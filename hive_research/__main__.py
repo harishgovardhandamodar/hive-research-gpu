@@ -92,6 +92,29 @@ def cmd_gpu_status(args: argparse.Namespace) -> None:
     print(json.dumps(status, indent=2))
 
 
+def cmd_export(args: argparse.Namespace) -> None:
+    config = Config()
+    gpu_mgr = GPUManager(config)
+    org = Organizer(config, gpu_mgr)
+
+    if args.bibtex:
+        path = org.export_bibtex(args.bibtex)
+        print(f"BibTeX exported to: {path if args.bibtex and Path(args.bibtex).exists() else args.bibtex}")
+    if args.json:
+        path = org.export_json(args.json)
+        print(f"JSON dump exported to: {path if args.json and Path(args.json).exists() else args.json}")
+    if args.csv:
+        path = org.export_csv(args.csv)
+        print(f"CSV exported to: {path if args.csv and Path(args.csv).exists() else args.csv}")
+    if args.backup is not None:
+        out = args.backup if args.backup else None
+        path = org.export_backup(out, include_pdfs=not args.no_pdfs)
+        print(f"Backup created: {path}")
+    if not any([args.bibtex, args.json, args.csv, args.backup is not None]):
+        print("No export format specified. Use --bibtex, --json, --csv, or --backup.")
+        print("Example: python -m hive_research export --bibtex papers.bib")
+
+
 def cmd_serve(args: argparse.Namespace) -> None:
     from .server import run_server
 
@@ -143,6 +166,20 @@ def main() -> None:
     p_serve.add_argument("--host", type=str, default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=7777)
     p_serve.set_defaults(func=cmd_serve)
+
+    # Export
+    p_export = sub.add_parser("export", help="Export papers or knowledge graph")
+    p_export.add_argument("--bibtex", type=str, nargs="?", const="papers.bib",
+                         help="Export papers as BibTeX (default: papers.bib)")
+    p_export.add_argument("--json", type=str, nargs="?", const="graph.json",
+                         help="Export graph JSON dump (default: graph.json)")
+    p_export.add_argument("--csv", type=str, nargs="?", const="papers.csv",
+                         help="Export papers as CSV (default: papers.csv)")
+    p_export.add_argument("--backup", type=str, nargs="?", const="",
+                         help="Create ZIP backup (optional: output path)")
+    p_export.add_argument("--no-pdfs", action="store_true",
+                         help="Exclude PDFs from backup")
+    p_export.set_defaults(func=cmd_export)
 
     args = parser.parse_args()
     _setup_logging(verbose=args.verbose)

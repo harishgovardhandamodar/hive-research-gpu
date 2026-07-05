@@ -14,6 +14,7 @@ from .pool import ResearchPool
 from .rag import RAGEngine
 from .similarity import paper_similarity_matrix
 from .web_ingest import WebIngester
+from .exporter import to_bibtex, to_json_dump, create_backup, papers_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -303,3 +304,17 @@ class Organizer:
         if generated:
             self.kg.save()
         return {"status": "ok", "generated": generated}
+
+    # ── Export ──
+
+    def export_bibtex(self, output_path: str | None = None) -> str:
+        return to_bibtex(self.kg, output_path)
+
+    def export_json(self, output_path: str | None = None) -> str:
+        return to_json_dump(self.kg, output_path)
+
+    def export_csv(self, output_path: str | None = None) -> str:
+        return papers_to_csv(self.kg, output_path)
+
+    def export_backup(self, output_path: str | None = None, include_pdfs: bool = True) -> str:
+        return create_backup(self.config, output_path, include_pdfs=include_pdfs)
