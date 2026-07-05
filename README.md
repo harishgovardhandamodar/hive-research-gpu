@@ -12,7 +12,10 @@ Hive Research GPU ingests academic papers from arXiv, extracts structured knowle
 - **RAG Search** — Chunk + embed pipeline with cosine similarity search; ask questions over your paper library
 - **Research Pool** — Automatically monitor arXiv topics; observe new papers, batch-import into your knowledge base
 - **Web Dashboard** — Real-time interactive dashboard with force-directed graph, browsing, similarity matrix, chat, and live logs
-- **CLI** — Full command-line interface for search, import, stats, similarity, RAG queries, and GPU monitoring
+- **CLI** — Full command-line interface for search, import, stats, similarity, RAG queries, GPU monitoring, and export
+- **Python Client Library** — `HiveClient` with remote (REST) and embedded modes for programmatic access
+- **Hybrid Search** — BM25 keyword search fused with vector cosine similarity via Reciprocal Rank Fusion
+- **Paper Collections** — Create collections, save searches, and favorite papers with CLI and API
 - **Dual GPU** — Two Ollama instances (one per GPU) for parallel LLM inference and embedding
 - **Figure Extraction** — Extract figures, tables, and diagrams from PDFs with caption detection
 - **Citation Lineage** — Automatically fetch and link cited papers, build citation graphs
