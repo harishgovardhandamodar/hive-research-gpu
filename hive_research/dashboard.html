@@ -262,8 +262,8 @@ select{cursor:pointer}
 .pool-topic-card:hover{border-color:var(--accent)}
 .pool-topic-card .btn-o{background:transparent;border:1px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .12s}
 .pool-topic-card .btn-o:hover{border-color:var(--accent);color:var(--accent)}
-.card .card-body{overflow:hidden;transition:max-height .25s ease}
-.card .card-body.collapsed{max-height:0;padding-top:0;padding-bottom:0}
+.card .card-body.collapsible{overflow:hidden;display:block}
+.card .card-body.collapsible.collapsed{display:none}
 .pool-topic h3 .count{font-size:11px;font-weight:400;color:var(--text3)}
 .pool-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;transition:all .2s}
 .pool-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:var(--glow)}
