@@ -360,6 +360,15 @@ class RouteHandler(BaseHTTPRequestHandler):
         elif path == "/api/pool/topics":
             topics = self.org.pool.get_topics()
             _json_response(self, {"topics": topics})
+        elif path == "/api/pool/insights":
+            _json_response(self, self.org.pool.get_insights())
+        elif path == "/api/pool/suggestions":
+            paper_id = params.get("paper_id", "")
+            top_k = int(params.get("top_k", 8))
+            if not paper_id:
+                _json_response(self, {"error": "missing paper_id"}, 400)
+                return
+            _json_response(self, self.org.pool.get_suggestions(paper_id, top_k))
         else:
             _json_response(self, {"error": "not found"}, 404)
 
