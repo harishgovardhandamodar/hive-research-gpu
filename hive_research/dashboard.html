@@ -2514,7 +2514,7 @@ switchPanel('graph');
 loadGpuStatus();
 loadHeaderStats();
 loadGraph();
-loadPoolList();
+loadPool();
 fetchLogs();
 // Force re-render after layout settles
 setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},500);
