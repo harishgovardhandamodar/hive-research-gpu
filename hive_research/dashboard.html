@@ -262,8 +262,9 @@ select{cursor:pointer}
 .pool-topic-card:hover{border-color:var(--accent)}
 .pool-topic-card .btn-o{background:transparent;border:1px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .12s}
 .pool-topic-card .btn-o:hover{border-color:var(--accent);color:var(--accent)}
-.card .card-body.collapsible{overflow:hidden;display:block}
-.card .card-body.collapsible.collapsed{display:none}
+#addTopicToggle:hover{border-color:var(--accent)!important;color:var(--accent)!important;background:var(--surface)}
+#poolTopicCards{display:flex;flex-direction:column;align-items:stretch;width:100%}
+#poolTopics{display:flex;flex-direction:column;align-items:flex-start}
 .pool-topic h3 .count{font-size:11px;font-weight:400;color:var(--text3)}
 .pool-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;transition:all .2s}
 .pool-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:var(--glow)}
@@ -608,16 +609,14 @@ select{cursor:pointer}
     <div id="poolBrowse" style="flex:1;overflow-y:auto;padding:0 12px 8px"></div>
     <!-- Topics Tab -->
     <div id="poolTopics" style="display:none;flex:1;overflow-y:auto;padding:0 12px 8px">
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-header" onclick="toggleCollapsible(this)" style="cursor:pointer;user-select:none">
-          <span>&#x2795; Add Topic</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--text3)">&#x25BC;</span>
-        </div>
-        <div class="card-body collapsible" style="padding:8px 10px">
-          <div class="btn-group" style="margin-bottom:6px">
-            <input id="poolTopicName" placeholder="Topic name" style="width:180px">
-            <input id="poolTopicQuery" placeholder="arXiv query" style="flex:1">
-            <button class="btn btn-sm" onclick="addPoolTopic()">+ Add</button>
+      <div id="addTopicToggle" onclick="toggleAddTopic()" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px dashed var(--border);border-radius:var(--radius);cursor:pointer;font-size:18px;color:var(--text3);margin-bottom:8px;transition:all .15s" title="Add topic">&#x2795;</div>
+      <div id="addTopicForm" style="display:none;margin-bottom:10px">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 10px">
+            <input id="poolTopicName" placeholder="Topic name" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:11px;outline:none">
+            <input id="poolTopicQuery" placeholder="arXiv query" style="flex:2;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:11px;outline:none">
+            <button class="btn btn-sm" onclick="addPoolTopic()" style="white-space:nowrap">+ Add</button>
+            <span onclick="toggleAddTopic()" style="cursor:pointer;color:var(--text3);font-size:14px;padding:4px">&#x2716;</span>
           </div>
         </div>
       </div>
@@ -2191,13 +2190,17 @@ function renderFullSubgraph(){
   svg.transition().duration(400).call(d3.zoom().transform,d3.zoomIdentity);
 }
 
-// ── Collapsible ──
-function toggleCollapsible(header){
-  const body=header.nextElementSibling;
-  if(!body)return;
-  body.classList.toggle('collapsed');
-  const arrow=header.querySelector('span:last-child');
-  if(arrow)arrow.textContent=body.classList.contains('collapsed')?'\u25B2':'▲';
+// ── Add Topic Toggle ──
+function toggleAddTopic(){
+  const form=el('addTopicForm');
+  const toggle=el('addTopicToggle');
+  if(form.style.display==='none'){
+    form.style.display='block';
+    toggle.style.display='none';
+  }else{
+    form.style.display='none';
+    toggle.style.display='flex';
+  }
 }
 
 // ── Filter helper ──
@@ -2380,8 +2383,7 @@ async function loadPoolTopics(){
 async function addPoolTopic(){
   const name=el('poolTopicName').value.trim(),query=el('poolTopicQuery').value.trim();
   if(!name||!query)return;
-  await api('/api/pool/topics/add','POST',{name,query});
-  el('poolTopicName').value='';el('poolTopicQuery').value='';loadPoolTopics();
+  try{await api('/api/pool/topics/add','POST',{name,query});loadPoolTopics();el('poolTopicName').value='';el('poolTopicQuery').value='';toggleAddTopic()}catch(e){addLog('Error adding topic: '+e,'ERROR')}
 }
 async function removePoolTopic(name){
   if(!confirm('Remove topic "'+name+'"?'))return;
