@@ -6,8 +6,8 @@ Prioritized, trackable improvements for the project.
 
 ## P0 — Critical (Current Sprint)
 
-- [ ] **TEST** Add pytest infrastructure + core module tests (graph, similarity, RAG, pipeline)
-- [ ] **PERF** Fix O(N²) similarity: cache results, top-K per paper, batch pagination
+- [x] **TEST** Add pytest infrastructure + core module tests (graph, similarity, RAG, pipeline)
+- [x] **PERF** Fix O(N²) similarity: cache results, top-K per paper, batch pagination
 - [ ] **ARCH** Migrate `http.server` → FastAPI (async, WebSocket, auto-docs)
 - [ ] **UI** Modularize dashboard JS into separate files (nav.js, graph.js, papers.js, chat.js)
 
@@ -15,7 +15,7 @@ Prioritized, trackable improvements for the project.
 
 - [ ] **FEAT** Add Jupyter notebooks (quick-start, KG analysis, RAG, API demo)
 - [ ] **FEAT** Add Python client library (`HiveClient`)
-- [ ] **FEAT** Export/import: BibTeX, JSON graph dump, full backup CLI + API
+- [x] **FEAT** Export/import: BibTeX, JSON graph dump, full backup CLI + API
 - [ ] **FEAT** Paper collections, saved searches, favorites
 - [ ] **SEARCH** BM25 + hybrid search (vector + keyword) with RRF
 - [ ] **UI** Graph improvements: minimap, expand-on-hover, path finder, timeline
@@ -52,4 +52,8 @@ Prioritized, trackable improvements for the project.
 
 | Date | Item | Branch | Status |
 |------|------|--------|--------|
-| — | — | — | — |
+| 2025-01-23 | P1: Fix O(N² × E) similarity with pre-built lookups + top_k | `feat/perf-similarity-cache` | ✅ Merged |
+| 2025-01-23 | P0: pytest infra + conftest.py + test_similarity + test_graph | `feat/perf-similarity-cache` | ✅ Merged |
+| 2025-01-23 | P1: Export/import (BibTeX, JSON, CSV, backup) + CLI + API + tests | `feat/export-import` | ✅ Done |
+| 2025-01-23 | P0: Help page with rich docs, feature cards, Python/Jupyter tabs | `feat/help-page` | ✅ Merged |
+| 2025-01-23 | P0: Remove landscape, deduplicate nav, fix graph icon | `feat/help-page` | ✅ Merged |
