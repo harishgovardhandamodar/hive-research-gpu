@@ -17,6 +17,8 @@
 - [Similarity](similarity.md)
 - [Paper Collections & Favorites](collections.md)
 - [Export & Backup](export.md)
+- [Ingestion Queue](ingestion.md)
+- [Duplicate Detection](duplicate-detection.md)
 - [Research Pool](research-pool.md)
 - [GPU Management](gpu.md)
 - [Docker Deployment](docker.md)

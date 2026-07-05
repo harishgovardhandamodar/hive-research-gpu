@@ -21,6 +21,8 @@ Hive Research GPU is a self-contained research assistant that ingests academic p
 - **Citation Lineage** — Automatically detects cited arXiv IDs in PDFs, fetches metadata, and links them into the graph
 - **Figure Extraction** — Extracts figures, tables, and diagrams from PDFs with heuristic caption detection; embeds them into vault notes
 - **Auth** — Optional Bearer token authentication via `HIVE_AUTH_TOKEN` environment variable
+- **Ingestion Queue** — Async paper ingestion with per-paper status tracking (queued → fetching → downloading → extracting → analyzing → graph → indexing → done)
+- **Duplicate Detection** — Finds title-similar papers in the knowledge base, shows warnings in Browse tab
 - **Docker** — Ready-to-deploy container setup with NVIDIA GPU passthrough and dual Ollama processes
 
 ## Quick Start

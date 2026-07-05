@@ -108,6 +108,8 @@ The test suite uses mock fixtures from `tests/conftest.py`:
 | `test_rag.py` | 18 | BM25, vector/keyword/hybrid search |
 | `test_client.py` | 20 | HiveClient remote + embedded modes |
 | `test_faiss.py` | 2 | FAISS with numpy fallback |
+| `test_ingestion.py` | 11 | Ingestion queue: enqueue, status, events, stats, clear |
+| `test_pool.py` | 11 | Research pool: topics, observation, insights, suggestions |
 
 ## Frontend Development
 

@@ -104,6 +104,26 @@ Rich documentation panel available via the **❓ Help** sidebar button:
 - Data storage locations
 - Keyboard shortcuts
 
+### Duplicate Detection (Browse Tab)
+
+When viewing papers in the Browse tab, potential title duplicates are flagged:
+
+- **⚠ N badge** — yellow warning icon with number of potential duplicates
+- **Hover** on the badge to see the duplicate paper titles
+- Detection uses Jaccard token similarity (threshold 0.85)
+- No duplicates = no badge
+
+### Ingestion Queue Status Bar
+
+A status bar below the main panels shows real-time ingestion progress:
+
+- **Active count** — papers currently being processed
+- **Color-coded badges**: ◌ queued (gray), ● in-progress (blue), ✓ done (green), ✗ error (red)
+- Each badge shows `paper_id:status` with hover tooltip for details
+- **Clear finished** button to remove completed jobs
+- Polls every 2 seconds for updates
+- Status changes also appear in the Activity Log with `paper_id:status` format
+
 ## Activity Log
 
 Collapsible bottom bar displaying real-time application logs with filter toggles for Info/Done/Warn/Error levels.

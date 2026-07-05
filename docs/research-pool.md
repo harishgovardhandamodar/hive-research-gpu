@@ -74,15 +74,63 @@ pool.remove_topic("AI alignment")
 
 The pool generates a similarity graph based on token Jaccard similarity over titles + abstracts. Edges are created when similarity ≥ 0.12. This helps identify clusters of related papers within the pool.
 
+## Pool GUI
+
+The pool panel features a redesigned interface for researchers:
+
+- **Browse tab**: Topic filter dropdown, paper cards with relevance scoring, batch import per topic
+- **Topics & Graph tab**: Split-pane view — left panel has topic insight cards, right panel has interactive D3 graph
+- **Topic cards**: Show observed/imported counts, conversion rate, progress bar, click to filter browse
+- **Sub-graph overlay**: Click a topic → full-screen force-directed graph of that topic's papers
+- **Free-form query bar**: Type natural language queries like `"find me references about AI acceleration and quantum computing"`
+- **Resizable divider**: Drag to adjust the split between topic cards and graph
+- **Collapsible Add Topic**: Compact "+" button that expands to the full add form
+
+## Free-Form Query
+
+The pool supports natural language queries:
+
+```
+POST /api/pool/query
+{"query": "find me references that cover AI acceleration, photonic computing, quantum and federated learning"}
+```
+
+The query engine:
+1. Extracts keywords (splits on commas, removes stop words)
+2. Searches the local pool database by title/abstract/topic overlap
+3. Falls back to arXiv API for unmatched keywords
+4. Returns matched papers + similarity graph edges
+
+## Insights
+
+`GET /api/pool/insights` returns per-topic performance statistics:
+
+```json
+{
+  "total_papers": 800,
+  "imported_papers": 45,
+  "conversion_rate": 0.056,
+  "recent_new": 12,
+  "topics": {
+    "Knowledge graphs": {"observed": 100, "imported": 8, "conversion_rate": 0.08},
+    "Federated learning": {"observed": 100, "imported": 3, "conversion_rate": 0.03}
+  }
+}
+```
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/pool` | GET | Cached feed (topic → papers) |
 | `/api/pool/papers` | GET | All observed papers with status |
-| `/api/pool/graph` | GET | Pool similarity graph |
+| `/api/pool/graph` | GET | Pool similarity graph (cached) |
 | `/api/pool/topics` | GET | List of monitored topics |
 | `/api/pool/topics/add` | POST | Add a topic |
 | `/api/pool/topics/remove` | POST | Remove a topic |
 | `/api/pool/import` | POST | Import a single paper from pool |
 | `/api/pool/import_batch` | POST | Import multiple papers |
+| `/api/pool/query` | POST | Free-form natural language query |
+| `/api/pool/insights` | GET | Topic performance and conversion stats |
+| `/api/pool/suggestions?paper_id=X` | GET | Similar papers from pool |
+| `/api/pool/tags/update` | POST | Update tags for a pool paper |

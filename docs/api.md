@@ -307,3 +307,28 @@ Optional field: `mode` (string) — `"vector"` (semantic), `"keyword"` (BM25), o
 | `/api/export/json` | GET | Download graph JSON |
 | `/api/export/csv` | GET | Download papers CSV (`papers.csv`) |
 | `/api/export/backup` | GET | Download backup ZIP |
+
+### Ingestion Queue Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/ingestion/queue` | GET | All jobs with current status |
+| `/api/ingestion/events?since=&n=` | GET | Status change events |
+| `/api/ingestion/stats` | GET | Job counts by status |
+| `/api/ingestion/add` | POST | Enqueue paper `{"id":"1706.03762","model":"fast"}` |
+| `/api/ingestion/clear` | POST | Clear completed/failed jobs |
+
+### Pool Query
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/pool/query` | POST | Free-form natural language query `{"query":"..."}` |
+| `/api/pool/insights` | GET | Topic performance and conversion stats |
+| `/api/pool/suggestions?paper_id=X` | GET | Similar papers from the pool |
+
+### Duplicate Detection
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/papers/duplicates?paper_id=X` | GET | Find duplicates for a paper |
+| `/api/papers/duplicates` | GET | Find all duplicate groups |
