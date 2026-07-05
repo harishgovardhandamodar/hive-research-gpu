@@ -115,6 +115,54 @@ def cmd_export(args: argparse.Namespace) -> None:
         print("Example: python -m hive_research export --bibtex papers.bib")
 
 
+def cmd_collections(args: argparse.Namespace) -> None:
+    config = Config()
+    gpu_mgr = GPUManager(config)
+    org = Organizer(config, gpu_mgr)
+
+    if args.col_action == "list":
+        cols = org.collections.list_collections()
+        if not cols:
+            print("No collections.")
+            return
+        for name, c in cols.items():
+            print(f"  {name}: {len(c.get('papers', []))} papers — {c.get('description', '')}")
+    elif args.col_action == "create":
+        r = org.collections.create_collection(args.name, args.description)
+        print(r.get("status", "error"), "—", args.name)
+    elif args.col_action == "delete":
+        r = org.collections.delete_collection(args.name)
+        print(r.get("status", "error"), "—", args.name)
+    elif args.col_action == "add":
+        r = org.collections.add_to_collection(args.collection, args.paper_id)
+        print(r.get("status", "error"), "—", r.get("paper_id", ""), "→", args.collection)
+    elif args.col_action == "remove":
+        r = org.collections.remove_from_collection(args.collection, args.paper_id)
+        print(r.get("status", "error"), "—", r.get("paper_id", ""), "←", args.collection)
+
+
+def cmd_favorites(args: argparse.Namespace) -> None:
+    config = Config()
+    gpu_mgr = GPUManager(config)
+    org = Organizer(config, gpu_mgr)
+
+    if args.fav_action == "list":
+        favs = org.collections.list_favorites()
+        if not favs:
+            print("No favorites.")
+            return
+        for pid in favs:
+            paper = org.kg.get_paper(pid)
+            title = paper.label if paper else pid
+            print(f"  {pid} — {title}")
+    elif args.fav_action == "add":
+        r = org.collections.add_favorite(args.paper_id)
+        print(r.get("status", "error"), "—", args.paper_id)
+    elif args.fav_action == "remove":
+        r = org.collections.remove_favorite(args.paper_id)
+        print(r.get("status", "error"), "—", args.paper_id)
+
+
 def cmd_serve(args: argparse.Namespace) -> None:
     from .server import run_server
 
@@ -161,6 +209,39 @@ def main() -> None:
 
     p_gpu = sub.add_parser("gpu", help="Show GPU status")
     p_gpu.set_defaults(func=cmd_gpu_status)
+
+    # Collections
+    p_col = sub.add_parser("collections", help="Manage paper collections")
+    col_sub = p_col.add_subparsers(dest="col_action", required=True)
+    p_col_list = col_sub.add_parser("list", help="List collections")
+    p_col_list.set_defaults(func=cmd_collections)
+    p_col_create = col_sub.add_parser("create", help="Create a collection")
+    p_col_create.add_argument("name", type=str)
+    p_col_create.add_argument("--description", type=str, default="")
+    p_col_create.set_defaults(func=cmd_collections)
+    p_col_del = col_sub.add_parser("delete", help="Delete a collection")
+    p_col_del.add_argument("name", type=str)
+    p_col_del.set_defaults(func=cmd_collections)
+    p_col_add = col_sub.add_parser("add", help="Add paper to collection")
+    p_col_add.add_argument("collection", type=str)
+    p_col_add.add_argument("paper_id", type=str)
+    p_col_add.set_defaults(func=cmd_collections)
+    p_col_rm = col_sub.add_parser("remove", help="Remove paper from collection")
+    p_col_rm.add_argument("collection", type=str)
+    p_col_rm.add_argument("paper_id", type=str)
+    p_col_rm.set_defaults(func=cmd_collections)
+
+    # Favorites
+    p_fav = sub.add_parser("favorites", help="Manage favorite papers")
+    fav_sub = p_fav.add_subparsers(dest="fav_action", required=True)
+    p_fav_list = fav_sub.add_parser("list", help="List favorites")
+    p_fav_list.set_defaults(func=cmd_favorites)
+    p_fav_add = fav_sub.add_parser("add", help="Add paper to favorites")
+    p_fav_add.add_argument("paper_id", type=str)
+    p_fav_add.set_defaults(func=cmd_favorites)
+    p_fav_rm = fav_sub.add_parser("remove", help="Remove paper from favorites")
+    p_fav_rm.add_argument("paper_id", type=str)
+    p_fav_rm.set_defaults(func=cmd_favorites)
 
     p_serve = sub.add_parser("serve", help="Start web server")
     p_serve.add_argument("--host", type=str, default="127.0.0.1")

@@ -103,6 +103,16 @@ class RouteHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(csv.encode())
+        elif path == "/api/collections":
+            _json_response(self, self.org.collections.list_collections())
+        elif path == "/api/collections/papers":
+            collection = params.get("collection", "")
+            papers = self.org.collections.get_collection_papers(collection)
+            _json_response(self, {"collection": collection, "papers": papers})
+        elif path == "/api/searches":
+            _json_response(self, self.org.collections.list_saved_searches())
+        elif path == "/api/favorites":
+            _json_response(self, {"favorites": self.org.collections.list_favorites()})
         elif path == "/api/export/backup":
             zip_path = self.org.export_backup(include_pdfs=False)
             self.send_response(200)
@@ -556,6 +566,55 @@ info.textContent += ' | OK';
                     self.org.pool.mark_imported(aid)
                 results.append({"arxiv_id": aid, "status": r.get("status")})
             _json_response(self, {"results": results})
+        elif path == "/api/collections/create":
+            name = data.get("name", "")
+            desc = data.get("description", "")
+            if not name:
+                _json_response(self, {"error": "missing name"}, 400)
+                return
+            _json_response(self, self.org.collections.create_collection(name, desc))
+        elif path == "/api/collections/delete":
+            name = data.get("name", "")
+            if not name:
+                _json_response(self, {"error": "missing name"}, 400)
+                return
+            _json_response(self, self.org.collections.delete_collection(name))
+        elif path == "/api/collections/add":
+            collection = data.get("collection", "")
+            paper_id = data.get("paper_id", "")
+            if not collection or not paper_id:
+                _json_response(self, {"error": "missing collection/paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.add_to_collection(collection, paper_id))
+        elif path == "/api/collections/remove":
+            collection = data.get("collection", "")
+            paper_id = data.get("paper_id", "")
+            if not collection or not paper_id:
+                _json_response(self, {"error": "missing collection/paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.remove_from_collection(collection, paper_id))
+        elif path == "/api/searches/save":
+            query = data.get("query", "")
+            name = data.get("name", "")
+            if not query:
+                _json_response(self, {"error": "missing query"}, 400)
+                return
+            _json_response(self, self.org.collections.save_search(query, name))
+        elif path == "/api/searches/delete":
+            idx = data.get("index", -1)
+            _json_response(self, self.org.collections.delete_saved_search(idx))
+        elif path == "/api/favorites/add":
+            pid = data.get("paper_id", "")
+            if not pid:
+                _json_response(self, {"error": "missing paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.add_favorite(pid))
+        elif path == "/api/favorites/remove":
+            pid = data.get("paper_id", "")
+            if not pid:
+                _json_response(self, {"error": "missing paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.remove_favorite(pid))
         else:
             _json_response(self, {"error": "not found"}, 404)
 

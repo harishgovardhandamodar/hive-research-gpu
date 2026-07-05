@@ -15,6 +15,7 @@ from .rag import RAGEngine
 from .similarity import paper_similarity_matrix
 from .web_ingest import WebIngester
 from .exporter import to_bibtex, to_json_dump, create_backup, papers_to_csv
+from .collections import CollectionStore
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class Organizer:
         self.rag = RAGEngine(config, self.llm, self.kg)
         self.pool = ResearchPool(config.root_dir / "pool")
         self.web = WebIngester(self.llm, self.kg)
+        self.collections = CollectionStore(Path(config.root_dir) / "collections.json")
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
