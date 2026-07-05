@@ -529,14 +529,14 @@ class ResearchPool:
     # ── Free-form Query ──
 
     def query_pool(self, query: str, max_local: int = 50, max_arxiv: int = 10) -> dict[str, Any]:
-        """Free-form natural language query over pool papers with arXiv fallback.
+        try:
+            return self._query_pool_impl(query, max_local, max_arxiv)
+        except Exception as e:
+            logger.error("query_pool failed: %s", e, exc_info=True)
+            return {"papers": [], "graph": [], "error": str(e)}
 
-        1. Extracts keywords from the query
-        2. Searches local pool database (title, abstract, topics)
-        3. Falls back to arXiv API for topics not found locally
-        4. Returns matched papers + similarity graph
-        """
-        # Extract keywords (split on commas, remove common words)
+    def _query_pool_impl(self, query: str, max_local: int, max_arxiv: int) -> dict[str, Any]:
+        """Free-form natural language query over pool papers with arXiv fallback."""
         stop_words = {
             "find", "me", "a", "the", "that", "cover", "all", "for", "and",
             "or", "in", "on", "of", "to", "with", "about", "references",
@@ -554,15 +554,14 @@ class ResearchPool:
             return {"papers": [], "graph": []}
 
         # 1. Search local pool
-        self._lock.acquire()
-        try:
-            rows = self._db_conn().execute(
+        pool_papers = []
+        with self._lock:
+            conn = self._db_conn()
+            rows = conn.execute(
                 "SELECT * FROM papers ORDER BY last_seen DESC LIMIT ?",
                 (1000,),
             ).fetchall()
-        finally:
-            self._lock.release()
-        pool_papers = []
+            conn.close()
         for r in rows:
             p = dict(r)
             p["authors"] = json.loads(p.get("authors", "[]"))

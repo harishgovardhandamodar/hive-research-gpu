@@ -2356,7 +2356,7 @@ async function runPoolFreeQuery(){
     const topic=(topics[0]||'query');
     window._subgraphTopic=topic;
     renderTopicSubgraph(nodes,edges,topic);
-  }catch(e){addLog('Pool query error: '+e.message,'ERROR');console.error(e)}
+  }catch(e){addLog('Pool query error: '+(e.message||e),'ERROR');console.error(e)}
 }
 
 // ── Pool Node Preview ──
