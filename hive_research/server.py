@@ -107,6 +107,8 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_dashboard()
         elif path == "/hive":
             self._serve_hive_ui()
+        elif path.startswith("/static/"):
+            self._serve_static(path)
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -667,6 +669,31 @@ info.textContent += ' | OK';
             _html_response(self, HIVE_UI_HTML.read_text())
         else:
             _html_response(self, "<html><body><p>Hive UI not found</p></body></html>")
+
+    def _serve_static(self, path: str) -> None:
+        rel = path.lstrip("/")
+        static_dir = Path(__file__).parent / "static"
+        filepath = static_dir / rel
+        if not filepath.exists() or not filepath.is_file():
+            self.send_response(404)
+            self.end_headers()
+            return
+        suffix = filepath.suffix.lower()
+        mime = {
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".html": "text/html",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+        }.get(suffix, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(filepath.read_bytes())
 
 
 def run_server(
