@@ -1050,7 +1050,7 @@ function showNodePreview(d){
     if(d.affiliations)more+='<div><b>Affiliations:</b> '+esc(d.affiliations)+'</div>';
     if(d.abstract)abs=esc(d.abstract.substring(0,500));
     else if(d.definition&&d.type==='web')abs=esc(d.definition);
-    // Check for cites edges (lineage)
+    // Collect lineage data
     const prior=[]; const citedBy=[];
     if(gData&&gData.links){
       gData.links.forEach(l=>{
@@ -1059,17 +1059,32 @@ function showNodePreview(d){
         if(l.target===d.id){const n=gData.nodes.find(x=>x.id===l.source);if(n)citedBy.push({id:l.source,label:n.label||n.title||l.source});}
       });
     }
-    if(prior.length||citedBy.length){
-      const parts=[];
-      if(prior.length){
-        const items=prior.slice(0,6).map(r=>'<a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--accent);text-decoration:none">'+esc(r.label.substring(0,40))+'</a>').join(', ');
-        parts.push('<span style="color:var(--text3)">&#x2190;</span> '+items+(prior.length>6?' <span style="color:var(--text3);font-size:10px">+'+ (prior.length-6)+'</span>':''));
+    _previewPrior=prior; _previewCitedBy=citedBy; _previewPaperId=d.id;
+    const hasLineage=prior.length||citedBy.length;
+    const tabs=[];
+    if(hasLineage)tabs.push('Prior Works','Cited By');
+    tabs.push('Similarity');
+    if(tabs.length){
+      let tabBar='<div class="preview-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:6px">';
+      tabs.forEach((t,i)=>{
+        const active=i===0?' active':'';
+        tabBar+='<div class="preview-tab'+active+'" data-ptab="'+t.replace(/\s/g,'')+'" onclick="switchPreviewTab(\''+t.replace(/\s/g,'')+'\',this)" style="padding:4px 10px;cursor:pointer;font-size:10px;'+(i===0?'border-bottom:2px solid var(--accent);color:var(--accent);font-weight:500':'color:var(--text3)')+'">'+t+'</div>';
+      });
+      tabBar+='</div><div class="preview-tab-content">';
+      const contents={};
+      if(hasLineage){
+        const pItems=prior.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--accent);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
+        contents.PriorWorks='<ul style="margin:0;padding-left:16px">'+(pItems||'<li style="color:var(--text3)">None</li>')+'</ul>'+(prior.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (prior.length-8)+' more</div>':'');
+        const cItems=citedBy.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--cyan);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
+        contents.CitedBy='<ul style="margin:0;padding-left:16px">'+(cItems||'<li style="color:var(--text3)">None</li>')+'</ul>'+(citedBy.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (citedBy.length-8)+' more</div>':'');
       }
-      if(citedBy.length){
-        const items=citedBy.slice(0,6).map(r=>'<a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--cyan);text-decoration:none">'+esc(r.label.substring(0,40))+'</a>').join(', ');
-        parts.push('<span style="color:var(--text3)">&#x2192;</span> '+items+(citedBy.length>6?' <span style="color:var(--text3);font-size:10px">+'+ (citedBy.length-6)+'</span>':''));
-      }
-      more+='<div style="margin-top:4px;font-size:11px;line-height:1.5"><b>&#x1F517; Lineage</b><br>'+parts.join(' &nbsp; ')+'</div>';
+      contents.Similarity='<div id="previewSimLoading" style="color:var(--text3);font-size:10px">Loading...</div>';
+      // Render active tab
+      const firstTab=tabs[0].replace(/\s/g,'');
+      more+=tabBar+(contents[firstTab]||'')+'</div>';
+      // Fetch similarity in background
+      _previewSimFetched=false;
+      _previewSimData=null;
     }
     if(d.arxiv_id)actions+='<a href="https://arxiv.org/abs/'+d.arxiv_id+'" target="_blank" class="btn btn-sm">arXiv</a>';
     // Look up note path to add Browse buttons
@@ -1130,6 +1145,57 @@ function showNodePreview(d){
   el('previewActions').innerHTML=actions;
   el('previewMore').innerHTML=more;
   p.style.display='block';
+}
+
+// ── Node Preview Tabs ──
+function switchPreviewTab(tab,btn){
+  const container=el('previewMore');
+  const tabs=container.querySelectorAll('.preview-tab');
+  tabs.forEach(t=>{t.style.borderBottom='2px solid transparent';t.style.color='var(--text3)';t.style.fontWeight='400'});
+  if(btn){btn.style.borderBottom='2px solid var(--accent)';btn.style.color='var(--accent)';btn.style.fontWeight='500'}
+  let html='';
+  if(tab==='PriorWorks'){
+    const items=_previewPrior.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--accent);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
+    html='<ul style="margin:0;padding-left:16px">'+(items||'<li style="color:var(--text3)">None</li>')+'</ul>'+
+      (_previewPrior.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (_previewPrior.length-8)+' more</div>':'');
+  }else if(tab==='CitedBy'){
+    const items=_previewCitedBy.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--cyan);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
+    html='<ul style="margin:0;padding-left:16px">'+(items||'<li style="color:var(--text3)">None</li>')+'</ul>'+
+      (_previewCitedBy.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (_previewCitedBy.length-8)+' more</div>':'');
+  }else if(tab==='Similarity'){
+    if(!_previewSimFetched){
+      html='<div id="previewSimLoading" style="color:var(--text3);font-size:10px">Loading...</div><div id="previewSimResult"></div>';
+      (async()=>{
+        try{
+          const algo=el('simAlgorithm')?el('simAlgorithm').value:'combined';
+          const allIds=gData&&gData.nodes?gData.nodes.filter(n=>n.group===0).map(n=>n.id):[_previewPaperId];
+          _previewSimData=await api('/api/similarity','POST',{paper_ids:allIds,algorithm:algo});
+        }catch(e){_previewSimData=[]}
+        _previewSimFetched=true;
+        renderPreviewSimilarity();
+      })();
+    }else{
+      html=buildPreviewSimHtml();
+    }
+  }
+  const tc=container.querySelector('.preview-tab-content');
+  if(tc)tc.innerHTML=html;
+}
+function buildPreviewSimHtml(){
+  if(!_previewSimData||!_previewSimData.length)return'<div style="color:var(--text3);font-size:10px;padding:4px 0">No similarity data</div>';
+  const items=_previewSimData.filter(s=>s.source!==s.target&&(s.source===_previewPaperId||s.target===_previewPaperId)).slice(0,6);
+  if(!items.length)return'<div style="color:var(--text3);font-size:10px;padding:4px 0">No similarity data</div>';
+  return'<ul style="margin:0;padding-left:16px">'+items.map(s=>{
+    const otherId=s.source===_previewPaperId?s.target:s.source;
+    const otherTitle=s.source===_previewPaperId?s.target_title:s.source_title;
+    return '<li><span style="color:var(--text2);font-size:10px">'+(s.score*100).toFixed(0)+'% </span>'+
+      '<a href="#" onclick="event.preventDefault();selectPaper(\''+esc(otherId)+'\')" style="color:var(--accent);text-decoration:none">'+esc(otherTitle.substring(0,50))+'</a></li>';
+  }).join('')+'</ul>';
+}
+function renderPreviewSimilarity(){
+  const ld=el('previewSimLoading'); if(ld)ld.style.display='none';
+  const r=el('previewSimResult'); if(!r)return;
+  r.innerHTML=buildPreviewSimHtml();
 }
 
 // ── Add Paper ──
@@ -1696,6 +1762,7 @@ async function fetchLineage(aid){
 
 // ── Similarity ──
 let _simData=null;
+let _previewPrior=[], _previewCitedBy=[], _previewPaperId='', _previewSimData=null, _previewSimFetched=false;
 let _simView='list';
 let _simSelected=[];
 let _simPaperIds=new Set();
