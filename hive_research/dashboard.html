@@ -1253,11 +1253,13 @@ function renderPapers(papers){
   if(!papers.length){c.innerHTML='<div style="color:var(--text3);text-align:center;padding:20px;font-size:11px">No papers</div>';return}
   c.innerHTML=papers.map(p=>{
     const active=_selectedPaper&&_selectedPaper.id===p.id?' active':'';
+    const title=typeof p.title=='string'?p.title:'';
+    const authors=typeof p.authors=='string'?p.authors:Array.isArray(p.authors)?p.authors.map(a=>a.name||a).join(', '):'';
     return '<div class="browse-paper'+active+'" data-paper-id="'+esc(p.id)+'" onclick="selectPaper(\''+esc(p.id)+'\')">'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between">'+
       '<div style="flex:1;min-width:0">'+
-      '<div class="bp-title">'+esc(p.title.substring(0,60))+'</div>'+
-      '<div class="bp-meta">'+esc(p.authors.substring(0,40))+'</div>'+
+      '<div class="bp-title">'+esc(title.substring(0,60))+'</div>'+
+      '<div class="bp-meta">'+esc(authors.substring(0,40))+'</div>'+
       '</div>'+
       '<span class="bp-refresh" title="Regenerate notes for this paper" onclick="event.stopPropagation();refreshPaperNote(\''+esc(p.id)+'\')">&#x21BB;</span>'+
       '</div>'+
@@ -1572,8 +1574,8 @@ function searchPapers(){
   const q=document.getElementById('browseSearch').value.trim().toLowerCase();
   if(!q){renderPapers(_browsePapers);return}
   const filtered=_browsePapers.filter(p=>
-    p.title.toLowerCase().includes(q)||
-    p.authors.toLowerCase().includes(q)||
+    (p.title||'').toLowerCase().includes(q)||
+    (typeof p.authors=='string'?p.authors:Array.isArray(p.authors)?p.authors.map(a=>a.name||a).join(', '):'').toLowerCase().includes(q)||
     (p.affiliations||'').toLowerCase().includes(q)
   );
   renderPapers(filtered);

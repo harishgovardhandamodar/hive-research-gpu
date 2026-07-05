@@ -100,7 +100,8 @@ class RouteHandler(BaseHTTPRequestHandler):
                     note_path = str(legacy) if legacy.exists() else ""
                     note_dir = note_path
                 papers.append({
-                    "id": n.id, "title": n.label, "authors": n.authors,
+                    "id": n.id, "title": n.label,
+                    "authors": (', '.join(a.name for a in n.authors) if isinstance(n.authors, list) else n.authors) or '',
                     "published": n.published, "affiliations": n.affiliations,
                     "note_path": note_path,
                     "note_dir": note_dir if Path(note_dir).exists() else "",
@@ -109,11 +110,14 @@ class RouteHandler(BaseHTTPRequestHandler):
                 })
             _json_response(self, papers)
         elif path == "/api/papers/search":
+            def _auth_str(n):
+                a = n.authors
+                return ', '.join(x.name for x in a) if isinstance(a, list) else (a or '')
             q = params.get("q", "").lower()
             papers = [
-                {"id": n.id, "title": n.label, "authors": n.authors, "published": n.published, "affiliations": n.affiliations}
+                {"id": n.id, "title": n.label, "authors": _auth_str(n), "published": n.published, "affiliations": n.affiliations}
                 for n in self.org.kg.papers
-                if not q or q in n.label.lower() or q in n.authors.lower() or q in n.affiliations.lower()
+                if not q or q in n.label.lower() or q in _auth_str(n).lower() or q in (n.affiliations or '').lower()
             ]
             _json_response(self, papers)
         elif path == "/api/concepts":
