@@ -124,13 +124,15 @@ window.addEventListener('load',()=>{
 function getDpr(){return window.devicePixelRatio||1}
 function resizeCanvas(){
   const dpr=getDpr();
-  const rect=document.getElementById('main').getBoundingClientRect();
+  const main=document.getElementById('main');
+  if(!main)return;
+  const rect=main.getBoundingClientRect();
+  if(!rect.width||!rect.height)return;
   canvas.width=rect.width*dpr;
   canvas.height=rect.height*dpr;
   canvas.style.width=rect.width+'px';
   canvas.style.height=rect.height+'px';
   simWidth=rect.width; simHeight=rect.height;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.imageSmoothingEnabled=true;
   ctx.imageSmoothingQuality='high';
   if(nodes.length)render();
@@ -157,78 +159,68 @@ async function fetchData(){
 }
 
 function buildGraph(){
+  if(!Array.isArray(simData))simData=[];
   // Build node set from papers
   const paperMap={};
   papers.forEach(p=>{paperMap[p.id]=p});
+  nodes=papers.filter(p=>paperMap[p.id]).map(p=>({
+    id:p.id, label:p.label, authors:p.authors||'', published:p.published||'',
+    abstract:p.abstract||'', arxiv_id:p.arxiv_id||'',
+  }));
 
-  // Compute similarity links: top-N similar pairs per paper
-  const linkMap={};
-  const pairScore={};
-  simData.forEach(s=>{
-    const key=[s.source,s.target].sort().join('|');
-    if(!pairScore[key]||s.score>pairScore[key])pairScore[key]=s.score;
-  });
-
-  // Build similarity adjacency and track per-paper top matches
+  // Build similarity adjacency
   const topSim={};
-  simData.forEach(s=>{
+  (simData||[]).forEach(s=>{
+    if(!s||typeof s.score!=='number')return;
     [s.source,s.target].forEach((id,i)=>{
       if(!topSim[id])topSim[id]=[];
       const other=i===0?s.target:s.source;
-      topSim[id].push({id:other,score:s.score,title:i===0?s.target_title:s.source_title});
+      topSim[id].push({id:other,score:s.score});
     });
   });
 
-  // For each paper, keep top 5 similar papers
+  // Top 5 similar links per paper
   const seenLinks=new Set();
   links=[];
   Object.keys(topSim).forEach(id=>{
     if(!paperMap[id])return;
     const sorted=topSim[id].sort((a,b)=>b.score-a.score).slice(0,5);
     sorted.forEach(s=>{
+      if(!paperMap[s.id])return;
       const key=[id,s.id].sort().join('|');
-      if(!seenLinks.has(key)&&paperMap[s.id]){
-        seenLinks.add(key);
-        links.push({source:id,target:s.id,score:s.score});
-      }
+      if(!seenLinks.has(key)){seenLinks.add(key);links.push({source:id,target:s.id,score:s.score})}
     });
   });
 
-  nodes=papers.filter(p=>paperMap[p.id]).map(p=>({
-    id:p.id, label:p.label, authors:p.authors||'', published:p.published||'',
-    abstract:p.abstract||'', arxiv_id:p.arxiv_id||'',
-  }));
-  // Cluster via simple greedy on similarity graph
   assignClusters();
-
-  // Run force layout
   runForceLayout();
 }
 
 function assignClusters(){
-  // Label propagation: assign to most-similar neighbor iteratively
+  if(!links.length||!nodes.length){
+    nodes.forEach((n,i)=>{n.cluster='c'+(i%PALETTE.length);n.color=PALETTE[i%PALETTE.length]});
+    renderLegend();return;
+  }
   const clusterMap={};
-  nodes.forEach(n=>{clusterMap[n.id]=n.id}); // each starts as own cluster
+  nodes.forEach(n=>{clusterMap[n.id]=n.id});
   for(let iter=0;iter<20;iter++){
     let changed=0;
     nodes.forEach(n=>{
-      const neighbors=links.filter(l=>l.source.id===n.id||l.target.id===n.id);
-      if(!neighbors.length)return;
+      const nid=n.id;
+      let bestId=null, bestCount=-1;
       const counts={};
-      neighbors.forEach(l=>{
-        const nid=l.source.id===n.id?l.target.id:l.source.id;
-        const c=clusterMap[nid]||nid;
-        counts[c]=(counts[c]||0)+1;
+      links.forEach(l=>{
+        const sa=l.source?.id||l.source, ta=l.target?.id||l.target;
+        if(sa===nid){const c=clusterMap[ta]||ta;counts[c]=(counts[c]||0)+1}
+        if(ta===nid){const c=clusterMap[sa]||sa;counts[c]=(counts[c]||0)+1}
       });
-      let best=null, bestCount=0;
       Object.keys(counts).forEach(c=>{
-        if(counts[c]>bestCount){bestCount=counts[c];best=c}
+        if(counts[c]>bestCount){bestCount=counts[c];bestId=c}
       });
-      if(best&&best!==clusterMap[n.id]){clusterMap[n.id]=best;changed++}
+      if(bestId&&bestId!==clusterMap[nid]){clusterMap[nid]=bestId;changed++}
     });
     if(!changed)break;
   }
-  // Assign cluster index
   const uniqueClusters=[...new Set(Object.values(clusterMap))];
   const clusterColors={};
   uniqueClusters.forEach((c,i)=>{clusterColors[c]=PALETTE[i%PALETTE.length]});
@@ -240,57 +232,75 @@ function assignClusters(){
 }
 
 function runForceLayout(){
-  const w=simWidth, h=simHeight;
-  const sim=d3.forceSimulation(nodes)
-    .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>120-d.score*80).strength(d=>d.score*0.8))
-    .force('charge',d3.forceManyBody().strength(-120))
-    .force('center',d3.forceCenter(w/2,h/2))
-    .force('collision',d3.forceCollide(10))
-    .alphaDecay(0.02)
-    .on('end',()=>{sim.stop();render()});
+  if(!nodes.length)return;
+  const w=simWidth||800, h=simHeight||600;
+  if(!w||!h)return;
 
-  // Render during simulation for smooth animation
-  sim.on('tick',()=>{
-    // Clamp to viewport
-    nodes.forEach(n=>{
-      n.x=Math.max(10,Math.min(w-10,n.x));
-      n.y=Math.max(10,Math.min(h-10,n.y));
-    });
-    render();
+  // Seed initial positions in a grid so D3 has something to work with
+  const cols=Math.ceil(Math.sqrt(nodes.length));
+  nodes.forEach((n,i)=>{
+    n.x=w/2+(i%cols-cols/2)*30;
+    n.y=h/2+(Math.floor(i/cols)-Math.ceil(nodes.length/cols)/2)*30;
   });
 
-  // Stop after 5s max
-  setTimeout(()=>{sim.alpha(0);sim.stop();render()},5000);
+  if(links.length){
+    const sim=d3.forceSimulation(nodes)
+      .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>120-(d.score||0)*80).strength(d=>Math.max(0.01,(d.score||0)*0.8)))
+      .force('charge',d3.forceManyBody().strength(-120))
+      .force('center',d3.forceCenter(w/2,h/2))
+      .force('collision',d3.forceCollide(10))
+      .alphaDecay(0.02)
+      .on('tick',()=>{
+        nodes.forEach(n=>{
+          if(!isFinite(n.x))n.x=w/2;
+          if(!isFinite(n.y))n.y=h/2;
+          n.x=Math.max(5,Math.min(w-5,n.x));
+          n.y=Math.max(5,Math.min(h-5,n.y));
+        });
+        render();
+      })
+      .on('end',()=>{sim.stop();render()});
+    setTimeout(()=>{sim.alpha(0);sim.stop();render()},5000);
+  }else{
+    // No similarity links — space nodes in a grid
+    render();
+  }
 }
 
 // ── Rendering ──
 function render(){
-  const w=simWidth, h=simHeight;
+  const w=simWidth||canvas.width, h=simHeight||canvas.height;
+  if(!w||!h)return;
+  const dpr=getDpr();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
-
-  // Background
   ctx.fillStyle='#0f172a';
   ctx.fillRect(0,0,w,h);
 
-  ctx.save();
+  if(!nodes.length){
+    ctx.fillStyle='#64748b';
+    ctx.font='14px -apple-system,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('No papers loaded',w/2,h/2);
+    return;
+  }
+
   ctx.translate(transform.x,transform.y);
   ctx.scale(transform.k,transform.k);
 
   // Draw links
   links.forEach(l=>{
-    const s=l.source,l2=l.target;
-    const sx=typeof s.x==='number'?s.x:s.x||w/2;
-    const sy=typeof s.y==='number'?s.y:s.y||h/2;
-    const tx=typeof l2.x==='number'?l2.x:l2.x||w/2;
-    const ty=typeof l2.y==='number'?l2.y:l2.y||h/2;
+    let s=l.source,t=l.target;
+    if(typeof s==='string'||typeof t==='string')return;
+    const sx=s.x||0,sy=s.y||0,tx=t.x||0,ty=t.y||0;
     ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(tx,ty);
-    ctx.strokeStyle='rgba(148,163,184,'+(0.08+l.score*0.12)+')';
-    ctx.lineWidth=Math.max(0.3,l.score*1.5);
+    ctx.strokeStyle='rgba(148,163,184,'+(0.08+Math.min(l.score||0,1)*0.12)+')';
+    ctx.lineWidth=Math.max(0.3,(l.score||0)*1.5);
     ctx.stroke();
   });
 
   // Draw nodes
-  const r=Math.max(5,Math.min(12,24/Math.sqrt(nodes.length||1)));
+  const r=Math.max(5,Math.min(12,24/Math.max(Math.sqrt(nodes.length),1)));
   nodes.forEach(n=>{
     const x=typeof n.x==='number'?n.x:w/2;
     const y=typeof n.y==='number'?n.y:h/2;
@@ -299,16 +309,16 @@ function render(){
     const rad=isSel?r*1.6:isHover?r*1.3:r;
     const alpha=selectedNode&&n!==selectedNode?0.3:1;
 
-    // Glow for selected
+    if(!isFinite(x)||!isFinite(y))return;
+
     if(isSel){
       ctx.beginPath();ctx.arc(x,y,rad+4,0,Math.PI*2);
-      ctx.fillStyle=n.color+'40';
+      ctx.fillStyle=(n.color||'#60a5fa')+'40';
       ctx.fill();
     }
 
-    // Node circle
     ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);
-    ctx.fillStyle=n.color;
+    ctx.fillStyle=n.color||'#60a5fa';
     ctx.globalAlpha=alpha;
     ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,0.2)';
@@ -316,19 +326,17 @@ function render(){
     ctx.stroke();
     ctx.globalAlpha=1;
 
-    // Label
     if(transform.k>0.6||isSel||isHover){
-      const maxW=200/transform.k;
-      let label=n.label.substring(0,40);
-      ctx.font=`${Math.max(9,11/transform.k)}px -apple-system, sans-serif`;
-      if(ctx.measureText(label).width>maxW)label=label.substring(0,30)+'…';
+      const maxW=Math.min(200,simWidth*0.3)/transform.k;
+      let label=String(n.label||n.id||'').substring(0,40);
+      ctx.font=`${Math.max(9,11/transform.k)}px -apple-system,sans-serif`;
+      if(ctx.measureText(label).width>maxW&&label.length>5)label=label.substring(0,Math.max(10,Math.floor(maxW/6)))+'…';
       ctx.fillStyle='rgba(226,232,240,'+(isHover?1:0.7)+')';
       ctx.textAlign='center';
-      ctx.fillText(label,x,y+rad+14/transform.k);
+      ctx.textBaseline='top';
+      ctx.fillText(label,x,y+rad+3);
     }
   });
-
-  ctx.restore();
 }
 
 function renderLegend(){
