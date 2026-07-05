@@ -19,6 +19,7 @@ from .organizer import Organizer
 logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
+LANDSCAPE_HTML = Path(__file__).parent / "landscape.html"
 
 
 def _json_response(
@@ -69,6 +70,8 @@ class RouteHandler(BaseHTTPRequestHandler):
         path, params = self._parse_path()
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
+        elif path == "/landscape":
+            self._serve_landscape()
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -533,6 +536,12 @@ info.textContent += ' | OK';
             _html_response(self, HTML.read_text())
         else:
             _html_response(self, _inline_dashboard())
+
+    def _serve_landscape(self) -> None:
+        if LANDSCAPE_HTML.exists():
+            _html_response(self, LANDSCAPE_HTML.read_text())
+        else:
+            _html_response(self, "<html><body><p>Landscape view not found</p></body></html>")
 
 
 def run_server(

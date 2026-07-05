@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Landscape</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+:root{--bg:#0f172a;--surface:#1e293b;--surface2:#334155;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--accent:#60a5fa;--cyan:#2dd4bf;--green:#34d399;--purple:#c084fc;--orange:#fb923c;--pink:#f472b6;--border:#1e3a5f;--radius:8px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh}
+#app{display:flex;flex-direction:column;height:100vh}
+/* Top bar */
+#topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10}
+#topbar h1{font-size:15px;font-weight:600;color:var(--accent);white-space:nowrap}
+#topbar .stat{font-size:11px;color:var(--text3);white-space:nowrap}
+#topbar .stat b{color:var(--text2)}
+#topbar .sep{width:1px;height:20px;background:var(--border)}
+#searchBar{flex:1;max-width:320px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;outline:none;transition:border-color .15s}
+#searchBar:focus{border-color:var(--accent)}
+#searchBar::placeholder{color:var(--text3)}
+.btn{padding:6px 14px;border:none;border-radius:var(--radius);background:var(--accent);color:#fff;font-size:11px;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}
+/* Main area */
+#main{flex:1;position:relative;overflow:hidden}
+#main canvas{display:block;width:100%;height:100%}
+/* Tooltip */
+#tooltip{position:absolute;pointer-events:none;opacity:0;transition:opacity .15s;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:11px;max-width:300px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+#tooltip .tt-title{font-weight:600;color:var(--accent);margin-bottom:3px;font-size:12px}
+#tooltip .tt-meta{color:var(--text3);margin-bottom:2px}
+#tooltip .tt-score{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500}
+#tooltip .tt-score.high{background:rgba(52,211,153,.15);color:var(--green)}
+#tooltip .tt-score.med{background:rgba(251,191,36,.15);color:#fbbf24}
+#tooltip .tt-score.low{background:rgba(100,116,139,.15);color:var(--text3)}
+/* Detail panel */
+#detail{position:absolute;top:0;right:-380px;width:360px;height:100%;background:var(--surface);border-left:1px solid var(--border);transition:right .25s ease;z-index:15;overflow-y:auto;padding:16px;font-size:12px;box-shadow:-4px 0 20px rgba(0,0,0,.3)}
+#detail.open{right:0}
+#detail .close{float:right;background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0 4px}
+#detail .close:hover{color:var(--text)}
+#detail h2{font-size:14px;color:var(--accent);margin-bottom:6px;padding-right:20px}
+#detail .meta{color:var(--text3);font-size:11px;margin-bottom:8px}
+#detail .section{margin-top:10px}
+#detail .section b{color:var(--text2);display:block;margin-bottom:3px;font-size:11px}
+#detail .section p{color:var(--text2);line-height:1.5}
+#detail .sim-list{list-style:none;padding:0}
+#detail .sim-list li{padding:4px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#detail .sim-list li a{color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#detail .sim-list li a:hover{text-decoration:underline}
+#detail .sim-list li .pct{font-size:10px;color:var(--text3);margin-left:8px;flex-shrink:0}
+/* Legend */
+#legend{position:absolute;bottom:16px;left:16px;display:flex;flex-wrap:wrap;gap:6px;background:rgba(30,41,59,.85);padding:8px 12px;border-radius:var(--radius);border:1px solid var(--border);font-size:10px;z-index:5;pointer-events:none;backdrop-filter:blur(4px)}
+#legend .l{display:flex;align-items:center;gap:4px;color:var(--text3)}
+#legend .sw{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+/* Loading overlay */
+#loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:30;transition:opacity .4s}
+#loading.hidden{opacity:0;pointer-events:none}
+#loading .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading div{text-align:center}
+#loading p{color:var(--text3);font-size:12px;margin-top:6px}
+/* Responsive */
+@media(max-width:700px){#topbar{flex-wrap:wrap;gap:6px;padding:8px 10px}#topbar .stat{display:none}#searchBar{max-width:none;flex:1 1 100%;order:10}#detail{width:100%;right:-100%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>&#x1F30D; Landscape</h1>
+    <span class="sep"></span>
+    <span class="stat">Papers <b id="statPapers">0</b></span>
+    <span class="stat">Concepts <b id="statConcepts">0</b></span>
+    <span class="stat">Edges <b id="statEdges">0</b></span>
+    <span class="sep"></span>
+    <input id="searchBar" placeholder="Search papers..." oninput="onSearch(this.value)">
+    <button class="btn" onclick="fetchData()">&#x21bb; Refresh</button>
+    <button class="btn btn-outline" onclick="resetZoom()">&#x25A6; Fit</button>
+  </div>
+  <div id="main">
+    <canvas id="canvas"></canvas>
+    <div id="tooltip"></div>
+    <div id="detail"></div>
+    <div id="legend"></div>
+    <div id="loading"><div><div class="spinner"></div><p>Loading research landscape...</p></div></div>
+  </div>
+</div>
+<script>
+// ── Globals ──
+let papers=[], concepts=[], edges=[], simData=[];
+let nodes=[], links=[];
+let simWidth, simHeight;
+let transform={x:0,y:0,k:1};
+let isDragging=false, dragStart, dragMoved;
+let hoveredNode=null, selectedNode=null;
+let canvas, ctx;
+
+// ── Color palette for clusters ──
+const PALETTE=['#60a5fa','#2dd4bf','#fb923c','#c084fc','#34d399','#f472b6','#fbbf24','#f87171','#a78bfa','#22d3ee','#4ade80','#facc15'];
+
+// ── Init ──
+window.addEventListener('load',()=>{
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize',()=>{resizeCanvas();if(nodes.length)render()});
+  canvas.addEventListener('mousedown',onMouseDown);
+  canvas.addEventListener('mousemove',onMouseMove);
+  canvas.addEventListener('mouseup',onMouseUp);
+  canvas.addEventListener('wheel',onWheel,{passive:false});
+  canvas.addEventListener('click',onClick);
+  fetchData();
+});
+
+function resizeCanvas(){
+  const rect=document.getElementById('main').getBoundingClientRect();
+  canvas.width=rect.width*devicePixelRatio;
+  canvas.height=rect.height*devicePixelRatio;
+  canvas.style.width=rect.width+'px';
+  canvas.style.height=rect.height+'px';
+  simWidth=rect.width; simHeight=rect.height;
+  ctx.scale(devicePixelRatio,devicePixelRatio);
+}
+
+// ── Data Fetching ──
+async function fetchData(){
+  document.getElementById('loading').classList.remove('hidden');
+  try{
+    const [p,c,s,e,stats]=await Promise.all([
+      api('/api/papers'), api('/api/concepts'),
+      api('/api/similarity','POST',{algorithm:'combined'}),
+      api('/api/graph'), api('/api/stats'),
+    ]);
+    papers=p||[]; concepts=c||[]; simData=s||[]; edges=e?.links||[];
+    if(stats){
+      document.getElementById('statPapers').textContent=stats.papers||0;
+      document.getElementById('statConcepts').textContent=stats.concepts||0;
+      document.getElementById('statEdges').textContent=stats.relations||0;
+    }
+    buildGraph();
+  }catch(e){console.error('Fetch error:',e)}
+  document.getElementById('loading').classList.add('hidden');
+}
+
+function buildGraph(){
+  // Build node set from papers
+  const paperMap={};
+  papers.forEach(p=>{paperMap[p.id]=p});
+
+  // Compute similarity links: top-N similar pairs per paper
+  const linkMap={};
+  const pairScore={};
+  simData.forEach(s=>{
+    const key=[s.source,s.target].sort().join('|');
+    if(!pairScore[key]||s.score>pairScore[key])pairScore[key]=s.score;
+  });
+
+  // Build similarity adjacency and track per-paper top matches
+  const topSim={};
+  simData.forEach(s=>{
+    [s.source,s.target].forEach((id,i)=>{
+      if(!topSim[id])topSim[id]=[];
+      const other=i===0?s.target:s.source;
+      topSim[id].push({id:other,score:s.score,title:i===0?s.target_title:s.source_title});
+    });
+  });
+
+  // For each paper, keep top 5 similar papers
+  const seenLinks=new Set();
+  links=[];
+  Object.keys(topSim).forEach(id=>{
+    if(!paperMap[id])return;
+    const sorted=topSim[id].sort((a,b)=>b.score-a.score).slice(0,5);
+    sorted.forEach(s=>{
+      const key=[id,s.id].sort().join('|');
+      if(!seenLinks.has(key)&&paperMap[s.id]){
+        seenLinks.add(key);
+        links.push({source:id,target:s.id,score:s.score});
+      }
+    });
+  });
+
+  nodes=papers.filter(p=>paperMap[p.id]).map(p=>({
+    id:p.id, label:p.label, authors:p.authors||'', published:p.published||'',
+    abstract:p.abstract||'', arxiv_id:p.arxiv_id||'',
+  }));
+  // Cluster via simple greedy on similarity graph
+  assignClusters();
+
+  // Run force layout
+  runForceLayout();
+}
+
+function assignClusters(){
+  // Label propagation: assign to most-similar neighbor iteratively
+  const clusterMap={};
+  nodes.forEach(n=>{clusterMap[n.id]=n.id}); // each starts as own cluster
+  for(let iter=0;iter<20;iter++){
+    let changed=0;
+    nodes.forEach(n=>{
+      const neighbors=links.filter(l=>l.source.id===n.id||l.target.id===n.id);
+      if(!neighbors.length)return;
+      const counts={};
+      neighbors.forEach(l=>{
+        const nid=l.source.id===n.id?l.target.id:l.source.id;
+        const c=clusterMap[nid]||nid;
+        counts[c]=(counts[c]||0)+1;
+      });
+      let best=null, bestCount=0;
+      Object.keys(counts).forEach(c=>{
+        if(counts[c]>bestCount){bestCount=counts[c];best=c}
+      });
+      if(best&&best!==clusterMap[n.id]){clusterMap[n.id]=best;changed++}
+    });
+    if(!changed)break;
+  }
+  // Assign cluster index
+  const uniqueClusters=[...new Set(Object.values(clusterMap))];
+  const clusterColors={};
+  uniqueClusters.forEach((c,i)=>{clusterColors[c]=PALETTE[i%PALETTE.length]});
+  nodes.forEach(n=>{
+    n.cluster=clusterMap[n.id];
+    n.color=clusterColors[n.cluster];
+  });
+  renderLegend();
+}
+
+function runForceLayout(){
+  const w=simWidth, h=simHeight;
+  const sim=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>120-d.score*80).strength(d=>d.score*0.8))
+    .force('charge',d3.forceManyBody().strength(-120))
+    .force('center',d3.forceCenter(w/2,h/2))
+    .force('collision',d3.forceCollide(10))
+    .alphaDecay(0.02)
+    .on('end',()=>{sim.stop();render()});
+
+  // Render during simulation for smooth animation
+  sim.on('tick',()=>{
+    // Clamp to viewport
+    nodes.forEach(n=>{
+      n.x=Math.max(10,Math.min(w-10,n.x));
+      n.y=Math.max(10,Math.min(h-10,n.y));
+    });
+    render();
+  });
+
+  // Stop after 5s max
+  setTimeout(()=>{sim.alpha(0);sim.stop();render()},5000);
+}
+
+// ── Rendering ──
+function render(){
+  const w=simWidth, h=simHeight;
+  ctx.clearRect(0,0,w,h);
+
+  // Background
+  ctx.fillStyle='#0f172a';
+  ctx.fillRect(0,0,w,h);
+
+  ctx.save();
+  ctx.translate(transform.x,transform.y);
+  ctx.scale(transform.k,transform.k);
+
+  // Draw links
+  links.forEach(l=>{
+    const s=l.source,l2=l.target;
+    const sx=typeof s.x==='number'?s.x:s.x||w/2;
+    const sy=typeof s.y==='number'?s.y:s.y||h/2;
+    const tx=typeof l2.x==='number'?l2.x:l2.x||w/2;
+    const ty=typeof l2.y==='number'?l2.y:l2.y||h/2;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(tx,ty);
+    ctx.strokeStyle='rgba(148,163,184,'+(0.08+l.score*0.12)+')';
+    ctx.lineWidth=Math.max(0.3,l.score*1.5);
+    ctx.stroke();
+  });
+
+  // Draw nodes
+  const r=Math.max(5,Math.min(12,24/Math.sqrt(nodes.length||1)));
+  nodes.forEach(n=>{
+    const x=typeof n.x==='number'?n.x:w/2;
+    const y=typeof n.y==='number'?n.y:h/2;
+    const isHover=n===hoveredNode;
+    const isSel=n===selectedNode;
+    const rad=isSel?r*1.6:isHover?r*1.3:r;
+    const alpha=selectedNode&&n!==selectedNode?0.3:1;
+
+    // Glow for selected
+    if(isSel){
+      ctx.beginPath();ctx.arc(x,y,rad+4,0,Math.PI*2);
+      ctx.fillStyle=n.color+'40';
+      ctx.fill();
+    }
+
+    // Node circle
+    ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);
+    ctx.fillStyle=n.color;
+    ctx.globalAlpha=alpha;
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    ctx.lineWidth=isSel?2:1;
+    ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // Label
+    if(transform.k>0.6||isSel||isHover){
+      const maxW=200/transform.k;
+      let label=n.label.substring(0,40);
+      ctx.font=`${Math.max(9,11/transform.k)}px -apple-system, sans-serif`;
+      if(ctx.measureText(label).width>maxW)label=label.substring(0,30)+'…';
+      ctx.fillStyle='rgba(226,232,240,'+(isHover?1:0.7)+')';
+      ctx.textAlign='center';
+      ctx.fillText(label,x,y+rad+14/transform.k);
+    }
+  });
+
+  ctx.restore();
+}
+
+function renderLegend(){
+  const clusterNodes={};
+  nodes.forEach(n=>{
+    if(!clusterNodes[n.cluster])clusterNodes[n.cluster]={count:0,color:n.color,label:''};
+    clusterNodes[n.cluster].count++;
+  });
+  const entries=Object.entries(clusterNodes).sort((a,b)=>b[1].count-a[1].count).slice(0,8);
+  const html=entries.map(([c,v])=>{
+    const label=v.count>1?`${v.count} papers`:null;
+    return `<div class="l"><div class="sw" style="background:${v.color}"></div>${label||'Cluster'}</div>`;
+  }).join('');
+  document.getElementById('legend').innerHTML=html||'';
+}
+
+// ── Interaction ──
+function screenToGraph(sx,sy){
+  return {x:(sx-transform.x)/transform.k,y:(sy-transform.y)/transform.k};
+}
+
+function hitTest(sx,sy){
+  const pt=screenToGraph(sx,sy);
+  const r=Math.max(5,Math.min(12,24/Math.sqrt(nodes.length||1)));
+  let best=null, bestDist=20/transform.k+r;
+  nodes.forEach(n=>{
+    const x=typeof n.x==='number'?n.x:simWidth/2;
+    const y=typeof n.y==='number'?n.y:simHeight/2;
+    const d=Math.hypot(pt.x-x,pt.y-y);
+    const hitR=selectedNode===n?r*1.6:r+2;
+    if(d<hitR+4/transform.k&&d<bestDist){bestDist=d;best=n}
+  });
+  return best;
+}
+
+function onMouseDown(e){
+  const rect=canvas.getBoundingClientRect();
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+  const hit=hitTest(sx,sy);
+  if(hit){
+    isDragging=false; dragStart={x:sx,y:sy,node:hit,nx:hit.x,ny:hit.y};
+    dragMoved=false;
+  }else{
+    isDragging=true; dragStart={x:sx-transform.x,y:sy-transform.y};
+    dragMoved=false;
+    canvas.style.cursor='grabbing';
+  }
+}
+
+function onMouseMove(e){
+  const rect=canvas.getBoundingClientRect();
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+
+  if(isDragging&&dragStart){
+    const dx=sx-(dragStart.x+transform.x), dy=sy-(dragStart.y+transform.y);
+    if(Math.abs(dx)>2||Math.abs(dy)>2)dragMoved=true;
+    if(dragStart.node){
+      dragStart.node.x=dragStart.nx+dx/transform.k;
+      dragStart.node.y=dragStart.ny+dy/transform.k;
+      render();
+    }else{
+      transform.x=sx-dragStart.x;
+      transform.y=sy-dragStart.y;
+      render();
+    }
+  }else{
+    const hit=hitTest(sx,sy);
+    hoveredNode=hit;
+    canvas.style.cursor=hit?'pointer':'default';
+    updateTooltip(sx,sy,hit);
+    render();
+  }
+}
+
+function onMouseUp(e){
+  if(isDragging&&!dragStart?.node){
+    isDragging=false; canvas.style.cursor='default';
+    render(); return;
+  }
+  if(dragStart?.node&&!dragMoved){
+    selectNode(dragStart.node);
+  }
+  isDragging=false; dragStart=null;
+  canvas.style.cursor='default';
+}
+
+function onClick(e){
+  const rect=canvas.getBoundingClientRect();
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+  const hit=hitTest(sx,sy);
+  if(hit&&!dragMoved)selectNode(hit);
+  else if(!hit&&!dragMoved){selectedNode=null;closeDetail()}
+}
+
+function onWheel(e){
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const delta=e.deltaY>0?0.9:1.1;
+  const nk=Math.max(0.2,Math.min(5,transform.k*delta));
+  // Zoom toward mouse position
+  transform.x=mx-(mx-transform.x)/transform.k*nk;
+  transform.y=my-(my-transform.y)/transform.k*nk;
+  transform.k=nk;
+  render();
+}
+
+function resetZoom(){
+  transform={x:0,y:0,k:1};
+  render();
+}
+
+// ── Tooltip ──
+function updateTooltip(sx,sy,node){
+  const tt=document.getElementById('tooltip');
+  if(!node){tt.style.opacity=0;return}
+  const scoreClass=node.clusterScore>0.3?'high':node.clusterScore>0.15?'med':'low';
+  tt.innerHTML=
+    '<div class="tt-title">'+esc(node.label)+'</div>'+
+    '<div class="tt-meta">'+(node.authors||'')+'</div>'+
+    '<div class="tt-meta">'+(node.published||'')+'</div>';
+  tt.style.opacity=1;
+  const ttx=sx+14, tty=sy-10;
+  const tw=tt.offsetWidth, th=tt.offsetHeight;
+  tt.style.left=Math.min(ttx,simWidth-tw-8)+'px';
+  tt.style.top=Math.min(tty,simHeight-th-8)+'px';
+}
+
+// ── Detail panel ──
+function selectNode(node){
+  selectedNode=node;
+  hoveredNode=null;
+  document.getElementById('tooltip').style.opacity=0;
+  render();
+
+  const p=papers.find(x=>x.id===node.id);
+  if(!p)return;
+  const detail=document.getElementById('detail');
+  // Similar papers
+  const simItems=simData.filter(s=>
+    s.source===node.id||s.target===node.id
+  ).sort((a,b)=>b.score-a.score).slice(0,10);
+
+  let simHtml='';
+  if(simItems.length){
+    simHtml='<div class="section"><b>Similar Papers</b><ul class="sim-list">'+
+      simItems.map(s=>{
+        const otherId=s.source===node.id?s.target:s.source;
+        const otherTitle=s.source===node.id?s.target_title:s.source_title;
+        const otherP=papers.find(x=>x.id===otherId);
+        return '<li><a href="#" onclick="event.preventDefault();selectNodeById(\''+esc(otherId)+'\')">'+
+          esc(otherTitle.substring(0,60))+'</a><span class="pct">'+(s.score*100).toFixed(0)+'%</span></li>';
+      }).join('')+'</ul></div>';
+  }
+
+  detail.innerHTML=
+    '<button class="close" onclick="closeDetail()">&#x2716;</button>'+
+    '<h2>'+esc(p.title)+'</h2>'+
+    '<div class="meta">'+(p.authors?esc(p.authors):'')+
+    (p.published?' &middot; '+p.published:'')+'</div>'+
+    (p.abstract?'<div class="section"><b>Abstract</b><p>'+esc(p.abstract.substring(0,400))+'</p></div>':'')+
+    simHtml;
+  detail.classList.add('open');
+}
+
+function selectNodeById(id){
+  const n=nodes.find(x=>x.id===id);
+  if(n)selectNode(n);
+}
+
+function closeDetail(){
+  document.getElementById('detail').classList.remove('open');
+  selectedNode=null;
+  render();
+}
+
+// ── Search ──
+let _searchTimer=null;
+function onSearch(q){
+  clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(()=>{
+    q=q.toLowerCase().trim();
+    if(!q){nodes.forEach(n=>n.filtered=true);render();return}
+    const match=nodes.filter(n=>n.label.toLowerCase().includes(q)||(n.authors||'').toLowerCase().includes(q));
+    if(match.length)selectNode(match[0]);
+  },200);
+}
+
+// ── API helper ──
+async function api(path,method,body){
+  const opts={method:method||'GET',headers:{'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(path,opts);
+  return r.json();
+}
+
+function esc(s){
+  if(!s)return'';
+  const d=document.createElement('div');d.textContent=s;return d.innerHTML;
+}
+</script>
+</body>
+</html>
