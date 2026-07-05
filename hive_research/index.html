@@ -5,49 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Hive Research</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
-<link rel="stylesheet" href="/static/css/style.css">.h-yellow{border-left:3px solid #fbbf24}
-.h-orange{border-left:3px solid #fb923c}
-.h-pink{border-left:3px solid #f472b6}
-.help-section{padding:14px;border-bottom:1px solid var(--border)}
-.help-section h2{font-size:14px;font-weight:600;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.help-steps{display:flex;flex-direction:column;gap:8px}
-.help-step{font-size:11px;color:var(--text2);line-height:1.5;padding:8px 10px;background:var(--surface);border-radius:var(--radius);border-left:3px solid var(--accent)}
-.help-step b{color:var(--text)}
-.help-step code{font-family:monospace;font-size:10px;background:rgba(84,152,255,.12);padding:1px 4px;border-radius:3px;color:var(--accent)}
-.help-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0}
-.help-flow-node{font-size:10px;padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);white-space:nowrap}
-.help-flow-arrow{color:var(--accent);font-size:14px;font-weight:700}
-.help-code-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:'SF Mono',monospace;font-size:11px;line-height:1.8;overflow-x:auto}
-.help-code-block .help-cmd{color:var(--accent);font-weight:500}
-.help-code-block .help-cmt{color:var(--text3);margin-left:8px}
-.help-api-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px}
-.help-api-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border-radius:var(--radius);font-size:11px;border:1px solid var(--border)}
-.help-api-method{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;flex-shrink:0}
-.help-api-method.get{background:rgba(52,211,153,.15);color:#34d399}
-.help-api-method.post{background:rgba(251,191,36,.15);color:#fbbf24}
-.help-api-item code{font-family:monospace;font-size:10px;color:var(--text2);background:rgba(148,163,184,.1);padding:2px 5px;border-radius:3px}
-.help-api-desc{color:var(--text3);font-size:10px;margin-left:auto}
-.help-table{display:flex;flex-direction:column;gap:4px}
-.help-table-row{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--surface);border-radius:var(--radius);font-size:11px;border:1px solid var(--border)}
-.help-table-row b{color:var(--text);font-weight:500;min-width:140px}
-.help-table-row span{color:var(--text2)}
-.help-table-row kbd{font-family:monospace;font-size:10px;background:var(--bg);border:1px solid var(--border);padding:2px 5px;border-radius:3px;color:var(--text)}
-.help-footer{text-align:center;padding:20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border)}
-.help-footer a{color:var(--accent);text-decoration:none}
-.help-footer a:hover{text-decoration:underline}
-/* ── Help Tabs ── */
-.help-tabs{margin-top:8px}
-.help-tab-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:10px}
-.help-tab{padding:6px 14px;font-size:11px;color:var(--text3);cursor:pointer;border-radius:var(--radius) var(--radius) 0 0;border-bottom:2px solid transparent;transition:all .15s;background:transparent}
-.help-tab:hover{color:var(--text);background:var(--surface2)}
-.help-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
-.help-tab-content{display:none}
-.help-tab-content.active{display:block}
-.help-code-title{color:var(--text3);font-size:10px;margin-top:10px;margin-bottom:2px}
-.help-code-title:first-child{margin-top:0}
-/* ── Responsive ── */
-@media(max-width:700px){#app{grid-template-columns:1fr;grid-template-rows:36px 1fr}#sidebar{display:none}#detail{width:100%;right:-100%}}
-</style>
+<link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 <div id="app">
