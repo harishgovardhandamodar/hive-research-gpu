@@ -63,9 +63,13 @@ class LLMInterface:
         max_tokens: int | None = None,
         gpu_id: int | None = None,
     ) -> str:
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
         payload: dict[str, Any] = {
             "model": model or self.config.ollama_model,
-            "prompt": prompt,
+            "messages": messages,
             "stream": False,
             "options": {
                 "temperature": temperature if temperature is not None
@@ -74,12 +78,10 @@ class LLMInterface:
                 else self.config.ollama_max_tokens,
             },
         }
-        if system:
-            payload["system"] = system
         if gpu_id is None and self.gpu_mgr:
             gpu_id = self.gpu_mgr.get_next_llm_gpu()
-        data = self._request("generate", payload, gpu_id=gpu_id)
-        return data.get("response", "")
+        data = self._request("chat", payload, gpu_id=gpu_id)
+        return data.get("message", {}).get("content", "")
 
     def generate_parallel(
         self,
@@ -232,12 +234,12 @@ class LLMInterface:
     def embed(self, text: str, model: str | None = None, gpu_id: int | None = None) -> list[float]:
         payload = {
             "model": model or self.config.ollama_embed_model,
-            "prompt": text,
+            "input": text,
         }
         if gpu_id is None and self.gpu_mgr:
             gpu_id = self.gpu_mgr.get_next_embed_gpu()
-        data = self._request("embeddings", payload, gpu_id=gpu_id)
-        return data.get("embedding", [])
+        data = self._request("embed", payload, gpu_id=gpu_id)
+        return data.get("embeddings", [data.get("embedding", [])])[0] if isinstance(data.get("embeddings"), list) else data.get("embedding", [])
 
     def embed_parallel(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         results: list[list[float]] = [[] for _ in texts]

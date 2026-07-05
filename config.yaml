@@ -10,14 +10,14 @@ arxiv:
 
 ollama:
   base_url: http://localhost:11434
-  model: qwen3.6:35b-mlx
+  model: qwen3.6:35b
   fast_model: llama3.2:3b
   embed_model: nomic-embed-text
   max_tokens: 16384
   temperature: 0.1
 
 gpu:
-  enabled: true
+  enabled: false
   device_count: 2
   memory_fraction: 0.95
   parallel_papers: 2
