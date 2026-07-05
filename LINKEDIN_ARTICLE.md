@@ -95,10 +95,13 @@ score(d) = 1/(60 + rank_vector(d)) + 1/(60 + rank_keyword(d))
 Result: hybrid search that captures both semantic meaning and keyword precision.
 
 ```
-[RAG Chat Interface - Screenshot]
-The chat panel showing a RAG query with cited sources:
-"Q: What methods are used for graph classification?"
-"A: Graph neural networks achieve state-of-the-art... [1][2]"
+[Screenshot 2 - RAG Chat]
+What to capture: The Chat panel showing a Q&A with cited sources.
+How: Open http://localhost:7777/hive → Chat → Ask "What is attention?"
+→ Wait for answer → Capture the chat messages area showing:
+  • User question in blue bubble
+  • AI answer with [1], [2] source citations
+  • Sources listed below the answer
 ```
 
 ### 4. Optional FAISS for Scalability
@@ -164,9 +167,15 @@ Each step logs a status update:
 The web dashboard is a single-page application served by the Python HTTP server. It communicates via a REST API — no frameworks, no build step, just vanilla JavaScript and D3.js.
 
 ```
-[Dashboard Graph View - Screenshot]
-Force-directed knowledge graph showing paper nodes (blue),
-concept nodes (purple), and citation edges (green).
+[Screenshot 1 - Knowledge Graph]
+What to capture: The main Graph view showing the force-directed visualization.
+How: Open http://localhost:7777/hive → Graph tab (default) → Wait for
+simulation to settle → Capture showing:
+  • Blue square nodes = papers
+  • Purple circle nodes = concepts  
+  • Green edges = citation links
+  • Orange diamond nodes = web resources
+  • Tooltip on hover showing paper details
 ```
 
 ### Core Views
@@ -181,9 +190,14 @@ concept nodes (purple), and citation edges (green).
 | **Collections** | User-defined paper sets and saved searches |
 
 ```
-[Research Pool Panel - Screenshot]
-Split view showing topic insight cards (left) with observed/imported
-counts and conversion bars, and pool similarity graph (right).
+[Screenshot 3 - Research Pool]
+What to capture: The Topics & Graph split-pane view.
+How: Pool → Topics & Graph → Shows:
+  • Left panel: topic cards with observed/imported/rate% 
+  • Right panel: interactive D3 graph with topic-colored nodes
+  • Progress bars on each topic card
+  • Sub-graph and remove buttons on each card
+  • Draggable divider between panels
 ```
 
 ### Research Pool
@@ -237,9 +251,13 @@ graph LR
 ## RAG Engine: Three Search Modes
 
 ```
-[RAG Hybrid Search Results - Screenshot]
-Showing the same question answered with vector, keyword, and hybrid modes.
-Hybrid mode combines the best of both.
+[Screenshot 4 - YAML Frontmatter]
+What to capture: The Browse panel showing a paper's 00_notes.md preview.
+How: Browse → click a paper with notes → the notes auto-open showing:
+  • Metadata card with title, authors, arXiv link, published date
+  • Tags as colored badge pills
+  • Summary and notes below the metadata
+  • File groups on the left (Notes, PDFs)
 ```
 
 | Mode | Method | Best For |
@@ -373,6 +391,55 @@ result = client.query(
 
 Open source at: [github.com/your-org/hive-research-gpu](https://github.com/your-org/hive-research-gpu)  
 Built with Python, Ollama, D3.js, and a lot of curiosity.
+
+---
+
+## Screenshot Guide
+
+To capture the screenshots for this article, follow these steps:
+
+### 1. Knowledge Graph View
+1. Start the server: `python -m hive_research serve`
+2. Open `http://localhost:7777/hive` in Chrome/Firefox
+3. Click **Graph** in the sidebar
+4. Wait for the D3 force-directed graph to render (nodes will spread out)
+5. Capture the full browser window showing the graph with colored nodes and edges
+
+### 2. RAG Chat
+1. Click **Chat** in the sidebar
+2. Type "What is the transformer architecture?" and press Enter
+3. Wait for the answer with cited sources `[1]`, `[2]`
+4. Capture the chat panel showing the Q&A with sources
+
+### 3. Research Pool
+1. Click **Pool** in the sidebar
+2. Click **Topics & Graph** tab
+3. Wait for topic cards to load on the left and pool graph on the right
+4. Capture the split-pane view with topic insights and graph
+
+### 4. YAML Frontmatter Preview
+1. Click **Browse** in the sidebar
+2. Click a paper that has a `00_notes.md` file
+3. The notes file should auto-open showing the beautified metadata card
+4. Capture the preview panel showing title, authors, tags, and arXiv link
+
+### 5. Ingestion Queue Status
+1. Go to **Import** panel
+2. Add a paper (e.g., `1706.03762`)
+3. The ingestion queue status bar will appear below the panels
+4. Capture the status bar showing the paper's progress badges
+
+### 6. Free-Form Pool Query
+1. Switch to **Pool** panel
+2. Type a query like "find me references about graph neural networks and transformers" in the search bar
+3. Press Enter or click Search
+4. Capture the sub-graph overlay showing results
+
+### Tools for capturing
+- **Chrome**: Full-page screenshot via DevTools (Ctrl+Shift+P → "Capture full size screenshot")
+- **macOS**: Cmd+Shift+4 for selection, Cmd+Shift+5 for window
+- **Windows**: Snipping Tool or Win+Shift+S
+- **Clean up**: Crop to show just the relevant panel, remove browser chrome
 
 ---
 
