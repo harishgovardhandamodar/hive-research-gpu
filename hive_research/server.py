@@ -16,10 +16,43 @@ from .gpu import GPUManager
 from .logs import get_capture
 from .organizer import Organizer
 
+# Optional auth: set HIVE_AUTH_TOKEN env var to enable
+AUTH_TOKEN = os.environ.get("HIVE_AUTH_TOKEN", "")
+
+
+def _check_auth(handler: BaseHTTPRequestHandler) -> bool:
+    """Returns True if auth passes or is not configured."""
+    if not AUTH_TOKEN:
+        return True
+    auth = handler.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:] == AUTH_TOKEN
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode()
+            _, password = decoded.split(":", 1)
+            return password == AUTH_TOKEN
+        except Exception:
+            return False
+    return False
+
+
+def _require_auth(handler: BaseHTTPRequestHandler) -> bool:
+    """Send 401 if auth fails. Returns True if allowed."""
+    if _check_auth(handler):
+        return True
+    handler.send_response(401)
+    handler.send_header("WWW-Authenticate", 'Bearer realm="hive-research"')
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.end_headers()
+    handler.wfile.write(json.dumps({"error": "unauthorized"}).encode())
+    return False
+
 logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
-LANDSCAPE_HTML = Path(__file__).parent / "landscape.html"
+HIVE_UI_HTML = Path(__file__).parent / "index.html"
 
 
 def _json_response(
@@ -68,10 +101,14 @@ class RouteHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path, params = self._parse_path()
+        if not _require_auth(self):
+            return
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
-        elif path == "/landscape":
-            self._serve_landscape()
+        elif path == "/hive":
+            self._serve_hive_ui()
+        elif path.startswith("/static/"):
+            self._serve_static(path)
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -84,6 +121,44 @@ class RouteHandler(BaseHTTPRequestHandler):
             if isinstance(paper_ids, str):
                 paper_ids = [x.strip() for x in paper_ids.split(",") if x.strip()]
             _json_response(self, self.org.similarity(paper_ids=paper_ids, algorithm=algorithm))
+        elif path == "/api/export/bibtex":
+            bibtex = self.org.export_bibtex()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-bibtex")
+            self.send_header("Content-Disposition", 'attachment; filename="papers.bib"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(bibtex.encode())
+        elif path == "/api/export/json":
+            data = self.org.export_json()
+            _json_response(self, json.loads(data))
+        elif path == "/api/export/csv":
+            csv = self.org.export_csv()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", 'attachment; filename="papers.csv"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(csv.encode())
+        elif path == "/api/collections":
+            _json_response(self, self.org.collections.list_collections())
+        elif path == "/api/collections/papers":
+            collection = params.get("collection", "")
+            papers = self.org.collections.get_collection_papers(collection)
+            _json_response(self, {"collection": collection, "papers": papers})
+        elif path == "/api/searches":
+            _json_response(self, self.org.collections.list_saved_searches())
+        elif path == "/api/favorites":
+            _json_response(self, {"favorites": self.org.collections.list_favorites()})
+        elif path == "/api/export/backup":
+            zip_path = self.org.export_backup(include_pdfs=False)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{Path(zip_path).name}"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            with open(zip_path, "rb") as f:
+                self.wfile.write(f.read())
         elif path == "/api/papers":
             from .pipeline import _sanitize_id
             has_lineage = set()
@@ -412,6 +487,8 @@ info.textContent += ' | OK';
 
     def do_POST(self) -> None:
         path, params = self._parse_path()
+        if not _require_auth(self):
+            return
         body = self._read_body()
         try:
             data = json.loads(body) if body else {}
@@ -419,14 +496,15 @@ info.textContent += ' | OK';
             data = {}
 
         if path == "/api/add":
-            arxiv_id = data.get("id", params.get("id", ""))
-            if not arxiv_id:
-                _json_response(self, {"error": "missing id"}, 400)
-                return
-            model_param = data.get("model", params.get("model", None))
-            model = self.org.config.resolve_model(model_param)
-            result = self.org.add_by_id(arxiv_id, model=model)
-            _json_response(self, result)
+            try:
+                from .schemas import AddPaperRequest
+                req = AddPaperRequest(**{**data, **params})
+                model_param = data.get("model", params.get("model", None))
+                model = self.org.config.resolve_model(model_param)
+                result = self.org.add_by_id(req.id, model=model)
+                _json_response(self, result)
+            except Exception as e:
+                _json_response(self, {"error": str(e)}, 400)
         elif path == "/api/search":
             query = data.get("query", params.get("query", ""))
             if not query:
@@ -528,6 +606,55 @@ info.textContent += ' | OK';
                     self.org.pool.mark_imported(aid)
                 results.append({"arxiv_id": aid, "status": r.get("status")})
             _json_response(self, {"results": results})
+        elif path == "/api/collections/create":
+            name = data.get("name", "")
+            desc = data.get("description", "")
+            if not name:
+                _json_response(self, {"error": "missing name"}, 400)
+                return
+            _json_response(self, self.org.collections.create_collection(name, desc))
+        elif path == "/api/collections/delete":
+            name = data.get("name", "")
+            if not name:
+                _json_response(self, {"error": "missing name"}, 400)
+                return
+            _json_response(self, self.org.collections.delete_collection(name))
+        elif path == "/api/collections/add":
+            collection = data.get("collection", "")
+            paper_id = data.get("paper_id", "")
+            if not collection or not paper_id:
+                _json_response(self, {"error": "missing collection/paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.add_to_collection(collection, paper_id))
+        elif path == "/api/collections/remove":
+            collection = data.get("collection", "")
+            paper_id = data.get("paper_id", "")
+            if not collection or not paper_id:
+                _json_response(self, {"error": "missing collection/paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.remove_from_collection(collection, paper_id))
+        elif path == "/api/searches/save":
+            query = data.get("query", "")
+            name = data.get("name", "")
+            if not query:
+                _json_response(self, {"error": "missing query"}, 400)
+                return
+            _json_response(self, self.org.collections.save_search(query, name))
+        elif path == "/api/searches/delete":
+            idx = data.get("index", -1)
+            _json_response(self, self.org.collections.delete_saved_search(idx))
+        elif path == "/api/favorites/add":
+            pid = data.get("paper_id", "")
+            if not pid:
+                _json_response(self, {"error": "missing paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.add_favorite(pid))
+        elif path == "/api/favorites/remove":
+            pid = data.get("paper_id", "")
+            if not pid:
+                _json_response(self, {"error": "missing paper_id"}, 400)
+                return
+            _json_response(self, self.org.collections.remove_favorite(pid))
         else:
             _json_response(self, {"error": "not found"}, 404)
 
@@ -537,11 +664,36 @@ info.textContent += ' | OK';
         else:
             _html_response(self, _inline_dashboard())
 
-    def _serve_landscape(self) -> None:
-        if LANDSCAPE_HTML.exists():
-            _html_response(self, LANDSCAPE_HTML.read_text())
+    def _serve_hive_ui(self) -> None:
+        if HIVE_UI_HTML.exists():
+            _html_response(self, HIVE_UI_HTML.read_text())
         else:
-            _html_response(self, "<html><body><p>Landscape view not found</p></body></html>")
+            _html_response(self, "<html><body><p>Hive UI not found</p></body></html>")
+
+    def _serve_static(self, path: str) -> None:
+        rel = path.lstrip("/")
+        static_dir = Path(__file__).parent / "static"
+        filepath = static_dir / rel
+        if not filepath.exists() or not filepath.is_file():
+            self.send_response(404)
+            self.end_headers()
+            return
+        suffix = filepath.suffix.lower()
+        mime = {
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".html": "text/html",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+        }.get(suffix, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(filepath.read_bytes())
 
 
 def run_server(

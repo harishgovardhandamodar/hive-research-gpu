@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Hive Research</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="stylesheet" href="/static/css/style.css">.h-yellow{border-left:3px solid #fbbf24}
+.h-orange{border-left:3px solid #fb923c}
+.h-pink{border-left:3px solid #f472b6}
+.help-section{padding:14px;border-bottom:1px solid var(--border)}
+.help-section h2{font-size:14px;font-weight:600;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.help-steps{display:flex;flex-direction:column;gap:8px}
+.help-step{font-size:11px;color:var(--text2);line-height:1.5;padding:8px 10px;background:var(--surface);border-radius:var(--radius);border-left:3px solid var(--accent)}
+.help-step b{color:var(--text)}
+.help-step code{font-family:monospace;font-size:10px;background:rgba(84,152,255,.12);padding:1px 4px;border-radius:3px;color:var(--accent)}
+.help-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0}
+.help-flow-node{font-size:10px;padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);white-space:nowrap}
+.help-flow-arrow{color:var(--accent);font-size:14px;font-weight:700}
+.help-code-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:'SF Mono',monospace;font-size:11px;line-height:1.8;overflow-x:auto}
+.help-code-block .help-cmd{color:var(--accent);font-weight:500}
+.help-code-block .help-cmt{color:var(--text3);margin-left:8px}
+.help-api-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px}
+.help-api-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border-radius:var(--radius);font-size:11px;border:1px solid var(--border)}
+.help-api-method{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;flex-shrink:0}
+.help-api-method.get{background:rgba(52,211,153,.15);color:#34d399}
+.help-api-method.post{background:rgba(251,191,36,.15);color:#fbbf24}
+.help-api-item code{font-family:monospace;font-size:10px;color:var(--text2);background:rgba(148,163,184,.1);padding:2px 5px;border-radius:3px}
+.help-api-desc{color:var(--text3);font-size:10px;margin-left:auto}
+.help-table{display:flex;flex-direction:column;gap:4px}
+.help-table-row{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--surface);border-radius:var(--radius);font-size:11px;border:1px solid var(--border)}
+.help-table-row b{color:var(--text);font-weight:500;min-width:140px}
+.help-table-row span{color:var(--text2)}
+.help-table-row kbd{font-family:monospace;font-size:10px;background:var(--bg);border:1px solid var(--border);padding:2px 5px;border-radius:3px;color:var(--text)}
+.help-footer{text-align:center;padding:20px;font-size:11px;color:var(--text3);border-top:1px solid var(--border)}
+.help-footer a{color:var(--accent);text-decoration:none}
+.help-footer a:hover{text-decoration:underline}
+/* ── Help Tabs ── */
+.help-tabs{margin-top:8px}
+.help-tab-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.help-tab{padding:6px 14px;font-size:11px;color:var(--text3);cursor:pointer;border-radius:var(--radius) var(--radius) 0 0;border-bottom:2px solid transparent;transition:all .15s;background:transparent}
+.help-tab:hover{color:var(--text);background:var(--surface2)}
+.help-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
+.help-tab-content{display:none}
+.help-tab-content.active{display:block}
+.help-code-title{color:var(--text3);font-size:10px;margin-top:10px;margin-bottom:2px}
+.help-code-title:first-child{margin-top:0}
+/* ── Responsive ── */
+@media(max-width:700px){#app{grid-template-columns:1fr;grid-template-rows:36px 1fr}#sidebar{display:none}#detail{width:100%;right:-100%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>&#x1F9D1;&#x200D;&#x1F4BB; Hive</h1>
+    <div class="s"></div>
+    <input id="gSearch" placeholder="Search graph..." oninput="G.search(this.value)">
+    <button class="btn" onclick="G.refresh()">&#x21bb; Refresh</button>
+    <button id="themeBtn" onclick="H.toggleTheme()">&#x263E;</button>
+  </div>
+  <div id="sidebar">
+    <div class="nv a" data-v="dash" onclick="H.switch('dash',this)">&#x1F4CA;<div class="tt">Dashboard</div></div>
+    <div class="nv" data-v="graph" onclick="H.switch('graph',this)">&#x1F578;<div class="tt">Graph</div></div>
+    <div class="nv" data-v="papers" onclick="H.switch('papers',this)">&#x1F4D6;<div class="tt">Papers</div></div>
+    <div class="nv" data-v="similarity" onclick="H.switch('similarity',this)">&#x2248;<div class="tt">Similarity</div></div>
+    <div class="nv" data-v="import" onclick="H.switch('import',this)">&#x2795;<div class="tt">Import</div></div>
+    <div class="nv" data-v="chat" onclick="H.switch('chat',this)">&#x1F4AC;<div class="tt">Chat</div></div>
+    <div class="sp"></div>
+    <div class="nv" data-v="help" onclick="H.switch('help',this)">&#x2753;<div class="tt">Help</div></div>
+  </div>
+  <div id="main">
+    <!-- Dashboard -->
+    <div class="p a" id="p-dash">
+      <h2>Dashboard</h2>
+      <div class="stats" id="statsR"></div>
+      <div style="color:var(--text3);font-size:11px;margin-top:8px">Select a view from the sidebar to get started.</div>
+    </div>
+    <!-- Graph -->
+    <div class="p" id="p-graph">
+      <div id="graphWrap"><div id="gEmpty">No graph data</div></div>
+    </div>
+    <!-- Papers -->
+    <div class="p" id="p-papers"><div id="pList"></div></div>
+    <!-- Similarity -->
+    <div class="p" id="p-similarity">
+      <div class="sim-c">
+        <select id="simAlgo"><option value="combined">Combined</option><option value="vector">Vector</option><option value="abstract">Abstract</option><option value="author">Author</option></select>
+        <button class="btn" onclick="S.load()">&#x2248; Compute</button>
+      </div>
+      <div style="overflow:auto" id="simR"></div>
+    </div>
+    <!-- Import -->
+    <div class="p" id="p-import">
+      <h2>Add Paper</h2>
+      <div class="imp-g"><input id="impId" placeholder="arXiv ID or URL"><button class="btn" onclick="I.add()">Add</button></div>
+      <h2>Web Link</h2>
+      <div class="imp-g"><input id="impUrl" placeholder="https://..."><button class="btn" onclick="I.web()">Ingest</button></div>
+      <h2>Search arXiv</h2>
+      <div class="imp-g"><input id="impQ" placeholder="search query"><button class="btn" onclick="I.search()">Search</button></div>
+    </div>
+    <!-- Chat -->
+    <div class="p" id="p-chat" style="display:flex;flex-direction:column">
+      <div id="chatM"></div>
+      <div class="chat-in"><input id="chatIn" placeholder="Ask about your research..." onkeydown="if(event.key==='Enter')C.send()"><button class="btn" onclick="C.send()">Send</button></div>
+    </div>
+    <!-- Help -->
+    <div class="p" id="p-help">
+      <div class="help-hero">
+        <div class="help-hero-icon">&#x1F41D;</div>
+        <h1>Hive Research GPU</h1>
+        <p>Self-contained research assistant powered by dual GPUs, local LLMs, and a knowledge graph</p>
+      </div>
+      <div class="help-grid">
+        <div class="help-card h-blue">
+          <div class="help-card-icon">&#x1F4CA;</div>
+          <h3>Dashboard</h3>
+          <p>System overview with live stats, paper counts, and quick access to all views</p>
+        </div>
+        <div class="help-card h-purple">
+          <div class="help-card-icon">&#x1F578;</div>
+          <h3>Knowledge Graph</h3>
+          <p>Interactive force-directed graph. Blue=paper, purple=concept, teal=lineage, orange=web. Drag, pan, zoom. Click nodes for details</p>
+        </div>
+        <div class="help-card h-green">
+          <div class="help-card-icon">&#x1F4D6;</div>
+          <h3>Papers</h3>
+          <p>Browse your full library. Search by title or author. View vault notes, figures, and citation lineage</p>
+        </div>
+        <div class="help-card h-yellow">
+          <div class="help-card-icon">&#x2248;</div>
+          <h3>Similarity</h3>
+          <p>Pairwise paper similarity with algorithm selector: Combined, Abstract Jaccard, Author Overlap, Concept Overlap, Vector</p>
+        </div>
+        <div class="help-card h-orange">
+          <div class="help-card-icon">&#x2795;</div>
+          <h3>Import</h3>
+          <p>Add papers by arXiv ID, ingest web articles, or search arXiv by keyword and import in batch</p>
+        </div>
+        <div class="help-card h-pink">
+          <div class="help-card-icon">&#x1F4AC;</div>
+          <h3>RAG Chat</h3>
+          <p>Ask questions in natural language. Semantic search over chunks &rarr; LLM answer with source citations</p>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x1F680; Quick Start</h2>
+        <div class="help-steps">
+          <div class="help-step"><b>1.</b> Go to <b>Import</b> &rarr; enter arXiv ID (e.g. <code>1706.03762</code>) &rarr; click <b>Add</b></div>
+          <div class="help-step"><b>2.</b> Pipeline runs: fetch &rarr; download PDF &rarr; extract text &rarr; LLM analysis &rarr; populate graph &rarr; index for RAG</div>
+          <div class="help-step"><b>3.</b> Visit <b>Graph</b> to see the paper and its linked concepts</div>
+          <div class="help-step"><b>4.</b> Ask questions in <b>Chat</b> using RAG over all papers</div>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x2699; Ingestion Pipeline</h2>
+        <div class="help-flow">
+          <div class="help-flow-node">arXiv ID</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">Fetch Meta</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">Download PDF</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">Extract Text</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">LLM Analysis</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">Build Graph</div>
+          <div class="help-flow-arrow">&rarr;</div>
+          <div class="help-flow-node">RAG Index</div>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x1F4BB; CLI Commands</h2>
+        <div class="help-code-block">
+          <div><span class="help-cmd">python -m hive_research serve</span> <span class="help-cmt"># Start web dashboard (:7777)</span></div>
+          <div><span class="help-cmd">python -m hive_research add &lt;id&gt;</span> <span class="help-cmt"># Add paper by arXiv ID</span></div>
+          <div><span class="help-cmd">python -m hive_research import "query" -n 5</span> <span class="help-cmt"># Search & import</span></div>
+          <div><span class="help-cmd">python -m hive_research query "question"</span> <span class="help-cmt"># RAG question</span></div>
+          <div><span class="help-cmd">python -m hive_research gpu</span> <span class="help-cmt"># GPU status</span></div>
+          <div><span class="help-cmd">python -m hive_research stats</span> <span class="help-cmt"># System stats</span></div>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x1F4E1; API Reference & Examples</h2>
+        <div class="help-tabs">
+          <div class="help-tab-bar">
+            <div class="help-tab active" data-tab="api-endpoints" onclick="switchHelpTab(this)">Endpoints</div>
+            <div class="help-tab" data-tab="api-python" onclick="switchHelpTab(this)">Python</div>
+            <div class="help-tab" data-tab="api-jupyter" onclick="switchHelpTab(this)">Jupyter</div>
+          </div>
+          <div class="help-tab-content active" id="api-endpoints">
+            <div class="help-api-grid">
+              <div class="help-api-item"><span class="help-api-method get">GET</span><code>/api/graph</code><span class="help-api-desc">Knowledge graph nodes & links</span></div>
+              <div class="help-api-item"><span class="help-api-method get">GET</span><code>/api/papers</code><span class="help-api-desc">All papers</span></div>
+              <div class="help-api-item"><span class="help-api-method get">GET</span><code>/api/stats</code><span class="help-api-desc">System statistics</span></div>
+              <div class="help-api-item"><span class="help-api-method get">GET</span><code>/api/papers/search?q=...</code><span class="help-api-desc">Search papers</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/add</code><span class="help-api-desc">Add paper by ID</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/query</code><span class="help-api-desc">RAG question</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/search</code><span class="help-api-desc">Search arXiv</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/import</code><span class="help-api-desc">Search & import</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/similarity</code><span class="help-api-desc">Similarity matrix</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/web/add</code><span class="help-api-desc">Ingest web URL</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/lineage</code><span class="help-api-desc">Citation lineage</span></div>
+              <div class="help-api-item"><span class="help-api-method post">POST</span><code>/api/refresh</code><span class="help-api-desc">Refresh all notes</span></div>
+            </div>
+          </div>
+          <div class="help-tab-content" id="api-python">
+            <div class="help-code-block">
+<div class="help-code-title"># --- Setup ---</div>
+<div>import requests, json</div>
+<div>BASE = <span class="help-cmd">"http://localhost:7777"</span></div>
+<div></div>
+<div class="help-code-title"># --- Add a paper ---</div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/add"</span>,</div>
+<div>    json={<span class="help-cmd">"id"</span>: <span class="help-cmd">"1706.03762"</span>, <span class="help-cmd">"model"</span>: <span class="help-cmd">"fast"</span>})</div>
+<div>print(r.json())  <span class="help-cmt"># {status, paper_id, concepts, tags, ...}</span></div>
+<div></div>
+<div class="help-code-title"># --- Query the graph ---</div>
+<div>r = requests.get(<span class="help-cmd">f"{BASE}/api/graph"</span>)</div>
+<div>graph = r.json()</div>
+<div>print(<span class="help-cmd">f"Papers: {len(graph['nodes'])}, Edges: {len(graph['links'])}"</span>)</div>
+<div></div>
+<div class="help-code-title"># --- RAG question ---</div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/query"</span>,</div>
+<div>    json={<span class="help-cmd">"question"</span>: <span class="help-cmd">"What methods are used for graph classification?"</span>})</div>
+<div>print(r.json()[<span class="help-cmd">"answer"</span>])</div>
+<div></div>
+<div class="help-code-title"># --- Search arXiv (no import) ---</div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/search"</span>,</div>
+<div>    json={<span class="help-cmd">"query"</span>: <span class="help-cmd">"transformer attention"</span>})</div>
+<div>for p in r.json()[<span class="help-cmd">"results"</span>]:</div>
+<div>    print(p[<span class="help-cmd">"title"</span>], p[<span class="help-cmd">"arxiv_id"</span>])</div>
+<div></div>
+<div class="help-code-title"># --- Import batch ---</div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/import"</span>,</div>
+<div>    json={<span class="help-cmd">"query"</span>: <span class="help-cmd">"graph neural networks"</span>, <span class="help-cmd">"model"</span>: <span class="help-cmd">"fast"</span>})</div>
+<div>print(r.json()[<span class="help-cmd">"added"</span>], <span class="help-cmd">"papers added"</span>)</div>
+<div></div>
+<div class="help-code-title"># --- Similarity matrix ---</div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/similarity"</span>,</div>
+<div>    json={<span class="help-cmd">"algorithm"</span>: <span class="help-cmd">"combined"</span>})</div>
+<div>top = sorted(r.json(), key=<span class="help-cmd">lambda x: x["score"]</span>, reverse=<span class="help-cmd">True</span>)[:5]</div>
+<div>for s in top: print(<span class="help-cmd">f"{s['source_title'][:40]:40} {s['score']:.2f}"</span>)</div>
+<div></div>
+<div class="help-code-title"># --- System stats ---</div>
+<div>r = requests.get(<span class="help-cmd">f"{BASE}/api/stats"</span>)</div>
+<div>print(r.json())  <span class="help-cmt"># {papers, concepts, relations, rag, gpu}</span></div>
+            </div>
+          </div>
+          <div class="help-tab-content" id="api-jupyter">
+            <div class="help-code-block">
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># Hive Research GPU &mdash; Jupyter Notebook Guide</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div>import requests, json, pandas as pd</div>
+<div>import matplotlib.pyplot as plt</div>
+<div>from IPython.display import Markdown, display</div>
+<div>BASE = <span class="help-cmd">"http://localhost:7777"</span></div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 1. Add Papers to the Knowledge Base</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div><span class="help-cmt"># Add a single paper by arXiv ID</span></div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/add"</span>, json={<span class="help-cmd">"id"</span>: <span class="help-cmd">"1706.03762"</span>})</div>
+<div>result = r.json()</div>
+<div>display(Markdown(<span class="help-cmd">f"**Status:** {result['status']} | **Concepts:** {result.get('concepts',0)}"</span>))</div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 2. Browse the Knowledge Graph</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div><span class="help-cmt"># Fetch graph and visualize node types</span></div>
+<div>graph = requests.get(<span class="help-cmd">f"{BASE}/api/graph"</span>).json()</div>
+<div>nodes = graph[<span class="help-cmd">"nodes"</span>]</div>
+<div>types = {}</div>
+<div>for n in nodes:</div>
+<div>    t = n.get(<span class="help-cmd">"type"</span>, <span class="help-cmd">"paper"</span>)</div>
+<div>    types[t] = types.get(t, 0) + 1</div>
+<div>pd.Series(types).plot(kind=<span class="help-cmd">"bar"</span>, color=<span class="help-cmd">"#60a5fa"</span>)</div>
+<div>plt.title(<span class="help-cmd">"Knowledge Graph Node Types"</span>)</div>
+<div>plt.show()</div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 3. RAG Question Answering</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div>question = <span class="help-cmd">"What are the key contributions of the attention mechanism?"</span></div>
+<div>r = requests.post(<span class="help-cmd">f"{BASE}/api/query"</span>, json={<span class="help-cmd">"question"</span>: question})</div>
+<div>answer = r.json()[<span class="help-cmd">"answer"</span>]</div>
+<div>display(Markdown(<span class="help-cmd">f"### Answer\n\n{answer}"</span>))</div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 4. Paper Similarity Analysis</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div>sim = requests.post(<span class="help-cmd">f"{BASE}/api/similarity"</span>,</div>
+<div>    json={<span class="help-cmd">"algorithm"</span>: <span class="help-cmd">"vector"</span>}).json()</div>
+<div>df = pd.DataFrame(sim).sort_values(<span class="help-cmd">"score"</span>, ascending=<span class="help-cmd">False</span>).head(10)</div>
+<div>df[[<span class="help-cmd">"source_title"</span>, <span class="help-cmd">"target_title"</span>, <span class="help-cmd">"score"</span>]]</div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 5. Research Pool Monitoring</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div>pool = requests.get(<span class="help-cmd">f"{BASE}/api/pool"</span>).json()</div>
+<div>for topic, papers in pool.items():</div>
+<div>    print(<span class="help-cmd">f"\n=== {topic} ({len(papers)} papers) ==="</span>)</div>
+<div>    for p in papers[:3]:</div>
+<div>        print(<span class="help-cmd">f"  - {p['title'][:60]}..."</span>)</div>
+<div></div>
+<div class="help-code-title"># %% [markdown]</div>
+<div><span class="help-cmt"># ## 6. System Health Check</span></div>
+<div></div>
+<div class="help-code-title"># %%</div>
+<div>stats = requests.get(<span class="help-cmd">f"{BASE}/api/stats"</span>).json()</div>
+<div>gpu = stats.get(<span class="help-cmd">"gpu"</span>, {})</div>
+<div>display(Markdown(<span class="help-cmd">f"""</span></div>
+<div><span class="help-cmd">| Metric | Value |</span></div>
+<div><span class="help-cmd">|--------|-------|</span></div>
+<div><span class="help-cmd">| Papers | {stats['papers']} |</span></div>
+<div><span class="help-cmd">| Concepts | {stats['concepts']} |</span></div>
+<div><span class="help-cmd">| RAG Chunks | {stats['rag']['chunks']} |</span></div>
+<div><span class="help-cmd">| GPUs | {gpu.get('device_count', 0)} |</span></div>
+<div><span class="help-cmd">""")</span>)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x1F4BE; Data Storage</h2>
+        <div class="help-table">
+          <div class="help-table-row"><b>data/papers/</b><span>Downloaded PDFs</span></div>
+          <div class="help-table-row"><b>data/graph/main.json</b><span>Knowledge graph (HiveGraph JSON)</span></div>
+          <div class="help-table-row"><b>data/vault/</b><span>Markdown notes with YAML frontmatter</span></div>
+          <div class="help-table-row"><b>data/rag/</b><span>Chunk index + embeddings.npy</span></div>
+          <div class="help-table-row"><b>data/pool/pool.db</b><span>Research pool SQLite database</span></div>
+        </div>
+      </div>
+      <div class="help-section">
+        <h2>&#x1F3AF; Keyboard Shortcuts</h2>
+        <div class="help-table">
+          <div class="help-table-row"><kbd>Ctrl</kbd>+<kbd>/</kbd> <span>Focus search (when in graph)</span></div>
+          <div class="help-table-row"><kbd>Enter</kbd> <span>Send chat message</span></div>
+          <div class="help-table-row"><kbd>Esc</kbd> <span>Close detail panel</span></div>
+        </div>
+      </div>
+      <div class="help-footer">
+        <p>Documentation powered by project GitBook docs &mdash; <a href="https://github.com/your-org/hive-research-gpu/tree/main/docs" target="_blank">View full docs on GitHub</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="detail"></div>
+<div id="load"><div><div class="sp"></div><p>Loading...</p></div></div>
+<div id="log"></div>
+
+<script src="/static/js/nav.js"></script>
+<script src="/static/js/graph.js"></script>
+<script src="/static/js/papers.js"></script>
+<script src="/static/js/chat.js"></script>
+<script src="/static/js/help.js"></script>
+</body>
+</html>

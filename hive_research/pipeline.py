@@ -12,7 +12,7 @@ from .config import Config
 from .gpu import GPUManager
 from .graph import KnowledgeGraph
 from .llm import LLMInterface
-from .parser import extract_images_from_pdf, extract_referenced_arxiv_ids, extract_sections, extract_text
+from .parser import extract_images_from_pdf, extract_referenced_arxiv_ids, extract_sections, cached_extract_text
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class PaperPipeline:
         if self.config.arxiv_download_pdf:
             pdf_path = download_pdf(paper_id, self.config.papers_dir)
             if pdf_path and pdf_path.exists():
-                pdf_text = extract_text(pdf_path)
+                pdf_text = cached_extract_text(pdf_path)
                 safe_title = _sanitize_id(paper.title) or paper_id
                 figures_dir = Path(self.config.vault_dir) / safe_title / "figures"
                 figures = extract_images_from_pdf(pdf_path, figures_dir)
