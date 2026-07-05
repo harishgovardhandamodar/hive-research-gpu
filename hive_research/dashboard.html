@@ -2660,20 +2660,30 @@ async function removePoolTopic(name){
 
 // ── Refresh ──
 async function refreshAll(){
-  await Promise.all([loadHeaderStats(),loadGraph(),loadGpuStatus(),loadPoolList()]);
+  await Promise.all([loadHeaderStats(),loadGraph(),loadGpuStatus(),loadPool()]);
 }
+let _graphRenderQueued=false;
 async function loadGraph(){
   try{
     gData=await api('/api/graph');
-    if(el('panel-graph').classList.contains('active'))
-      setTimeout(()=>renderGraph(gData),100);
+    if(el('panel-graph').classList.contains('active')&&!el('panel-graph').classList.contains('pending'))
+      _scheduleGraphRender();
   }catch(_){}
+}
+function _scheduleGraphRender(){
+  if(_graphRenderQueued)return;
+  _graphRenderQueued=true;
+  setTimeout(()=>{
+    _graphRenderQueued=false;
+    if(gData&&gData.nodes)renderGraph(gData);
+    else addLog('No graph data to render','WARN');
+  },50);
 }
 
 let _resizeTimer;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
-  _resizeTimer=setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},300);
+  _resizeTimer=setTimeout(_scheduleGraphRender,300);
 });
 
 // ── Init ──
@@ -2692,12 +2702,9 @@ window.addEventListener('resize',()=>{
 switchPanel('graph');
 loadGpuStatus();
 loadHeaderStats();
-loadGraph();
+loadGraph();  // fetches & renders once via _scheduleGraphRender
 loadPool();
 fetchLogs();
-// Force re-render after layout settles
-setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},500);
-setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},1500);
 </script>
 </body>
 </html>
