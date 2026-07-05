@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
 LANDSCAPE_HTML = Path(__file__).parent / "landscape.html"
+HIVE_UI_HTML = Path(__file__).parent / "index.html"
 
 
 def _json_response(
@@ -70,6 +71,8 @@ class RouteHandler(BaseHTTPRequestHandler):
         path, params = self._parse_path()
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
+        elif path == "/hive":
+            self._serve_hive_ui()
         elif path == "/landscape":
             self._serve_landscape()
         elif path == "/debug/graph":
@@ -542,6 +545,12 @@ info.textContent += ' | OK';
             _html_response(self, LANDSCAPE_HTML.read_text())
         else:
             _html_response(self, "<html><body><p>Landscape view not found</p></body></html>")
+
+    def _serve_hive_ui(self) -> None:
+        if HIVE_UI_HTML.exists():
+            _html_response(self, HIVE_UI_HTML.read_text())
+        else:
+            _html_response(self, "<html><body><p>Hive UI not found</p></body></html>")
 
 
 def run_server(
