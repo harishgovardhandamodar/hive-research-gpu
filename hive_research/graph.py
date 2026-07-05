@@ -177,3 +177,53 @@ class KnowledgeGraph:
             if l.get("source") in valid_ids and l.get("target") in valid_ids
         ]
         return data
+
+    def detail_graph(self, llm: Any) -> int:
+        node_map = {n.id: n.label for n in self._hive.nodes}
+        batch: list[dict[str, str]] = []
+        edges_to_detail: list[Edge] = []
+        for e in self._hive.edges:
+            src_label = node_map.get(e.source, e.source)
+            tgt_label = node_map.get(e.target, e.target)
+            if not e.detail.strip():
+                batch.append({
+                    "source_id": e.source,
+                    "source_label": src_label,
+                    "target_label": tgt_label,
+                    "relation": e.relation,
+                })
+                edges_to_detail.append(e)
+        if not batch:
+            return 0
+
+        system_msg = "You are a research knowledge graph assistant."
+        user_prompt = (
+            "For each triple below, write ONE short sentence describing the relationship "
+            "between the two nodes. Be specific and informative. "
+            "Return ONLY a JSON array of strings in the same order:\n"
+            + "\n".join(
+                f"- {b['source_label']} --[{b['relation']}]--> {b['target_label']}"
+                for b in batch
+            )
+        )
+        raw = llm.chat(
+            [{"role": "system", "content": system_msg},
+             {"role": "user", "content": user_prompt}],
+            temperature=0.1,
+        )
+        content = raw.get("content", "") if isinstance(raw, dict) else str(raw)
+        try:
+            details = json.loads(content)
+            if not isinstance(details, list):
+                details = [str(details)]
+        except json.JSONDecodeError:
+            import re
+            matches = re.findall(r'"(.*?)"', content)
+            details = matches if matches else [content]
+        count = 0
+        for e, d in zip(edges_to_detail, details):
+            if isinstance(d, str) and d.strip():
+                e.detail = d.strip()[:200]
+                count += 1
+        self.save()
+        return count

@@ -91,7 +91,7 @@ class Organizer:
         return self.rag.answer(question)
 
     def similarity(self, paper_ids: list[str] | None = None, algorithm: str = "combined") -> list[dict[str, Any]]:
-        return paper_similarity_matrix(self.kg, paper_ids=paper_ids, algorithm=algorithm)
+        return paper_similarity_matrix(self.kg, paper_ids=paper_ids, algorithm=algorithm, llm=self.llm)
 
     def stats(self) -> dict[str, Any]:
         stats = {
@@ -104,6 +104,10 @@ class Organizer:
 
     def graph_data(self) -> dict[str, Any]:
         return self.kg.to_node_link()
+
+    def detail_graph(self) -> dict[str, Any]:
+        count = self.kg.detail_graph(self.llm)
+        return {"detailed": count, "graph": self.kg.to_node_link()}
 
     def notes_path_for(self, paper_id: str) -> str | None:
         n = self.kg.get_paper(paper_id)

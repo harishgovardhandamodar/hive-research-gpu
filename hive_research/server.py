@@ -483,6 +483,9 @@ info.textContent += ' | OK';
             model = self.org.config.resolve_model(model_param)
             result = self.org.refresh_paper(paper_id, model=model)
             _json_response(self, result)
+        elif path == "/api/graph/detail":
+            result = self.org.detail_graph()
+            _json_response(self, result)
         elif path == "/api/definitions":
             result = self.org.generate_definitions()
             _json_response(self, result)

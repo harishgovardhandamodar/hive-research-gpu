@@ -447,6 +447,7 @@ select{cursor:pointer}
   <div class="panel-header"><h2>Knowledge Graph <span class="badge" id="graphBadge">0 nodes</span>
     <button class="btn btn-sm" onclick="refreshPapers()" style="margin-left:auto;font-size:10px">&#x1F504; Refresh</button>
     <button class="btn btn-sm" onclick="generateDefs()" style="font-size:10px">&#x1F4DD; Fill Definitions</button>
+    <button class="btn btn-sm" onclick="detailGraph()" style="font-size:10px">&#x1F50D; Detail Graph</button>
     <button class="btn btn-sm btn-outline" onclick="toggleGraphControls()" style="font-size:12px;margin-left:4px" id="gcToggle">&#x2699;</button>
   </h2></div>
   <div class="panel-body" style="padding-top:8px">
@@ -625,6 +626,8 @@ select{cursor:pointer}
     <div class="btn-group" style="flex-shrink:0">
       <select id="simAlgorithm" style="width:auto;padding:8px 12px;font-size:12px">
         <option value="combined">Combined (default)</option>
+        <option value="vector_combined">Vector Combined</option>
+        <option value="vector">Vector (semantic)</option>
         <option value="abstract">Abstract Jaccard</option>
         <option value="author">Author Overlap</option>
         <option value="concept">Concept Overlap</option>
@@ -1645,6 +1648,16 @@ async function generateDefs(){
     if(r.generated>0){addLog('Generated '+r.generated+' definitions','DONE');refreshAll()}
     else{addLog('No concepts needing definitions','DONE')}
   }catch(e){addLog('Error generating definitions: '+e,'ERROR')}
+}
+
+// ── Detail Graph ──
+async function detailGraph(){
+  addLog('Detailing graph edges...','INPROGRESS');
+  try{
+    const r=await api('/api/graph/detail','POST');
+    addLog('Detailed '+r.detailed+' edges','DONE');
+    refreshAll();
+  }catch(e){addLog('Error detailing graph: '+e,'ERROR')}
 }
 
 // ── Lineage ──
