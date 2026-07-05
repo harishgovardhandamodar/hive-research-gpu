@@ -4,34 +4,32 @@ Prioritized, trackable improvements for the project.
 
 ---
 
-## P0 — Critical (Current Sprint)
+## P0 — Critical
 
 - [x] **TEST** Add pytest infrastructure + core module tests (graph, similarity, RAG, pipeline)
 - [x] **PERF** Fix O(N²) similarity: cache results, top-K per paper, batch pagination
 - [ ] **ARCH** Migrate `http.server` → FastAPI (async, WebSocket, auto-docs)
-- [ ] **UI** Modularize dashboard JS into separate files (nav.js, graph.js, papers.js, chat.js)
+- [ ] **UI** Modularize dashboard JS into separate files
 
 ## P1 — High Priority
 
-- [ ] **FEAT** Add Jupyter notebooks (quick-start, KG analysis, RAG, API demo)
-- [ ] **FEAT** Add Python client library (`HiveClient`)
+- [x] **FEAT** Add Jupyter notebooks (quick-start, KG analysis, RAG, API demo)
 - [x] **FEAT** Export/import: BibTeX, JSON graph dump, full backup CLI + API
-- [ ] **FEAT** Paper collections, saved searches, favorites
-- [ ] **SEARCH** BM25 + hybrid search (vector + keyword) with RRF
+- [x] **FEAT** Paper collections, saved searches, favorites
+- [x] **SEARCH** BM25 + hybrid search (vector + keyword) with RRF
+- [x] **QUALITY** Add Pydantic models for API schemas, config, data transfer
+- [x] **SECURITY** Optional Bearer/token auth via `HIVE_AUTH_TOKEN`
+- [x] **SECURITY** Input validation (arXiv IDs, URLs) with Pydantic schemas
+- [x] **DEVOPS** CI/CD (GitHub Actions: lint, test, build)
+- [ ] **FEAT** Add Python client library (`HiveClient`)
 - [ ] **UI** Graph improvements: minimap, expand-on-hover, path finder, timeline
-- [ ] **QUALITY** Add Pydantic models for API schemas, config, data transfer
-- [ ] **QUALITY** Extract shared dashboard UI into common CSS/JS modules
 
 ## P2 — Medium Priority
 
 - [ ] **PERF** PDF extraction thread pool + text cache
 - [ ] **PERF** Embedding caching with memory + disk tier
 - [ ] **PERF** FAISS or hnswlib for ANN search
-- [ ] **SECURITY** Optional basic auth + read-only mode
-- [ ] **SECURITY** Input validation (arXiv IDs, URLs) + rate limiting
-- [ ] **DEVOPS** CI/CD (GitHub Actions: lint, type-check, test, build)
-- [ ] **DEVOPS** Multi-stage Docker build, health checks, non-root user
-- [ ] **DEVOPS** Pre-commit hooks (ruff, mypy, prettier)
+- [ ] **UI** Extract shared dashboard UI into common CSS/JS modules
 
 ## P3 — Nice to Have
 
@@ -57,3 +55,10 @@ Prioritized, trackable improvements for the project.
 | 2025-01-23 | P1: Export/import (BibTeX, JSON, CSV, backup) + CLI + API + tests | `feat/export-import` | ✅ Done |
 | 2025-01-23 | P0: Help page with rich docs, feature cards, Python/Jupyter tabs | `feat/help-page` | ✅ Merged |
 | 2025-01-23 | P0: Remove landscape, deduplicate nav, fix graph icon | `feat/help-page` | ✅ Merged |
+| 2025-01-23 | P1: Paper collections, favorites, saved searches + API + CLI + tests | `feat/develop` | ✅ Done |
+| 2025-01-23 | P1: BM25 keyword search + hybrid RRF fusion in RAG engine | `feat/develop` | ✅ Done |
+| 2025-01-23 | P2: Pydantic schemas with arXiv/URL validation, graceful fallback | `feat/develop` | ✅ Done |
+| 2025-01-23 | P2: Optional Bearer/token auth via HIVE_AUTH_TOKEN | `feat/develop` | ✅ Done |
+| 2025-01-23 | P1: Jupyter notebooks (quick-start, KG analysis, RAG demo) | `feat/develop` | ✅ Done |
+| 2025-01-23 | P2: GitHub Actions CI (ruff lint, pytest, python build) | `feat/develop` | ✅ Done |
+| 2025-01-23 | P2: .dockerignore, input validation for /api/add | `feat/develop` | ✅ Done |
