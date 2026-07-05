@@ -416,7 +416,9 @@ info.textContent += ' | OK';
             if not arxiv_id:
                 _json_response(self, {"error": "missing id"}, 400)
                 return
-            result = self.org.add_by_id(arxiv_id)
+            model_param = data.get("model", params.get("model", None))
+            model = self.org.config.resolve_model(model_param)
+            result = self.org.add_by_id(arxiv_id, model=model)
             _json_response(self, result)
         elif path == "/api/search":
             query = data.get("query", params.get("query", ""))
@@ -430,7 +432,9 @@ info.textContent += ' | OK';
             if not query:
                 _json_response(self, {"error": "missing query"}, 400)
                 return
-            results = self.org.add_by_search(query)
+            model_param = data.get("model", params.get("model", None))
+            model = self.org.config.resolve_model(model_param)
+            results = self.org.add_by_search(query, model=model)
             _json_response(self, results)
         elif path == "/api/query":
             question = data.get("question", params.get("question", ""))
@@ -451,7 +455,9 @@ info.textContent += ' | OK';
             if not url:
                 _json_response(self, {"error": "missing url"}, 400)
                 return
-            result = self.org.web.ingest(url)
+            model_param = data.get("model", params.get("model", None))
+            model = self.org.config.resolve_model(model_param)
+            result = self.org.web.ingest(url, model=model)
             _json_response(self, result)
         elif path == "/api/similarity":
             paper_ids = data.get("paper_ids", params.get("paper_ids", None))
@@ -460,7 +466,8 @@ info.textContent += ' | OK';
                 paper_ids = [x.strip() for x in paper_ids.split(",") if x.strip()]
             _json_response(self, self.org.similarity(paper_ids=paper_ids, algorithm=algorithm))
         elif path == "/api/refresh":
-            model = data.get("model", params.get("model", None))
+            model_param = data.get("model", params.get("model", None))
+            model = self.org.config.resolve_model(model_param)
             result = self.org.refresh_papers(model=model)
             _json_response(self, result)
         elif path == "/api/papers/refresh":
@@ -468,7 +475,8 @@ info.textContent += ' | OK';
             if not paper_id:
                 _json_response(self, {"error": "missing paper_id"}, 400)
                 return
-            model = data.get("model", params.get("model", None))
+            model_param = data.get("model", params.get("model", None))
+            model = self.org.config.resolve_model(model_param)
             result = self.org.refresh_paper(paper_id, model=model)
             _json_response(self, result)
         elif path == "/api/definitions":

@@ -33,11 +33,12 @@ Displays: arXiv ID, title, authors, published date, categories, first 200 chars 
 Add a paper by arXiv ID.
 
 ```bash
-python -m hive_research add <arxiv_id>
+python -m hive_research add <arxiv_id> [--model MODEL]
 ```
 
 Arguments:
 - `id` — arXiv ID (e.g. `1706.03762`)
+- `--model` — Model to use for analysis. `"large"` (default) uses the configured main model, `"fast"` uses the fast model, or pass any model name directly.
 
 Triggers the full ingestion pipeline. Returns JSON with:
 - `status`: `"added"`, `"exists"`, or `"error"`
@@ -53,12 +54,13 @@ Triggers the full ingestion pipeline. Returns JSON with:
 Search arXiv and import all results.
 
 ```bash
-python -m hive_research import <query> [-n MAX_RESULTS]
+python -m hive_research import <query> [-n MAX_RESULTS] [--model MODEL]
 ```
 
 Arguments:
 - `query` — Search query
 - `-n`, `--max-results` — Number of results (default: 10)
+- `--model` — Model to use for analysis (same semantics as `add`).
 
 Processes papers in parallel when multiple GPUs are available.
 

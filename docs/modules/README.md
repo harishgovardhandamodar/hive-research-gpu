@@ -111,8 +111,8 @@ pipeline = PaperPipeline(config, llm, kg, gpu_mgr)
 
 | Method | Description |
 |--------|-------------|
-| `process_paper(paper, gpu_id)` | Full ingestion: download → analyze → graph → notes |
-| `process_papers_parallel(papers)` | Concurrent ingestion across GPUs |
+| `process_paper(paper, gpu_id, model)` | Full ingestion: download → analyze → graph → notes |
+| `process_papers_parallel(papers, model)` | Concurrent ingestion across GPUs |
 | `fetch_lineage(paper_id, pdf_text, max_refs)` | Extract citations and link prior work |
 | `_analyze_text(text, title, figures, model)` | LLM analysis: tags, concepts, summary, experiments |
 
@@ -179,7 +179,7 @@ web = WebIngester(llm, kg)
 
 | Method | Description |
 |--------|-------------|
-| `ingest(url)` | Fetch URL → extract title/content/images → LLM analysis → graph addition |
+| `ingest(url, model)` | Fetch URL → extract title/content/images → LLM analysis → graph addition |
 
 ## `hive_research.organizer`
 
@@ -192,8 +192,8 @@ org = Organizer(config, gpu_mgr)
 
 | Method | Description |
 |--------|-------------|
-| `add_by_id(arxiv_id)` | Fetch + process + RAG index a single paper |
-| `add_by_search(query, max_results)` | Search + process multiple papers |
+| `add_by_id(arxiv_id, model)` | Fetch + process + RAG index a single paper |
+| `add_by_search(query, max_results, model)` | Search + process multiple papers |
 | `search(query, max_results)` | arXiv search (no import) |
 | `query_rag(question)` | RAG question answering |
 | `similarity(paper_ids, algorithm)` | Paper similarity matrix |
@@ -227,6 +227,10 @@ cfg.ollama_model        # → "qwen3.6:35b-mlx"
 cfg.gpu_device_count    # → 2
 cfg.rag_chunk_size      # → 512
 ```
+
+| Method | Description |
+|--------|-------------|
+| `resolve_model(model)` | Map `None`/`""`/`"large"` → `ollama_model`, `"fast"` → `ollama_fast_model`, else passthrough |
 
 All properties have sensible defaults and support environment variable overrides.
 

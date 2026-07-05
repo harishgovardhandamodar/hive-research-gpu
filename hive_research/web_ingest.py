@@ -87,7 +87,7 @@ class WebIngester:
         self.llm = llm
         self.kg = kg
 
-    def ingest(self, url: str) -> dict[str, Any]:
+    def ingest(self, url: str, model: str | None = None) -> dict[str, Any]:
         existing = self.kg.get_paper(url)
         if existing:
             return {"status": "exists", "node_id": url}
@@ -124,7 +124,8 @@ class WebIngester:
         analysis = self.llm.extract_structured(
             f"Analyze this web page and extract concepts.\n\n{content_for_llm}\n\n"
             'Respond JSON: {"summary": "...", "tags": ["tag1","tag2"], '
-            '"concepts": [{"name":"...", "definition":"..."}]}'
+            '"concepts": [{"name":"...", "definition":"..."}]}',
+            model=model,
         )
 
         tags = analysis.get("tags", [])

@@ -134,8 +134,10 @@ Add a paper by arXiv ID.
 
 ```json
 POST /api/add
-{"id": "1706.03762"}
+{"id": "1706.03762", "model": "fast"}
 ```
+
+Optional field: `model` (string) — analysis model to use. Accepts `"large"` (default), `"fast"`, or any model name.
 
 ### `/api/search`
 
@@ -152,8 +154,10 @@ Search and import papers.
 
 ```json
 POST /api/import
-{"query": "graph neural networks"}
+{"query": "graph neural networks", "model": "fast"}
 ```
+
+Optional field: `model` (string) — analysis model (same semantics as `/api/add`).
 
 ### `/api/query`
 
@@ -179,8 +183,10 @@ Ingest a web URL as a graph node.
 
 ```json
 POST /api/web/add
-{"url": "https://example.com/blog/post"}
+{"url": "https://example.com/blog/post", "model": "large"}
 ```
+
+Optional field: `model` (string) — analysis model (same semantics as `/api/add`).
 
 ### `/api/similarity`
 
@@ -197,8 +203,10 @@ Refresh notes for all papers missing them.
 
 ```json
 POST /api/refresh
-{"model": "qwen3.6:35b-mlx"}
+{"model": "fast"}
 ```
+
+Optional field: `model` (string) — analysis model. Accepts `"large"` (default), `"fast"`, or any model name.
 
 ### `/api/papers/refresh`
 
@@ -206,8 +214,10 @@ Refresh notes for a single paper.
 
 ```json
 POST /api/papers/refresh
-{"paper_id": "1706.03762", "model": "qwen3.6:35b-mlx"}
+{"paper_id": "1706.03762", "model": "fast"}
 ```
+
+Optional field: `model` (string) — analysis model (same semantics as `/api/refresh`).
 
 ### `/api/definitions`
 

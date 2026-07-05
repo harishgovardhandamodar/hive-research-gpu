@@ -74,6 +74,13 @@ class Config:
             self._get("ollama", "embed_model", default="nomic-embed-text")
         )
 
+    def resolve_model(self, model: str | None) -> str | None:
+        if not model or model == "large":
+            return self.ollama_model
+        if model == "fast":
+            return self.ollama_fast_model
+        return model
+
     @property
     def ollama_max_tokens(self) -> int:
         return int(self._get("ollama", "max_tokens", default=8192))

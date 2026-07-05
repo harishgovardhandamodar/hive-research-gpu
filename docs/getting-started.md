@@ -70,11 +70,11 @@ Environment variable overrides:
 # Search arXiv
 python -m hive_research search "attention mechanism" -n 10
 
-# Add a paper to your knowledge base
+# Add a paper to your knowledge base (uses the large model by default)
 python -m hive_research add 1706.03762
 
-# Import papers by search query
-python -m hive_research import "graph neural networks" -n 5
+# Import papers using the fast model for quicker processing
+python -m hive_research import "graph neural networks" -n 5 --model fast
 
 # Check GPU status
 python -m hive_research gpu

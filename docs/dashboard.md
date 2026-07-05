@@ -7,6 +7,14 @@ python -m hive_research serve --host 0.0.0.0 --port 7777
 # → http://localhost:7777
 ```
 
+## Header
+
+The top bar shows the system title, live stats (paper/concept counts), and two interactive controls:
+
+- **Model selector** — Dropdown to hot-swap between the default large model and the fast model. The selection applies immediately to all subsequent LLM actions (add, import, refresh, web ingest) and is persisted in browser `localStorage`.
+- **GPU** — Click to show GPU status.
+- **Theme toggle** — Switch between dark and light mode.
+
 ## Panels
 
 ### Pool
@@ -29,13 +37,13 @@ Interactive force-directed knowledge graph.
 - Green edges = citation links (`cites`)
 - **Filter** — Type to highlight matching nodes
 - **Click** any node → preview panel with title, authors, abstract, and actions
-- **Refresh** — Regenerate notes for papers missing them
+- **Refresh** — Regenerate notes for papers missing them (respects the selected model)
 - **Fill Definitions** — Auto-generate concept definitions from context
 - **Customization gear** → adjust node colors, sizes, edge colors per type
 
 ### Import
 
-Three sub-tabs for adding content:
+Three sub-tabs for adding content. All respect the currently selected model from the header:
 
 1. **Paper** — Enter arXiv ID or full URL to add a paper
 2. **Web Link** — Enter a blog/article URL to ingest as a web node
@@ -50,8 +58,7 @@ Full paper library browser:
   - File groups: vault notes, experiment files, figures
   - Citation lineage display
   - Markdown preview of any file
-  - **Recreate Notes** button to re-run LLM analysis
-  - Model selector for refresh operations
+  - **Recreate Notes** button to re-run LLM analysis (uses the selected model)
 
 ### Similarity
 

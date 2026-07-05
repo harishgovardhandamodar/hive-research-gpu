@@ -41,7 +41,7 @@ def cmd_add(args: argparse.Namespace) -> None:
     config = Config()
     gpu_mgr = GPUManager(config)
     org = Organizer(config, gpu_mgr)
-    result = org.add_by_id(args.id)
+    result = org.add_by_id(args.id, model=config.resolve_model(args.model))
     print(json.dumps(result, indent=2))
 
 
@@ -49,7 +49,7 @@ def cmd_import_search(args: argparse.Namespace) -> None:
     config = Config()
     gpu_mgr = GPUManager(config)
     org = Organizer(config, gpu_mgr)
-    results = org.add_by_search(args.query, max_results=args.max_results)
+    results = org.add_by_search(args.query, max_results=args.max_results, model=config.resolve_model(args.model))
     print(json.dumps(results, indent=2))
 
 
@@ -115,11 +115,15 @@ def main() -> None:
 
     p_add = sub.add_parser("add", help="Add paper by arXiv ID")
     p_add.add_argument("id", type=str)
+    p_add.add_argument("--model", type=str, default=None,
+                       help='Model to use (default: large, or "fast" for the fast model)')
     p_add.set_defaults(func=cmd_add)
 
     p_import_ = sub.add_parser("import", help="Search and import papers")
     p_import_.add_argument("query", type=str)
     p_import_.add_argument("-n", "--max-results", type=int, default=10)
+    p_import_.add_argument("--model", type=str, default=None,
+                           help='Model to use (default: large, or "fast" for the fast model)')
     p_import_.set_defaults(func=cmd_import_search)
 
     p_stats = sub.add_parser("stats", help="Show knowledge graph stats")

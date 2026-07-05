@@ -154,6 +154,31 @@ class LLMInterface:
         if not text or text[0] != '{':
             return None
         text = text.strip()
+        # Trim trailing non-JSON content after the last balanced '}'
+        depth = 0
+        last_balanced = -1
+        in_str = False
+        escaped = False
+        for i, ch in enumerate(text):
+            if escaped:
+                escaped = False
+                continue
+            if ch == '\\':
+                escaped = True
+                continue
+            if ch == '"' and not escaped:
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    last_balanced = i
+        if last_balanced >= 0:
+            text = text[:last_balanced + 1]
         text = re.sub(r',(\s*[}\]])', r'\1', text)
         text = re.sub(
             r':\s*(\d[\w.\-+]*[a-zA-Z][\w.\-+]*)\s*([,}\]])',

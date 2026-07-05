@@ -32,13 +32,13 @@ class Organizer:
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
 
-    def add_by_id(self, arxiv_id: str, with_lineage: bool = False) -> dict[str, Any]:
+    def add_by_id(self, arxiv_id: str, with_lineage: bool = False, model: str | None = None) -> dict[str, Any]:
         result = fetch_by_id_with_meta(arxiv_id)
         if result["status"] == "error":
             return result
         paper = result["paper"]
         gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-        result = self.pipeline.process_paper(paper, gpu_id=gpu_id)
+        result = self.pipeline.process_paper(paper, gpu_id=gpu_id, model=model)
         if result["status"] == "added":
             pdf_text = ""
             pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
@@ -50,14 +50,14 @@ class Organizer:
                 result["rag_chunks"] = n
         return result
 
-    def add_by_search(self, query: str, max_results: int | None = None) -> list[dict[str, Any]]:
+    def add_by_search(self, query: str, max_results: int | None = None, model: str | None = None) -> list[dict[str, Any]]:
         mr = max_results or self.config.arxiv_max_results
         papers = search_arxiv(query, max_results=mr)
         if self.gpu_mgr and self.config.gpu_enabled and self.gpu_mgr.device_count() > 1:
-            return self.pipeline.process_papers_parallel(papers)
+            return self.pipeline.process_papers_parallel(papers, model=model)
         results = []
         for p in papers:
-            r = self.add_by_id(p.arxiv_id)
+            r = self.add_by_id(p.arxiv_id, model=model)
             results.append(r)
         return results
 

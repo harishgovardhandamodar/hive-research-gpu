@@ -421,6 +421,10 @@ select{cursor:pointer}
   <div class="logo">&#x1F50D;</div>
   <h1>Lonewolf Research</h1>
   <div class="stats" id="headerStats"></div>
+  <select id="modelSelector" style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:155px" onchange="saveModelPref()" title="Active model for LLM calls">
+    <option value="">Default (large: qwen3.6:35b)</option>
+    <option value="fast">Fast (llama3.2:3b)</option>
+  </select>
   <div id="gpuStatus" onclick="loadGpuStatus()" title="NVIDIA GPU">&#x1F5A5; GPU</div>
   <div id="themeToggle" onclick="toggleTheme()" style="cursor:pointer;font-size:15px;color:var(--text3);padding:3px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);line-height:1;transition:all .15s">&#x263E;</div>
 </div>
@@ -550,11 +554,6 @@ select{cursor:pointer}
           <div id="browseLineage" style="display:none;padding:6px 14px;border-top:1px solid var(--border);flex-shrink:0;max-height:120px;overflow-y:auto;font-size:11px;background:var(--surface)"></div>
           <div id="browsePreviewToolbar" style="display:none;padding:4px 14px;border-top:1px solid var(--border);flex-shrink:0;gap:6px;align-items:center">
           <span id="browsePreviewPath" style="font-size:10px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-          <select id="modelSelector" style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:140px" onchange="saveModelPref()">
-            <option value="">Default (fast)</option>
-            <option value="qwen3.6:35b-mlx">qwen3.6:35b-mlx</option>
-            <option value="llama3.2:3b">llama3.2:3b</option>
-          </select>
           <button class="btn btn-sm btn-outline" onclick="recreateCurrentNotes()" title="Regenerate vault notes for this paper">&#x21BB; Recreate Notes</button>
         </div>
         </div><!-- /browseTopPanel -->
@@ -1121,7 +1120,10 @@ async function addPaper(){
   addLog('Adding '+id+'...','INPROGRESS');
   el('arxivInput').value='';
   try{
-    const r=await api('/api/add','POST',{id});
+    const body={id};
+    const model=getSelectedModel();
+    if(model)body.model=model;
+    const r=await api('/api/add','POST',body);
     if(r.status==='added'){addLog('Done: '+r.paper_id+' ('+r.concepts+' concepts, '+r.tags+' tags'+(r.rag_chunks?', '+r.rag_chunks+' rag chunks':'')+')','DONE')}
     else if(r.status==='exists'){addLog('Already exists: '+id,'WARN')}
     else if(r.status==='error'){addLog(r.message||'arXiv API error','ERROR')}
@@ -1137,7 +1139,10 @@ async function ingestWeb(){
   addLog('Ingesting web page: '+url+'...','INPROGRESS');
   el('webUrlInput').value='';
   try{
-    const r=await api('/api/web/add','POST',{url});
+    const body={url};
+    const model=getSelectedModel();
+    if(model)body.model=model;
+    const r=await api('/api/web/add','POST',body);
     if(r.status==='added'){
       addLog('Web link added: '+r.title.substring(0,60)+' ('+r.concepts+' concepts, '+r.tags+' tags)','DONE');
       el('webResult').innerHTML='<div class="card" style="margin-top:8px"><h4 style="color:var(--accent);margin-bottom:4px">'+esc(r.title)+'</h4>'+
@@ -1198,7 +1203,10 @@ async function importSearch(){
   if(!q)return;
   addLog('Importing all...','INPROGRESS');
   try{
-    const r=await api('/api/import','POST',{query:q});
+    const body={query:q};
+    const model=getSelectedModel();
+    if(model)body.model=model;
+    const r=await api('/api/import','POST',body);
     const added=r.filter(x=>x.status==='added').length;
     const exists=r.filter(x=>x.status==='exists').length;
     addLog('Imported: '+added+' new, '+exists+' already existed','DONE');

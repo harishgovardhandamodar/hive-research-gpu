@@ -34,7 +34,7 @@ class PaperPipeline:
         self.kg = kg
         self.gpu_mgr = gpu_mgr
 
-    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None) -> dict[str, Any]:
+    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None, model: str | None = None) -> dict[str, Any]:
         paper_id = paper.arxiv_id
         existing = self.kg.get_paper(paper_id)
         if existing:
@@ -62,7 +62,7 @@ class PaperPipeline:
                 figures = extract_images_from_pdf(pdf_path, figures_dir)
         text_for_analysis = pdf_text or paper.abstract
 
-        analysis = self._analyze_text(text_for_analysis, paper.title, figures=figures, gpu_id=gpu_id)
+        analysis = self._analyze_text(text_for_analysis, paper.title, figures=figures, model=model, gpu_id=gpu_id)
 
         concepts = analysis.get("concepts", [])
         relations = analysis.get("relations", [])
@@ -152,7 +152,7 @@ class PaperPipeline:
 
         return result
 
-    def process_papers_parallel(self, papers: list[PaperInfo]) -> list[dict[str, Any]]:
+    def process_papers_parallel(self, papers: list[PaperInfo], model: str | None = None) -> list[dict[str, Any]]:
         count = len(papers)
         if count == 0:
             return []
@@ -166,7 +166,7 @@ class PaperPipeline:
         def _process(idx: int, paper: PaperInfo) -> None:
             gpu_id = idx % max_parallel if max_parallel > 1 else None
             try:
-                results[idx] = self.process_paper(paper, gpu_id=gpu_id)
+                results[idx] = self.process_paper(paper, gpu_id=gpu_id, model=model)
             except Exception as e:
                 logger.error("Parallel process for %s failed: %s", paper.arxiv_id, e)
                 results[idx] = {"status": "error", "paper_id": paper.arxiv_id, "error": str(e)}

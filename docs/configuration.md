@@ -62,6 +62,18 @@ server:
   port: 7777
 ```
 
+## Model Resolution
+
+The `Config.resolve_model()` method maps user-facing model aliases to actual model names:
+
+| Input | Returns |
+|-------|---------|
+| `None` or `""` or `"large"` | `ollama.model` (the main analysis model) |
+| `"fast"` | `ollama.fast_model` (the lightweight tag model) |
+| any other string | The string itself (raw model name passthrough) |
+
+This is used by all API endpoints (`model` parameter) and the `--model` CLI flag to accept both aliases and explicit model names.
+
 ## Environment Variables
 
 | Variable | Overrides | Default |
