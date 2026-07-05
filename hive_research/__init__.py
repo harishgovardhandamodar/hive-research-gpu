@@ -7,3 +7,5 @@ except ImportError:
     _p = Path(__file__).resolve().parent.parent.parent / "hive-datatype"
     if _p.exists():
         sys.path.insert(0, str(_p))
+
+from .client import HiveClient  # noqa: E402, F401
