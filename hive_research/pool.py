@@ -158,6 +158,12 @@ class ResearchPool:
         import sqlite3
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         conn.executescript(SCHEMA)
+        # Migrations for schema changes
+        try:
+            conn.execute("SELECT color FROM topics LIMIT 1")
+        except sqlite3.OperationalError:
+            conn.execute("ALTER TABLE topics ADD COLUMN color TEXT NOT NULL DEFAULT '#60a5fa'")
+            conn.commit()
         conn.commit()
         conn.close()
 
