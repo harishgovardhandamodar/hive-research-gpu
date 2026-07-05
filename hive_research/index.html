@@ -334,8 +334,7 @@ function closeDetail(){$('detail').classList.remove('open')}
 
 // ── Landscape ──
 const L={
-  data:null,simData:null,nodes:null,links:null,
-  tx:0,ty:0,k:1,drag:false,d0:null,moved:false,
+  data:null,simData:null,_sim:null,_renderId:0,
   async refresh(){
     try{
       const [p,s]=await Promise.all([api('/api/papers'),api('/api/similarity','POST',{algorithm:'combined'})]);
@@ -344,51 +343,78 @@ const L={
     }catch(e){}
   },
   render(){
-    const canvas=$('lCanvas');const parent=canvas.parentElement;
+    // Stop any previous simulation
+    if(this._sim){try{this._sim.stop()}catch(e){}this._sim=null}
+    const renderId=++this._renderId;
+
+    const canvas=$('lCanvas');if(!canvas)return;
+    const parent=canvas.parentElement;if(!parent)return;
     const rect=parent.getBoundingClientRect();
     if(!rect.width||!rect.height)return;
+
     const dpr=window.devicePixelRatio||1;
     canvas.width=rect.width*dpr;canvas.height=rect.height*dpr;
     canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
     const ctx=canvas.getContext('2d');
     const W=rect.width,H=rect.height;
+    const baseBg=window.getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0b1120';
+    const accent='#5498ff';
+
     const papers=this.data||[],simData=this.simData||[];
     if(!papers.length){
-      const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0b1120';
-      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#64748b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('No papers',W/2,H/2);
+      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=baseBg;ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#64748b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('No papers loaded',W/2,H/2);
       return;
     }
-    const nodes=papers.map(p=>({id:p.id,label:p.title||p.label}));
-    const adj={};simData.forEach(s=>{if(!s||typeof s.score!=='number')return;
-      [s.source,s.target].forEach((id,i)=>{if(!adj[id])adj[id]=[];adj[id].push({id:i===0?s.target:s.source,score:s.score})})});
+
+    const nodes=papers.map(p=>({id:p.id,label:p.title||p.id}));
+    const adj={};
+    (simData||[]).forEach(s=>{
+      if(!s||typeof s.score!=='number'||!s.source||!s.target)return;
+      [s.source,s.target].forEach((id,i)=>{if(!adj[id])adj[id]=[];adj[id].push({id:i===0?s.target:s.source,score:s.score})});
+    });
     const links=[];const seen=new Set();
-    Object.keys(adj).forEach(id=>{adj[id].sort((a,b)=>b.score-a.score).slice(0,4).forEach(s=>{
-      const key=[id,s.id].sort().join('|');if(!seen.has(key)&&papers.find(p=>p.id===s.id)){seen.add(key);links.push({source:id,target:s.id,score:s.score})}
-    })});
+    const idSet=new Set(nodes.map(n=>n.id));
+    Object.keys(adj).forEach(id=>{
+      adj[id].sort((a,b)=>b.score-a.score).slice(0,4).forEach(s=>{
+        if(!idSet.has(s.id))return;
+        const key=[id,s.id].sort().join('|');
+        if(!seen.has(key)){seen.add(key);links.push({source:id,target:s.id,score:s.score})}
+      });
+    });
+
+    // Grid seed positions
     const cols=Math.ceil(Math.sqrt(nodes.length));
-    nodes.forEach((n,i)=>{n.x=W/2+(i%cols-cols/2)*25;n.y=H/2+(Math.floor(i/cols)-Math.ceil(nodes.length/cols)/2)*25});
-    if(links.length){
-      const sim=d3.forceSimulation(nodes)
-        .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>120-(d.score||0)*60).strength(d=>Math.max(.01,(d.score||0)*.6)))
-        .force('charge',d3.forceManyBody().strength(-120)).force('center',d3.forceCenter(W/2,H/2)).force('collision',d3.forceCollide(10))
-        .alphaDecay(.03).on('tick',()=>draw()).on('end',()=>{sim.stop();draw()});
-      setTimeout(()=>{sim.alphaTarget(0);sim.stop();draw()},3000);
-    }else draw();
-    function draw(){
-      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--bg').trim()||'#0b1120';ctx.fillRect(0,0,W,H);
+    nodes.forEach((n,i)=>{n.x=W/2+(i%cols-cols/2)*28;n.y=H/2+(Math.floor(i/cols)-Math.ceil(nodes.length/cols)/2)*28});
+
+    // Pre-compute theme colors once (not per frame)
+    const linkColor='rgba(148,163,184,0.15)';
+    const labelColor='rgba(148,163,184,0.7)';
+
+    let frame=0;
+    function snap(){
+      if(renderId!==L._renderId)return;
+      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=baseBg;ctx.fillRect(0,0,W,H);
       nodes.forEach(n=>{if(!isFinite(n.x))n.x=W/2;if(!isFinite(n.y))n.y=H/2;n.x=Math.max(5,Math.min(W-5,n.x));n.y=Math.max(5,Math.min(H-5,n.y))});
       links.forEach(l=>{const s=l.source,t=l.target;if(!s||!t||typeof s==='string'||typeof t==='string')return;
         ctx.beginPath();ctx.moveTo(s.x||0,s.y||0);ctx.lineTo(t.x||0,t.y||0);
-        ctx.strokeStyle='rgba(148,163,184,'+(.06+Math.min((l.score||0),1)*.14)+')';ctx.lineWidth=Math.max(.3,(l.score||0)*1.5);ctx.stroke()});
+        ctx.strokeStyle=linkColor;ctx.lineWidth=Math.max(.3,(l.score||0)*1.5);ctx.stroke()});
       const r=Math.max(4,Math.min(10,24/Math.max(Math.sqrt(nodes.length),1)));
       nodes.forEach(n=>{const x=n.x,y=n.y;
-        ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-        ctx.fillStyle='var(--accent)';ctx.fill();
+        ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=accent;ctx.fill();
         ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=.5;ctx.stroke();
-        if(L.k>.6){let lb=(n.label||'').substring(0,30);ctx.font='9px sans-serif';ctx.fillStyle='var(--text2)';ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(lb,x,y+r+2)}
+        if(frame>2){let lb=(n.label||'').substring(0,25);ctx.font='9px sans-serif';ctx.fillStyle=labelColor;ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(lb,x,y+r+2)}
       });
+      frame++;
     }
+
+    if(links.length){
+      this._sim=d3.forceSimulation(nodes)
+        .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>120-(d.score||0)*60).strength(d=>Math.max(.01,(d.score||0)*.6)))
+        .force('charge',d3.forceManyBody().strength(-120)).force('center',d3.forceCenter(W/2,H/2)).force('collision',d3.forceCollide(10))
+        .alphaDecay(.03).on('tick',()=>{if(renderId===L._renderId)snap()}).on('end',()=>{if(renderId===L._renderId){snap();L._sim=null}});
+      setTimeout(()=>{if(renderId===L._renderId&&L._sim){L._sim.alphaTarget(0);L._sim.stop();L._sim=null;snap()}},3000);
+    }else snap();
   }
 };
 
