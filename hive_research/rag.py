@@ -1,4 +1,4 @@
-"""RAG engine with vector search, BM25 keyword search, and hybrid fusion."""
+"""RAG engine with vector search (FAISS optional), BM25 keyword, and hybrid fusion."""
 
 from __future__ import annotations
 
@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 BM25_K1 = 1.5
 BM25_B = 0.75
 RRF_K = 60  # Reciprocal Rank Fusion constant
+
+# FAISS — optional, graceful fallback to numpy
+_HAVE_FAISS = False
+try:
+    import faiss
+    _HAVE_FAISS = True
+except ImportError:
+    faiss = None  # type: ignore
+    logger.info("faiss not installed — using numpy for vector search (pip install faiss-cpu for speed)")
 
 
 def _tokenize(text: str) -> list[str]:
@@ -148,6 +157,7 @@ class RAGEngine:
         self.chunks: list[Chunk] = []
         self.embeddings: np.ndarray | None = None
         self.bm25 = BM25Index()
+        self._faiss_index: Any = None
         self._load()
 
     def _index_path(self) -> Path:
@@ -155,6 +165,18 @@ class RAGEngine:
 
     def _embeddings_path(self) -> Path:
         return self.store_dir / "embeddings.npy"
+
+    def _build_faiss(self) -> None:
+        """Build or rebuild the FAISS index from current embeddings."""
+        if not _HAVE_FAISS or self.embeddings is None or len(self.embeddings) == 0:
+            return
+        dim = self.embeddings.shape[1]
+        # Normalize vectors for inner product (equivalent to cosine)
+        norms = np.linalg.norm(self.embeddings, axis=1, keepdims=True)
+        normalized = np.where(norms > 0, self.embeddings / norms, 0).astype(np.float32)
+        index = faiss.IndexFlatIP(dim)
+        index.add(normalized)
+        self._faiss_index = index
 
     def _save(self) -> None:
         index = [
@@ -170,6 +192,7 @@ class RAGEngine:
             json.dump(index, f, indent=2)
         if self.embeddings is not None:
             np.save(str(self._embeddings_path()), self.embeddings)
+            self._build_faiss()
 
     def _load(self) -> None:
         if self._index_path().exists():
@@ -179,10 +202,12 @@ class RAGEngine:
                 self.chunks = [Chunk(**item) for item in index]
                 if self._embeddings_path().exists():
                     self.embeddings = np.load(str(self._embeddings_path()))
+                    self._build_faiss()
                 self.bm25.build([c.text for c in self.chunks])
                 logger.info(
-                    "Loaded RAG index with %d chunks, BM25 ready",
+                    "Loaded RAG index with %d chunks%s, BM25 ready",
                     len(self.chunks),
+                    " + FAISS" if _HAVE_FAISS else "",
                 )
             except Exception as e:
                 logger.warning("Failed to load RAG index: %s", e)
@@ -219,17 +244,38 @@ class RAGEngine:
             self.embeddings = new_matrix
         else:
             self.embeddings = np.vstack([self.embeddings, new_matrix])
+        # Update FAISS incrementally
+        if _HAVE_FAISS:
+            norms = np.linalg.norm(new_matrix, axis=1, keepdims=True)
+            normalized = np.where(norms > 0, new_matrix / norms, 0).astype(np.float32)
+            if self._faiss_index is None:
+                self._build_faiss()
+            else:
+                self._faiss_index.add(normalized)
         self._save()
         return len(new_chunks)
 
     def search_vector(
         self, query: str, top_k: int | None = None
     ) -> list[dict[str, Any]]:
-        """Semantic vector search via cosine similarity."""
+        """Semantic vector search via FAISS (if available) or numpy brute-force."""
         if not self.chunks or self.embeddings is None:
             return []
         top_k = top_k or self.config.rag_top_k
         q_emb = np.array(self.llm.embed(query), dtype=np.float32)
+
+        if _HAVE_FAISS and self._faiss_index is not None:
+            # Normalize query for inner product (cosine)
+            q_norm = np.linalg.norm(q_emb)
+            q_normalized = (q_emb / q_norm if q_norm > 0 else q_emb).astype(np.float32).reshape(1, -1)
+            distances, indices = self._faiss_index.search(q_normalized, top_k)
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx >= 0 and idx < len(self.chunks) and distances[0][i] > 0:
+                    results.append(self._format_result(int(idx), float(distances[0][i])))
+            return results
+
+        # Fallback: numpy brute-force
         sims = self.embeddings @ q_emb
         norms = np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(q_emb)
         sims = np.divide(sims, norms, out=np.zeros_like(sims), where=norms != 0)
@@ -237,7 +283,7 @@ class RAGEngine:
         results = []
         for idx in top_indices:
             if sims[idx] > 0:
-                results.append(self._format_result(idx, sims[idx]))
+                results.append(self._format_result(int(idx), float(sims[idx])))
         return results
 
     def search_keyword(
