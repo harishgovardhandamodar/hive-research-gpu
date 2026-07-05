@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 12 * 3600
 REFRESH_INTERVAL = 12 * 3600
-MAX_PER_TOPIC = 10
+MAX_PER_TOPIC = 100
 
 DEFAULT_TOPICS = [
     {"name": "Knowledge graphs", "query": "knowledge graph embedding"},
