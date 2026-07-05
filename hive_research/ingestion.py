@@ -121,6 +121,14 @@ class IngestionQueue:
             elif status == STATUS_DONE or status == STATUS_ERROR:
                 job["finished"] = datetime.now().isoformat(timespec="seconds")
             self._emit(paper_id, status, message)
+            # Also log via standard logging (appears in activity log)
+            log_msg = f"{paper_id}:{status} — {message}"
+            if status == STATUS_ERROR:
+                logger.error(log_msg)
+            elif status == STATUS_DONE:
+                logger.info(log_msg)
+            else:
+                logger.debug(log_msg)
 
     def _emit(self, paper_id: str, status: str, message: str) -> None:
         entry = {
