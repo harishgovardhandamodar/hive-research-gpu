@@ -2028,14 +2028,12 @@ function poolTopicColor(topics){if(!topics||!topics.length)return POOL_TOPIC_COL
 function switchPoolTab(tab,el_){
   document.querySelectorAll('.pool-subtab').forEach(t=>t.classList.remove('active'));
   if(el_)el_.classList.add('active');
-  el('poolBrowse').style.display=tab==='browse'?'flex':'none';
+  const browse=el('poolBrowse');if(browse)browse.style.display=tab==='browse'?'flex':'none';
   const tg=el('poolTopicsGraph');
   if(tab==='topics-graph'){
-    tg.style.display='flex';
-    loadPoolTopics();
-    loadPoolGraph();
+    if(tg){tg.style.display='flex';loadPoolTopics();loadPoolGraph()}
   }else{
-    tg.style.display='none';
+    if(tg)tg.style.display='none';
   }
 }
 
@@ -2448,12 +2446,13 @@ function renderPoolGraph(data){
 
 // ── Pool Topics (insight cards) ──
 async function loadPoolTopics(){
+  const c=el('poolTopicCards');if(!c){console.warn('poolTopicCards not found');return}
   try{
+    c.innerHTML='<div style="color:var(--text3);text-align:center;padding:10px;font-size:10px">Loading topics...</div>';
     const [ins,topicsR]=await Promise.all([api('/api/pool/insights'),api('/api/pool/topics')]);
     const topics=topicsR.topics||[];
-    const topicData=ins.topics||{};
-    const c=el('poolTopicCards');if(!c)return;
     if(!topics.length){c.innerHTML='<div style="color:var(--text3);text-align:center;padding:20px;font-size:11px">No topics configured</div>';return}
+    const topicData=ins.topics||{};
     c.innerHTML=topics.map(t=>{
       const td=topicData[t.name]||{observed:0,imported:0,conversion_rate:0};
       const col=poolTopicColor([t.name]);
@@ -2468,7 +2467,7 @@ async function loadPoolTopics(){
         '<button class="btn-o" onclick="event.stopPropagation();removePoolTopic(\''+esc(t.name).replace(/'/g,"\\'")+'\')" style="margin-left:auto">&#x2716;</button>'+
         '</div></div>';
     }).join('');
-  }catch(_){}
+  }catch(e){console.error('loadPoolTopics error:',e);c.innerHTML='<div style="color:var(--text3);text-align:center;padding:20px;font-size:11px">Error loading topics. Check server connection.</div>'}
 }
 async function addPoolTopic(){
   const name=el('poolTopicName').value.trim(),query=el('poolTopicQuery').value.trim();
