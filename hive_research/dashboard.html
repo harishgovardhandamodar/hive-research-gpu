@@ -436,7 +436,7 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="browse" onclick="switchPanel('browse')">&#x2630;<span class="tip">Browse</span></div>
   <div class="nav-item" data-panel="similarity" onclick="switchPanel('similarity')">&#x2248;<span class="tip">Similarity</span></div>
   <div class="nav-item" data-panel="query" onclick="switchPanel('query')">&#x1F4AC;<span class="tip">Chat</span></div>
-  <div class="nav-item" onclick="window.open('/landscape','_blank')" style="cursor:pointer">&#x1F30D;<span class="tip">Landscape</span></div>
+
   <div class="spacer"></div>
   <div class="nav-item" data-panel="about" onclick="switchPanel('about')">&#x2139;<span class="tip">About</span></div>
 </div>
@@ -999,6 +999,7 @@ function renderGraph(data){
   linkLabel.append('text').text(d=>d.relation||'')
     .attr('font-size','8px').attr('fill',d=>d.relation==='cites'?GS.citeColor:'#94a3b8')
     .attr('text-anchor','middle').attr('dy','0.35em');
+  linkLabel.each(function(d){const t=d3.select(this).select('text').node();d._tw=t?t.getComputedTextLength()+10:30;});
   const node=container.append('g').selectAll('g').data(nodes).join('g').call(drag(simulation));
   node.append('title').text(d=>d.label+(d.abstract?'\n'+d.abstract.substring(0,300):'')+(d.definition?'\n'+d.definition:''));
   const citedIds=new Set(links.filter(l=>l.relation==='cites').map(l=>l.target));
@@ -1017,6 +1018,7 @@ function renderGraph(data){
   node.filter(d=>d.type!=='paper'&&d.group!==0&&d.type!=='web').append('circle')
     .attr('r',cs).attr('fill',GS.conceptColor).attr('stroke',GS.conceptColor).attr('stroke-width',2).attr('stroke-opacity',.5);
   node.append('text').text(d=>d.label?.substring(0,25)).attr('font-size','10px').attr('dx',14).attr('dy',4).attr('fill','#94a3b8');
+  const adj=new Map(); links.forEach(l=>{const s=l.source.id||l.source;const t=l.target.id||l.target;if(!adj.has(s))adj.set(s,new Set());if(!adj.has(t))adj.set(t,new Set());adj.get(s).add(t);adj.get(t).add(s);});
   node.on('click',function(e,d){showNodePreview(d);});
   node.on('mouseenter',function(e,d){
     let tip = '<b>'+esc(d.label)+'</b>'+(d.type?' <span style="color:#94a3b8">('+d.type+')</span>':'');
@@ -1027,7 +1029,7 @@ function renderGraph(data){
     tooltip.style('opacity',1).html(tip);
     d3.select(this).select('rect,circle').attr('stroke-width',3);
     link.attr('stroke-opacity',l=>l.source.id===d.id||l.target.id===d.id?0.5:0.05);
-    node.attr('opacity',n=>n.id===d.id||links.some(l=>(l.source.id===d.id&&l.target.id===n.id)||(l.target.id===d.id&&l.source.id===n.id))?1:.2);
+    node.attr('opacity',n=>n.id===d.id||(adj.get(d.id)&&adj.get(d.id).has(n.id))?1:.2);
   }).on('mousemove',function(e){
     const r=el('graphWrap').getBoundingClientRect();
     tooltip.style('left',(e.clientX-r.left+12)+'px').style('top',(e.clientY-r.top-10)+'px');
@@ -1045,15 +1047,7 @@ function renderGraph(data){
       const flip=ang>90||ang<-90;
       return 'translate('+mx+','+my+') rotate('+(flip?ang+180:ang)+')';
     });
-    linkLabel.select('text').text(d=>d.relation||'');
-    linkLabel.select('rect').attr('width',function(){
-      const t=d3.select(this.parentNode).select('text');
-      return t.node()?t.node().getComputedTextLength()+10:30;
-    }).attr('height',16).attr('x',function(){
-      const t=d3.select(this.parentNode).select('text');
-      const w=t.node()?t.node().getComputedTextLength()+10:30;
-      return -w/2;
-    }).attr('y',-8);
+    linkLabel.select('rect').attr('width',d=>d._tw||30).attr('height',16).attr('x',d=>-(d._tw||30)/2).attr('y',-8);
     node.attr('transform',d=>'translate('+d.x+','+d.y+')');
   });
   const _isLight=document.body.classList.contains('light');

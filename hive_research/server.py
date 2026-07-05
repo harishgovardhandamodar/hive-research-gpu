@@ -19,7 +19,6 @@ from .organizer import Organizer
 logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
-LANDSCAPE_HTML = Path(__file__).parent / "landscape.html"
 HIVE_UI_HTML = Path(__file__).parent / "index.html"
 
 
@@ -73,8 +72,6 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_dashboard()
         elif path == "/hive":
             self._serve_hive_ui()
-        elif path == "/landscape":
-            self._serve_landscape()
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -539,12 +536,6 @@ info.textContent += ' | OK';
             _html_response(self, HTML.read_text())
         else:
             _html_response(self, _inline_dashboard())
-
-    def _serve_landscape(self) -> None:
-        if LANDSCAPE_HTML.exists():
-            _html_response(self, LANDSCAPE_HTML.read_text())
-        else:
-            _html_response(self, "<html><body><p>Landscape view not found</p></body></html>")
 
     def _serve_hive_ui(self) -> None:
         if HIVE_UI_HTML.exists():
