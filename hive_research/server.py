@@ -369,6 +369,13 @@ class RouteHandler(BaseHTTPRequestHandler):
                 _json_response(self, {"error": "missing paper_id"}, 400)
                 return
             _json_response(self, self.org.pool.get_suggestions(paper_id, top_k))
+        elif path == "/api/papers/duplicates":
+            paper_id = params.get("paper_id", "")
+            threshold = float(params.get("threshold", 0.85))
+            if paper_id:
+                _json_response(self, self.org.kg.find_duplicate_papers(paper_id, threshold))
+            else:
+                _json_response(self, self.org.kg.find_all_duplicates(threshold))
         elif path == "/api/ingestion/queue":
             _json_response(self, self.org.ingestion.get_jobs())
         elif path == "/api/ingestion/events":

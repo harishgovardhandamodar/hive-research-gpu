@@ -178,6 +178,67 @@ class KnowledgeGraph:
         ]
         return data
 
+    def find_duplicate_papers(
+        self,
+        paper_id: str,
+        threshold: float = 0.85,
+    ) -> list[dict[str, Any]]:
+        """Find papers that are likely duplicates of the given paper.
+
+        Compares title token Jaccard similarity. Returns matches above threshold.
+        """
+        target = self.get_paper(paper_id)
+        if not target:
+            return []
+        target_tokens = set((target.label or "").lower().split())
+        if not target_tokens:
+            return []
+        results = []
+        for p in self.papers:
+            if p.id == paper_id:
+                continue
+            pt = set((p.label or "").lower().split())
+            if not pt:
+                continue
+            inter = len(target_tokens & pt)
+            union = len(target_tokens | pt)
+            score = inter / union if union else 0.0
+            if score >= threshold:
+                results.append({
+                    "paper_id": p.id,
+                    "title": p.label,
+                    "similarity": round(score, 4),
+                })
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        return results
+
+    def find_all_duplicates(self, threshold: float = 0.85) -> dict[str, list[dict[str, Any]]]:
+        """Find ALL duplicate groups across all papers.
+
+        Returns a dict mapping each paper_id to a list of potential duplicates.
+        """
+        results: dict[str, list[dict[str, Any]]] = {}
+        papers_list = self.papers
+        for i in range(len(papers_list)):
+            p1 = papers_list[i]
+            t1 = set((p1.label or "").lower().split())
+            if not t1:
+                continue
+            for j in range(i + 1, len(papers_list)):
+                p2 = papers_list[j]
+                t2 = set((p2.label or "").lower().split())
+                if not t2:
+                    continue
+                inter = len(t1 & t2)
+                union = len(t1 | t2)
+                score = inter / union if union else 0.0
+                if score >= threshold:
+                    entry = {"paper_id": p2.id, "title": p2.label, "similarity": round(score, 4)}
+                    results.setdefault(p1.id, []).append(entry)
+                    entry2 = {"paper_id": p1.id, "title": p1.label, "similarity": round(score, 4)}
+                    results.setdefault(p2.id, []).append(entry2)
+        return results
+
     def detail_graph(self, llm: Any) -> int:
         node_map = {n.id: n.label for n in self._hive.nodes}
         batch: list[dict[str, str]] = []
