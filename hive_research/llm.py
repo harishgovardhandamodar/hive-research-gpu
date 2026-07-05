@@ -298,6 +298,8 @@ class LLMInterface:
         messages: list[dict[str, str]],
         model: str | None = None,
         gpu_id: int | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         base_url = self._get_base_url(gpu_id)
         url = f"{base_url}/api/chat"
@@ -306,6 +308,13 @@ class LLMInterface:
             "messages": messages,
             "stream": False,
         }
+        options: dict[str, Any] = {}
+        if temperature is not None:
+            options["temperature"] = temperature
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
+        if options:
+            payload["options"] = options
         try:
             resp = requests.post(url, json=payload, timeout=120)
             resp.raise_for_status()
