@@ -1952,11 +1952,21 @@ async function generateDefs(){
 
 // ── Detail Graph ──
 async function detailGraph(){
-  addLog('Detailing graph edges...','INPROGRESS');
+  addLog('Detailing graph edges in background...','INPROGRESS');
   try{
     const r=await api('/api/graph/detail','POST');
-    addLog('Detailed '+r.detailed+' edges','DONE');
-    refreshAll();
+    if(r.status==='started'){
+      addLog('Graph detailing started — will update when complete','DONE');
+      // Poll for completion after a delay
+      setTimeout(async()=>{
+        addLog('Checking graph detail status...','INPROGRESS');
+        const stats=await api('/api/papers');
+        refreshAll();
+      },10000);
+    }else{
+      addLog('Detailed '+r.detailed+' edges','DONE');
+      refreshAll();
+    }
   }catch(e){addLog('Error detailing graph: '+e,'ERROR')}
 }
 

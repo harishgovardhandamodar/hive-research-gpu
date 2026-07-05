@@ -111,8 +111,22 @@ class Organizer:
         return self.kg.to_node_link()
 
     def detail_graph(self) -> dict[str, Any]:
-        count = self.kg.detail_graph(self.llm)
-        return {"detailed": count, "graph": self.kg.to_node_link()}
+        import threading
+        done = [False]
+        result = [{"detailed": 0, "graph": self.kg.to_node_link()}]
+
+        def _run():
+            try:
+                count = self.kg.detail_graph(self.llm)
+                result[0] = {"detailed": count, "graph": self.kg.to_node_link()}
+            except Exception as e:
+                logger.error("detail_graph background: %s", e)
+            finally:
+                done[0] = True
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return {"status": "started", "message": "Detailing graph edges in background."}
 
     def notes_path_for(self, paper_id: str) -> str | None:
         n = self.kg.get_paper(paper_id)
