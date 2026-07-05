@@ -1062,8 +1062,8 @@ function showNodePreview(d){
     _previewPrior=prior; _previewCitedBy=citedBy; _previewPaperId=d.id;
     const hasLineage=prior.length||citedBy.length;
     const tabs=[];
-    if(hasLineage)tabs.push('Prior Works','Cited By');
     tabs.push('Similarity');
+    if(hasLineage)tabs.push('Prior Works','Cited By');
     if(tabs.length){
       let tabBar='<div class="preview-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:6px">';
       tabs.forEach((t,i)=>{
@@ -1082,9 +1082,20 @@ function showNodePreview(d){
       // Render active tab
       const firstTab=tabs[0].replace(/\s/g,'');
       more+=tabBar+(contents[firstTab]||'')+'</div>';
-      // Fetch similarity in background
+      // Kick off similarity fetch when it's the default tab
       _previewSimFetched=false;
       _previewSimData=null;
+      if(firstTab==='Similarity'){
+        (async()=>{
+          try{
+            const algo=el('simAlgorithm')?el('simAlgorithm').value:'combined';
+            const allIds=gData&&gData.nodes?gData.nodes.filter(n=>n.group===0).map(n=>n.id):[_previewPaperId];
+            _previewSimData=await api('/api/similarity','POST',{paper_ids:allIds,algorithm:algo});
+          }catch(e){_previewSimData=[]}
+          _previewSimFetched=true;
+          renderPreviewSimilarity();
+        })();
+      }
     }
     if(d.arxiv_id)actions+='<a href="https://arxiv.org/abs/'+d.arxiv_id+'" target="_blank" class="btn btn-sm">arXiv</a>';
     // Look up note path to add Browse buttons
