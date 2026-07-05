@@ -2374,6 +2374,7 @@ function showPoolNodePreview(d){
   if(d.arxiv_id)actions+='<a href="https://arxiv.org/abs/'+d.arxiv_id+'" target="_blank" class="btn btn-sm" style="font-size:10px">arXiv</a> ';
   if(d.arxiv_id)actions+='<a href="https://arxiv.org/pdf/'+d.arxiv_id+'" target="_blank" class="btn btn-sm btn-o" style="font-size:10px">PDF</a>';
   if(d.imported)actions+='<span style="color:var(--green);font-size:10px">&#x2713; Imported</span>';
+  else if(d.arxiv_id)actions+='<button class="btn btn-sm" onclick="importPoolPaper(\''+d.arxiv_id+'\');closePoolPreview()" style="font-size:10px;background:var(--green);color:#fff">+ Add to KB</button>';
   el('poolPreviewActions').innerHTML=actions;
   overlay.style.display='flex';
 }
