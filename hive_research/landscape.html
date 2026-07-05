@@ -84,7 +84,7 @@ let drag=false, drag0, moved=false;
 let hover=null, picked=null;
 let canvas, ctx;
 let simRun=null;
-let fetchOk=false;
+let fetchOk=false, fetchErr=false;
 
 const P=['#60a5fa','#2dd4bf','#fb923c','#c084fc','#34d399','#f472b6','#fbbf24','#f87171','#a78bfa','#22d3ee','#4ade80','#facc15'];
 const dpr=()=>window.devicePixelRatio||1;
@@ -136,6 +136,7 @@ async function api(p,method,body){
 // ── Fetch ──
 async function fetch(){
   document.getElementById('load').classList.remove('h');
+  fetchErr=false;
   try{
     const [p,s,stats]=await Promise.all([
       api('/api/papers'),
@@ -151,8 +152,9 @@ async function fetch(){
     }
     build();
     fetchOk=true;
-  }catch(e){console.error('fetch',e)}
+  }catch(e){console.error('fetch',e);fetchErr=true}
   document.getElementById('load').classList.add('h');
+  draw();
 }
 
 // ── Build graph ──
@@ -161,7 +163,7 @@ function build(){
 
   const pm={}; papers.forEach(p=>{pm[p.id]=p});
   nodes=papers.map(p=>({
-    id:p.id, label:p.label, authors:p.authors||'', published:p.published||'',
+    id:p.id, label:p.title||p.label, authors:p.authors||'', published:p.published||'',
     abstract:p.abstract||'',
   }));
 
@@ -232,8 +234,8 @@ function leg(){
 // ── Layout ──
 function layout(){
   if(!nodes.length)return;
+  if(!W||!H)resize();
   const w=W||800, h=H||600;
-  if(!w||!h)return;
   // Grid seed
   const cols=Math.ceil(Math.sqrt(nodes.length));
   nodes.forEach((n,i)=>{
@@ -273,9 +275,10 @@ function draw(){
   ctx.fillRect(0,0,w,h);
 
   if(!nodes.length){
+    const msg=fetchErr?'Failed to load data':fetchOk?'No papers found':'Loading...';
     ctx.fillStyle='#64748b'; ctx.font='14px -apple-system,sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(fetchOk?'No papers found':'Loading...',w/2,h/2);
+    ctx.fillText(msg,w/2,h/2);
     return;
   }
 
