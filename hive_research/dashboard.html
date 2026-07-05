@@ -451,6 +451,7 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="query" onclick="switchPanel('query')">&#x1F4AC;<span class="tip">Chat</span></div>
 
   <div class="spacer"></div>
+  <div class="nav-item" data-panel="help" onclick="switchPanel('help')">&#x2753;<span class="tip">Help</span></div>
   <div class="nav-item" data-panel="about" onclick="switchPanel('about')">&#x2139;<span class="tip">About</span></div>
 </div>
 <div class="main">
@@ -713,6 +714,62 @@ select{cursor:pointer}
       <div class="chat-input">
         <input id="chatInput" placeholder="Ask anything..." onkeydown="if(event.key==='Enter')askRag()">
         <button class="btn" onclick="askRag()">Ask</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Help Panel ── -->
+<div class="panel" id="panel-help">
+  <div class="panel-header"><h2>Help <span class="badge">Guide</span></h2></div>
+  <div class="panel-body" style="gap:10px">
+    <div class="card">
+      <div class="card-header">&#x1F4D6; Quick Start</div>
+      <div style="font-size:12px;line-height:1.8;color:var(--text2);padding:4px 0">
+        1. Go to <b>Import</b> &rarr; enter arXiv ID (e.g. <code>1706.03762</code>) &rarr; <b>Add</b><br>
+        2. Pipeline runs: fetch &rarr; download PDF &rarr; extract text &rarr; LLM analysis &rarr; knowledge graph &rarr; RAG index<br>
+        3. Visit <b>Graph</b> to see the paper and its concepts<br>
+        4. Ask questions in <b>Chat</b> using RAG over all papers
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">&#x1F4BB; CLI Quick Reference</div>
+      <div style="font-size:11px;line-height:1.9;font-family:monospace;color:var(--text2)">
+        <div>python -m hive_research serve <span style="color:var(--text3)"># Start dashboard</span></div>
+        <div>python -m hive_research add &lt;id&gt; <span style="color:var(--text3)"># Add paper</span></div>
+        <div>python -m hive_research import "query" -n 5 <span style="color:var(--text3)"># Search & import</span></div>
+        <div>python -m hive_research query "question" <span style="color:var(--text3)"># RAG query</span></div>
+        <div>python -m hive_research stats <span style="color:var(--text3)"># System stats</span></div>
+        <div>python -m hive_research export --bibtex papers.bib <span style="color:var(--text3)"># Export</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">&#x1F4E1; API Endpoints</div>
+      <div style="font-size:11px;line-height:1.8;color:var(--text2)">
+        <div><b style="color:var(--accent)">GET</b> /api/graph &mdash; Knowledge graph</div>
+        <div><b style="color:var(--accent)">GET</b> /api/papers &mdash; All papers</div>
+        <div><b style="color:var(--accent)">GET</b> /api/stats &mdash; Statistics</div>
+        <div><b style="color:var(--green)">POST</b> /api/add &mdash; Add paper</div>
+        <div><b style="color:var(--green)">POST</b> /api/query &mdash; RAG question</div>
+        <div><b style="color:var(--green)">POST</b> /api/similarity &mdash; Compare papers</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">&#x1F4BB; Python Client</div>
+      <div style="font-size:11px;line-height:1.8;color:var(--text2)">
+        <pre style="background:var(--bg);padding:8px;border-radius:6px;font-size:10px;overflow-x:auto">
+from hive_research import HiveClient
+client = HiveClient("http://localhost:7777")
+stats = client.stats()
+papers = client.papers()
+answer = client.query("What is attention?")
+</pre>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">&#x1F30D; Full Documentation</div>
+      <div style="font-size:11px;color:var(--text2);padding:4px 0">
+        Visit the <a href="/hive" style="color:var(--accent)">Hive UI</a> for the full interactive help panel with feature cards, code examples, and Jupyter notebook integration.
       </div>
     </div>
   </div>
