@@ -2049,10 +2049,12 @@ async function loadPool(){
   el('poolBadge').textContent=_poolStore.length+' observed';
 }
 
-function buildPoolTopicFilter(data){
+function buildPoolTopicFilter(data,preserveSelection){
   const sel=el('poolTopicFilter');if(!sel)return;
+  const currentVal=preserveSelection?sel.value:'';
   const topics=Object.keys(data||{}).sort();
   sel.innerHTML='<option value="">All topics</option>'+topics.map(t=>'<option value="'+esc(t)+'">'+esc(t)+'</option>').join('');
+  if(currentVal&&topics.includes(currentVal))sel.value=currentVal;
   sel.onchange=function(){loadPoolBrowse()};
 }
 
@@ -2060,8 +2062,22 @@ let _lastPoolData=null;
 async function loadPoolBrowse(){
   const data=await api('/api/pool');
   _lastPoolData=data;
-  buildPoolTopicFilter(data);
+  const sel=el('poolTopicFilter');
+  const currentFilter=sel?sel.value:'';
+  buildPoolTopicFilter(data,true);
   renderPoolBrowse(data);
+  // Re-filter graph if a topic is selected
+  if(currentFilter&&currentFilter!==''){
+    const gData=await api('/api/pool/graph');
+    if(gData.nodes){
+      const filtered=gData.nodes.filter(n=>n.topics&&n.topics.includes(currentFilter));
+      const fIds=new Set(filtered.map(n=>n.id));
+      const fLinks=gData.edges.filter(l=>fIds.has(l.source)&&fIds.has(l.target));
+      if(filtered.length)renderPoolGraph({nodes:filtered,edges:fLinks});
+    }
+  }else{
+    loadPoolGraph();
+  }
 }
 
 let _poolSelected=[];
