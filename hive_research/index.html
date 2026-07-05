@@ -195,7 +195,7 @@ const nav={
     if(el)el.classList.add('a');
     this.current=name;
     if(name==='graph')setTimeout(()=>G.render(),50);
-    if(name==='landscape')setTimeout(()=>L.render(),50);
+    if(name==='landscape')setTimeout(()=>L.refresh(),50);
     if(name==='papers')P.load();
     if(name==='similarity')S.render();
   }
@@ -354,7 +354,8 @@ const L={
     const W=rect.width,H=rect.height;
     const papers=this.data||[],simData=this.simData||[];
     if(!papers.length){
-      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle='var(--bg)';ctx.fillRect(0,0,W,H);
+      const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0b1120';
+      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
       ctx.fillStyle='#64748b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('No papers',W/2,H/2);
       return;
     }
@@ -456,7 +457,7 @@ const C={
 // ── Init ──
 document.addEventListener('DOMContentLoaded',async ()=>{
   $('load').classList.remove('h');
-  try{await Promise.all([G.refresh(),D.load(),P.load()])}catch(e){}
+  try{await Promise.all([G.refresh(),D.load(),P.load(),L.refresh()])}catch(e){}
   $('load').classList.add('h');
 });
 
