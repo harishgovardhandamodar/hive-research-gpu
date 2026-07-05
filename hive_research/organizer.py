@@ -46,7 +46,7 @@ class Organizer:
             pdf_text = ""
             pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
             if pdf_path.exists():
-                from .parser import extract_text
+                from .parser import cached_extract_text as extract_text
                 pdf_text = extract_text(pdf_path)
             if pdf_text:
                 n = self.rag.index_paper(arxiv_id, pdf_text)
@@ -68,8 +68,8 @@ class Organizer:
         pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
         if not pdf_path.exists():
             return {"status": "error", "message": f"No PDF found for {arxiv_id}"}
-        from .parser import extract_text
-        pdf_text = extract_text(pdf_path)
+            from .parser import cached_extract_text as extract_text
+            pdf_text = extract_text(pdf_path)
         if not pdf_text:
             return {"status": "error", "message": "Could not extract text from PDF"}
         refs = self.pipeline.fetch_lineage(arxiv_id, pdf_text)
@@ -139,7 +139,7 @@ class Organizer:
 
     def _refresh_single(self, node: Any, model: str | None = None) -> bool:
         import json as _json
-        from .parser import extract_text, extract_images_from_pdf
+        from .parser import cached_extract_text as _cached_extract, extract_images_from_pdf
         from .pipeline import _sanitize_id
 
         try:
@@ -150,7 +150,7 @@ class Organizer:
             if not pdf_path or not pdf_path.exists():
                 logger.warning("No PDF found for %s — skipping", node.arxiv_id)
                 return False
-            text = extract_text(pdf_path)
+            text = _cached_extract(pdf_path)
             if not text:
                 logger.warning("No text extracted from PDF for %s — skipping", node.arxiv_id)
                 return False

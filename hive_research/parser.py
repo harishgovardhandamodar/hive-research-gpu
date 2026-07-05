@@ -2,10 +2,100 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Thread-local PyMuPDF import to avoid import races
+_tls = threading.local()
+
+_TEXT_CACHE: dict[str, str] = {}  # pdf_path -> text
+_TEXT_CACHE_LOCK = threading.Lock()
+_TEXT_CACHE_MAX = 50
+
+
+def _get_fitz():
+    """Lazy-import fitz with thread-local caching."""
+    if not hasattr(_tls, "fitz"):
+        import fitz
+        _tls.fitz = fitz
+    return _tls.fitz
+
+
+def _cache_key(pdf_path: str) -> str:
+    return str(Path(pdf_path).resolve())
+
+
+def cached_extract_text(pdf_path: str | Path) -> str:
+    """Extract text with disk + memory caching.
+
+    If a ``.txt`` sidecar file exists next to the PDF, it is returned
+    directly without re-extracting.
+    """
+    pdf = Path(pdf_path)
+    txt_cache = pdf.with_suffix(".txt")
+    key = _cache_key(pdf_path)
+
+    # Memory cache
+    with _TEXT_CACHE_LOCK:
+        if key in _TEXT_CACHE and _TEXT_CACHE[key]:
+            return _TEXT_CACHE[key]
+
+    # Disk cache
+    if txt_cache.exists():
+        text = txt_cache.read_text()
+        with _TEXT_CACHE_LOCK:
+            if len(_TEXT_CACHE) >= _TEXT_CACHE_MAX:
+                _TEXT_CACHE.clear()
+            _TEXT_CACHE[key] = text
+        return text
+
+    # Extract
+    text = _extract_text_inner(pdf)
+    if text:
+        txt_cache.write_text(text)
+        with _TEXT_CACHE_LOCK:
+            if len(_TEXT_CACHE) >= _TEXT_CACHE_MAX:
+                _TEXT_CACHE.clear()
+            _TEXT_CACHE[key] = text
+    return text
+
+
+def _extract_text_inner(pdf_path: Path) -> str:
+    """Core text extraction using PyMuPDF."""
+    fitz = _get_fitz()
+    doc = fitz.open(str(pdf_path))
+    try:
+        text = "\n".join(page.get_text() for page in doc)
+    finally:
+        doc.close()
+    return text
+
+
+def extract_text_parallel(
+    pdf_paths: list[str | Path],
+    max_workers: int = 4,
+) -> dict[str, str]:
+    """Extract text from multiple PDFs in parallel using a thread pool.
+
+    Returns:
+        Dict mapping str(pdf_path) -> extracted text.
+    """
+    results: dict[str, str] = {}
+    lock = threading.Lock()
+
+    def _extract_one(p: str | Path) -> None:
+        text = cached_extract_text(p)
+        with lock:
+            results[str(p)] = text
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        pool.map(_extract_one, pdf_paths)
+
+    return results
 
 SECTION_HEADING = re.compile(
     r"^(#{1,3}\s+|\d+\.\d*\s+|[A-Z][A-Z\s]{2,}(?:\n|$))",
