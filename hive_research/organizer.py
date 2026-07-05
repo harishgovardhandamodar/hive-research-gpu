@@ -16,6 +16,7 @@ from .similarity import paper_similarity_matrix
 from .web_ingest import WebIngester
 from .exporter import to_bibtex, to_json_dump, create_backup, papers_to_csv
 from .collections import CollectionStore
+from .ingestion import IngestionQueue
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class Organizer:
         self.pool = ResearchPool(config.root_dir / "pool")
         self.web = WebIngester(self.llm, self.kg)
         self.collections = CollectionStore(Path(config.root_dir) / "collections.json")
+        self.ingestion = IngestionQueue(config, self.llm, self.kg, self.pipeline, self.rag, gpu_mgr)
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()

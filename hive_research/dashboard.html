@@ -736,6 +736,14 @@ select{cursor:pointer}
 
 </div><!-- /main-top -->
 
+<!-- ── Ingestion Queue Status Bar ── -->
+<div id="ingestionBar" style="display:none;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);padding:4px 12px;font-size:10px;gap:6px;flex-wrap:wrap;align-items:center">
+  <span style="color:var(--text2);font-weight:500">&#x2699; Ingestion Queue</span>
+  <span id="ingQueueCount" style="color:var(--text3)">0 active</span>
+  <span id="ingQueueItems" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></span>
+  <span onclick="clearIngestionQueue()" style="cursor:pointer;color:var(--text3);margin-left:auto" title="Clear finished jobs">&#x2716;</span>
+</div>
+
 <!-- ── Persistent Bottom Log Bar ── -->
 <div class="log-bar" id="logBar">
   <div class="log-bar-header">
@@ -2358,6 +2366,33 @@ async function runPoolFreeQuery(){
     renderTopicSubgraph(nodes,edges,topic);
   }catch(e){addLog('Pool query error: '+(e.message||e),'ERROR');console.error(e)}
 }
+
+// ── Ingestion Queue ──
+async function pollIngestionQueue(){
+  try{
+    const jobs=await api('/api/ingestion/queue');
+    const bar=el('ingestionBar');if(!bar)return;
+    const active=jobs.filter(j=>j.status!=='done'&&j.status!=='error');
+    const done=jobs.filter(j=>j.status==='done'||j.status==='error');
+    el('ingQueueCount').textContent=active.length+' active, '+done.length+' done';
+    if(!active.length&&!done.length){bar.style.display='none';return}
+    bar.style.display='flex';
+    const items=el('ingQueueItems');
+    // Show active jobs first, then recent done
+    const display=[...active.slice(-5),...done.slice(-3)];
+    items.innerHTML=display.map(j=>{
+      const color=j.status==='error'?'var(--red)':j.status==='done'?'var(--green)':j.status==='queued'?'var(--text3)':'var(--accent)';
+      const icon=j.status==='error'?'&#x2716;':j.status==='done'?'&#x2713;':j.status==='queued'?'&#x25CB;':'&#x25CF;';
+      return '<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:3px;background:var(--bg);color:'+color+';font-size:9px;white-space:nowrap" title="'+esc(j.message||'')+'">'+
+        icon+' '+esc(j.paper_id)+' <span style="color:var(--text3)">'+esc(j.status)+'</span></span>';
+    }).join('');
+  }catch(_){}
+}
+async function clearIngestionQueue(){
+  try{await api('/api/ingestion/clear','POST');pollIngestionQueue()}catch(_){}
+}
+// Poll every 2 seconds
+setInterval(pollIngestionQueue,2000);
 
 // ── Pool Node Preview ──
 function showPoolNodePreview(d){

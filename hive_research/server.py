@@ -369,6 +369,14 @@ class RouteHandler(BaseHTTPRequestHandler):
                 _json_response(self, {"error": "missing paper_id"}, 400)
                 return
             _json_response(self, self.org.pool.get_suggestions(paper_id, top_k))
+        elif path == "/api/ingestion/queue":
+            _json_response(self, self.org.ingestion.get_jobs())
+        elif path == "/api/ingestion/events":
+            since = params.get("since", None)
+            n = int(params.get("n", 50))
+            _json_response(self, self.org.ingestion.get_events(since, n))
+        elif path == "/api/ingestion/stats":
+            _json_response(self, self.org.ingestion.get_stats())
         else:
             _json_response(self, {"error": "not found"}, 404)
 
@@ -510,7 +518,7 @@ info.textContent += ' | OK';
                 req = AddPaperRequest(**{**data, **params})
                 model_param = data.get("model", params.get("model", None))
                 model = self.org.config.resolve_model(model_param)
-                result = self.org.add_by_id(req.id, model=model)
+                result = self.org.ingestion.enqueue(req.id, model=model)
                 _json_response(self, result)
             except Exception as e:
                 _json_response(self, {"error": str(e)}, 400)
@@ -670,6 +678,17 @@ info.textContent += ' | OK';
                 _json_response(self, {"error": "missing query"}, 400)
                 return
             _json_response(self, self.org.pool.query_pool(query))
+        elif path == "/api/ingestion/add":
+            arxiv_id = data.get("id", params.get("id", ""))
+            if not arxiv_id:
+                _json_response(self, {"error": "missing id"}, 400)
+                return
+            model = data.get("model", params.get("model", None))
+            result = self.org.ingestion.enqueue(arxiv_id, model=model)
+            _json_response(self, result)
+        elif path == "/api/ingestion/clear":
+            cleared = self.org.ingestion.clear_done()
+            _json_response(self, {"status": "cleared", "count": cleared})
         else:
             _json_response(self, {"error": "not found"}, 404)
 
