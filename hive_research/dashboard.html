@@ -1078,7 +1078,7 @@ function showNodePreview(d){
         const cItems=citedBy.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--cyan);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
         contents.CitedBy='<ul style="margin:0;padding-left:16px">'+(cItems||'<li style="color:var(--text3)">None</li>')+'</ul>'+(citedBy.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (citedBy.length-8)+' more</div>':'');
       }
-      contents.Similarity='<div id="previewSimLoading" style="color:var(--text3);font-size:10px">Loading...</div>';
+      contents.Similarity='<div id="previewSimLoading" style="color:var(--text3);font-size:10px">Loading...</div><div id="previewSimResult"></div>';
       // Render active tab
       const firstTab=tabs[0].replace(/\s/g,'');
       more+=tabBar+(contents[firstTab]||'')+'</div>';
@@ -1186,7 +1186,7 @@ function switchPreviewTab(tab,btn){
         renderPreviewSimilarity();
       })();
     }else{
-      html=buildPreviewSimHtml();
+      html='<div id="previewSimLoading" style="display:none"></div><div id="previewSimResult">'+buildPreviewSimHtml()+'</div>';
     }
   }
   const tc=container.querySelector('.preview-tab-content');
