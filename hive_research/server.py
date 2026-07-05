@@ -16,6 +16,39 @@ from .gpu import GPUManager
 from .logs import get_capture
 from .organizer import Organizer
 
+# Optional auth: set HIVE_AUTH_TOKEN env var to enable
+AUTH_TOKEN = os.environ.get("HIVE_AUTH_TOKEN", "")
+
+
+def _check_auth(handler: BaseHTTPRequestHandler) -> bool:
+    """Returns True if auth passes or is not configured."""
+    if not AUTH_TOKEN:
+        return True
+    auth = handler.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:] == AUTH_TOKEN
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode()
+            _, password = decoded.split(":", 1)
+            return password == AUTH_TOKEN
+        except Exception:
+            return False
+    return False
+
+
+def _require_auth(handler: BaseHTTPRequestHandler) -> bool:
+    """Send 401 if auth fails. Returns True if allowed."""
+    if _check_auth(handler):
+        return True
+    handler.send_response(401)
+    handler.send_header("WWW-Authenticate", 'Bearer realm="hive-research"')
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.end_headers()
+    handler.wfile.write(json.dumps({"error": "unauthorized"}).encode())
+    return False
+
 logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
@@ -68,6 +101,8 @@ class RouteHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path, params = self._parse_path()
+        if not _require_auth(self):
+            return
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
         elif path == "/hive":
@@ -450,6 +485,8 @@ info.textContent += ' | OK';
 
     def do_POST(self) -> None:
         path, params = self._parse_path()
+        if not _require_auth(self):
+            return
         body = self._read_body()
         try:
             data = json.loads(body) if body else {}
@@ -457,14 +494,15 @@ info.textContent += ' | OK';
             data = {}
 
         if path == "/api/add":
-            arxiv_id = data.get("id", params.get("id", ""))
-            if not arxiv_id:
-                _json_response(self, {"error": "missing id"}, 400)
-                return
-            model_param = data.get("model", params.get("model", None))
-            model = self.org.config.resolve_model(model_param)
-            result = self.org.add_by_id(arxiv_id, model=model)
-            _json_response(self, result)
+            try:
+                from .schemas import AddPaperRequest
+                req = AddPaperRequest(**{**data, **params})
+                model_param = data.get("model", params.get("model", None))
+                model = self.org.config.resolve_model(model_param)
+                result = self.org.add_by_id(req.id, model=model)
+                _json_response(self, result)
+            except Exception as e:
+                _json_response(self, {"error": str(e)}, 400)
         elif path == "/api/search":
             query = data.get("query", params.get("query", ""))
             if not query:
