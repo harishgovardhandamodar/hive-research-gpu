@@ -102,7 +102,17 @@ window.addEventListener('load',()=>{
   canvas=document.getElementById('canvas');
   ctx=canvas.getContext('2d');
   resizeCanvas();
-  window.addEventListener('resize',()=>{resizeCanvas();if(nodes.length)render()});
+  window.addEventListener('resize',()=>resizeCanvas());
+  // Detect DPR changes when window moves between monitors
+  const dprListener=window.matchMedia('(resolution: 1dppx)');
+  dprListener.addEventListener('change',()=>{
+    const dpr=getDpr();
+    // Re-check all resolution media queries to catch any DPR switch
+    for(let i=1;i<=4;i++){
+      const mq=window.matchMedia(`(resolution: ${i}dppx)`);
+      if(mq.matches&&i!==dpr){resizeCanvas();if(nodes.length)render();break}
+    }
+  });
   canvas.addEventListener('mousedown',onMouseDown);
   canvas.addEventListener('mousemove',onMouseMove);
   canvas.addEventListener('mouseup',onMouseUp);
@@ -111,14 +121,19 @@ window.addEventListener('load',()=>{
   fetchData();
 });
 
+function getDpr(){return window.devicePixelRatio||1}
 function resizeCanvas(){
+  const dpr=getDpr();
   const rect=document.getElementById('main').getBoundingClientRect();
-  canvas.width=rect.width*devicePixelRatio;
-  canvas.height=rect.height*devicePixelRatio;
+  canvas.width=rect.width*dpr;
+  canvas.height=rect.height*dpr;
   canvas.style.width=rect.width+'px';
   canvas.style.height=rect.height+'px';
   simWidth=rect.width; simHeight=rect.height;
-  ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+  if(nodes.length)render();
 }
 
 // ── Data Fetching ──
