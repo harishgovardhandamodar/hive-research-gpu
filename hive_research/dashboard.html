@@ -789,6 +789,31 @@ function toggleTheme(){
   const isLight=document.body.classList.contains('light');
   localStorage.setItem('hive_theme',isLight?'light':'dark');
   el('themeToggle').textContent=isLight?'\u2600':'\u263E';
+  if(gData&&gData.nodes)recolorGraphEdges(isLight);
+}
+function recolorGraphEdges(isLight){
+  const svg=document.querySelector('#graphWrap svg');
+  if(!svg)return;
+  const edgeColor=isLight?'#94a3b8':'#1e3a5f';
+  const citeColor=isLight?'#059669':'#34d399';
+  const labelBg=isLight?'#f1f5f9':'#1e293b';
+  const labelText=isLight?'#475569':'#94a3b8';
+  // Arrow marker
+  const marker=svg.querySelector('marker path');
+  if(marker)marker.setAttribute('fill',edgeColor);
+  // Edge lines
+  svg.querySelectorAll('.graph-edges > line').forEach(el=>{
+    const isCite=el.__data__&&el.__data__.relation==='cites';
+    el.setAttribute('stroke',isCite?citeColor:edgeColor);
+  });
+  // Link label backgrounds
+  svg.querySelectorAll('.graph-labels > g').forEach(el=>{
+    const isCite=el.__data__&&el.__data__.relation==='cites';
+    const r=el.querySelector('rect');
+    if(r){r.setAttribute('fill',labelBg);r.setAttribute('stroke',edgeColor);}
+    const t=el.querySelector('text');
+    if(t)t.setAttribute('fill',isCite?citeColor:labelText);
+  });
 }
 (function(){
   const saved=localStorage.getItem('hive_theme');
@@ -961,12 +986,12 @@ function renderGraph(data){
   const defs=svg.append('defs');
   defs.append('marker').attr('id','arrow').attr('viewBox','0 -5 10 10').attr('refX',20).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
     .append('path').attr('d','M0,-5L10,0L0,5').attr('fill',GS.edgeColor);
-  const link=container.append('g').selectAll('line').data(links).join('line')
+  const link=container.append('g').attr('class','graph-edges').selectAll('line').data(links).join('line')
     .attr('stroke',d=>d.relation==='cites'?GS.citeColor:GS.edgeColor)
     .attr('stroke-width',d=>d.relation==='cites'?1.5:1)
     .attr('stroke-opacity',d=>d.relation==='cites'?.7:.5)
     .attr('marker-end','url(#arrow)');
-  const linkLabel=container.append('g').selectAll('g').data(links).join('g');
+  const linkLabel=container.append('g').attr('class','graph-labels').selectAll('g').data(links).join('g');
   linkLabel.append('rect')
     .attr('fill','#1e293b').attr('rx',4).attr('ry',4)
     .attr('stroke','#1e3a5f').attr('stroke-width',0.5);
@@ -1030,6 +1055,8 @@ function renderGraph(data){
     }).attr('y',-8);
     node.attr('transform',d=>'translate('+d.x+','+d.y+')');
   });
+  const _isLight=document.body.classList.contains('light');
+  if(_isLight)setTimeout(()=>recolorGraphEdges(true),0);
 }
 function applyFilter(val){
   if(!gData.nodes)return;
