@@ -264,8 +264,10 @@ select{cursor:pointer}
 .pool-topic-card .topic-meta{font-size:9px;color:var(--text3)}
 .pool-topic-card .topic-bar{margin:4px 0;height:3px;background:var(--bg);border-radius:2px;overflow:hidden}
 .pool-topic-card .topic-bar-fill{height:100%;border-radius:2px;transition:width .4s}
-.pool-topic-card .btn-o{background:transparent;border:1px solid var(--border);color:var(--text2);padding:1px 6px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:9px;transition:all .12s}
-.pool-topic-card .btn-o:hover{border-color:var(--accent);color:var(--accent)}
+.btn-o{background:var(--surface);border:1px solid var(--text3);color:var(--text2);padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:10px;font-weight:500;transition:all .12s;white-space:nowrap}
+.btn-o:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.pool-topic-card .btn-o{padding:1px 6px;font-size:9px}
+.pool-topic-card .btn-o:hover{background:var(--accent);border-color:var(--accent);color:#fff}
 #addTopicToggle:hover{border-color:var(--accent)!important;color:var(--accent)!important;background:var(--surface)}
 .pool-topic h3 .count{font-size:11px;font-weight:400;color:var(--text3)}
 .pool-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;transition:all .2s}
@@ -2252,9 +2254,9 @@ function renderPoolBrowse(data){
       ' <span class="count">'+(papers||[]).length+' papers</span>'+
       ' <span class="count" style="color:var(--text3);font-size:10px">import rate: '+convRate+'%</span></h3>'+
       '<div class="pool-topic-actions" style="display:flex;gap:4px;margin-bottom:8px">'+
-      '<button class="btn btn-sm btn-o" onclick="selectAllTopicPapers(\''+esc(topic)+'\')" style="font-size:9px">&#x2713; Select all</button>'+
-      '<button class="btn btn-sm btn-o" onclick="importAllTopicPapers(\''+esc(topic)+'\')" style="font-size:9px;color:var(--green)">+ Import all</button>'+
-      '<button class="btn btn-sm btn-o" onclick="fetchTopicSubgraph(\''+esc(topic).replace(/'/g,"\\'")+'\')" style="font-size:9px;color:var(--accent)">&#x1F50D; Sub-graph</button>'+
+      '<button class="btn btn-sm btn-o" onclick="selectAllTopicPapers(\''+esc(topic)+'\')">&#x2713; Select all</button>'+
+      '<button class="btn btn-sm btn-o" onclick="importAllTopicPapers(\''+esc(topic)+'\')" style="color:var(--green)">+ Import all</button>'+
+      '<button class="btn btn-sm btn-o" onclick="fetchTopicSubgraph(\''+esc(topic).replace(/'/g,"\\'")+'\')" style="color:var(--accent)">&#x1F50D; Sub-graph</button>'+
       '</div>'+
       (papers||[]).map(p=>{
         const ps=_poolStore.find(s=>s.arxiv_id===p.arxiv_id);
