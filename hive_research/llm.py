@@ -190,6 +190,11 @@ class LLMInterface:
             r'"\1": [\2]',
             text,
         )
+        # Remove stray quotes between closing brackets/braces (e.g. ]"}) → ]})
+        text = re.sub(r'\]"\s*([\]}])', r']\1', text)
+        text = re.sub(r'\}"\s*([\]}])', r'}\1', text)
+        # Fix spurious "[" as first array element (missing comma before next string)
+        text = re.sub(r'(?<=[\[,])\s*"\s*\[\s*"(?=[^,\]"\s])', '"', text)
         stack: list[str] = []
         in_str = False
         escaped = False
