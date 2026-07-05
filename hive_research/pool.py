@@ -525,3 +525,129 @@ class ResearchPool:
                 scored.append({"arxiv_id": p["arxiv_id"], "score": round(score, 4)})
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
+
+    # ── Free-form Query ──
+
+    def query_pool(self, query: str, max_local: int = 50, max_arxiv: int = 10) -> dict[str, Any]:
+        """Free-form natural language query over pool papers with arXiv fallback.
+
+        1. Extracts keywords from the query
+        2. Searches local pool database (title, abstract, topics)
+        3. Falls back to arXiv API for topics not found locally
+        4. Returns matched papers + similarity graph
+        """
+        # Extract keywords (split on commas, remove common words)
+        stop_words = {
+            "find", "me", "a", "the", "that", "cover", "all", "for", "and",
+            "or", "in", "on", "of", "to", "with", "about", "references",
+            "papers", "research", "related", "including", "like", "such",
+        }
+        raw_keywords = re.split(r"[,;]", query)
+        keywords = []
+        for part in raw_keywords:
+            for word in part.strip().lower().split():
+                word = word.strip(".,!?\"'()[]")
+                if word and len(word) > 2 and word not in stop_words:
+                    keywords.append(word)
+        keywords = list(set(keywords))
+        if not keywords:
+            return {"papers": [], "graph": []}
+
+        # 1. Search local pool
+        self._lock.acquire()
+        try:
+            rows = self._db_conn().execute(
+                "SELECT * FROM papers ORDER BY last_seen DESC LIMIT ?",
+                (1000,),
+            ).fetchall()
+        finally:
+            self._lock.release()
+        pool_papers = []
+        for r in rows:
+            p = dict(r)
+            p["authors"] = json.loads(p.get("authors", "[]"))
+            p["categories"] = json.loads(p.get("categories", "[]"))
+            p["topics"] = json.loads(p.get("topics", "[]"))
+            p["tags"] = json.loads(p.get("tags", "[]"))
+            p["imported"] = bool(p["imported"])
+            pool_papers.append(p)
+
+        # Score each paper by keyword overlap
+        scored_local = []
+        for p in pool_papers:
+            text = ((p.get("title", "") or "") + " " + (p.get("abstract", "") or "") + " " +
+                    " ".join(p.get("topics", []))).lower()
+            score = sum(1 for kw in keywords if kw in text)
+            if score > 0:
+                scored_local.append((p, score / len(keywords)))
+        scored_local.sort(key=lambda x: x[1], reverse=True)
+        matched_local = [p for p, s in scored_local[:max_local]]
+
+        # 2. For keywords with no matches, fall back to arXiv
+        matched_keywords = set()
+        for p in matched_local:
+            text = ((p.get("title", "") or "") + " " + (p.get("abstract", "") or "")).lower()
+            for kw in keywords:
+                if kw in text:
+                    matched_keywords.add(kw)
+        missing_keywords = [kw for kw in keywords if kw not in matched_keywords]
+
+        # 3. Fetch from arXiv for missing keywords
+        arxiv_papers = []
+        seen_ids = {p["arxiv_id"] for p in matched_local}
+        for kw in missing_keywords[:3]:  # Limit to 3 arXiv fallback queries
+            try:
+                results = search_arxiv(kw, max_results=max_arxiv)
+                for r in results:
+                    if r.arxiv_id not in seen_ids:
+                        seen_ids.add(r.arxiv_id)
+                        arxiv_papers.append({
+                            "arxiv_id": r.arxiv_id,
+                            "title": r.title,
+                            "authors": r.authors,
+                            "authors_str": r.authors_str,
+                            "published": r.published,
+                            "abstract": r.abstract[:500],
+                            "categories": r.categories,
+                            "pdf_url": r.pdf_url,
+                            "topics": [f"query: {kw}"],
+                            "imported": False,
+                            "is_new": True,
+                        })
+                    time.sleep(3.5)  # Rate limit
+            except Exception as e:
+                logger.warning("arXiv fallback query '%s' failed: %s", kw, e)
+
+        # 4. Build result
+        all_papers = matched_local + arxiv_papers
+        all_papers = all_papers[:max_local + max_arxiv]
+
+        # Build similarity graph between result papers
+        edges = []
+        for i in range(len(all_papers)):
+            for j in range(i + 1, len(all_papers)):
+                ta = (all_papers[i]["title"] or "") + " " + (all_papers[i]["abstract"] or "")
+                tb = (all_papers[j]["title"] or "") + " " + (all_papers[j]["abstract"] or "")
+                score = jaccard_tokens(ta, tb)
+                if score >= SIMILARITY_THRESHOLD:
+                    edges.append({
+                        "source": all_papers[i]["arxiv_id"],
+                        "target": all_papers[j]["arxiv_id"],
+                        "similarity": round(score, 4),
+                    })
+
+        # Format for frontend
+        papers_out = []
+        for p in all_papers:
+            papers_out.append({
+                "arxiv_id": p["arxiv_id"],
+                "title": (p.get("title", "") or "")[:120],
+                "authors_str": p.get("authors_str", ""),
+                "published": p.get("published", ""),
+                "abstract": (p.get("abstract", "") or "")[:500],
+                "topics": p.get("topics", []),
+                "imported": p.get("imported", False),
+                "is_new": p.get("is_new", False),
+            })
+
+        return {"papers": papers_out, "graph": edges}

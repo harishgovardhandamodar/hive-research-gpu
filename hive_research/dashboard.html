@@ -599,8 +599,10 @@ select{cursor:pointer}
         <div class="pool-subtab active" onclick="switchPoolTab('browse',this)">&#x1F4D6; Browse</div>
         <div class="pool-subtab" onclick="switchPoolTab('topics-graph',this)">&#x1F30D; Topics &amp; Graph</div>
       </div>
-      <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
-        <select id="poolTopicFilter" style="font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text2);max-width:140px">
+      <div style="display:flex;gap:4px;align-items:center;margin-left:auto;flex:1;justify-content:flex-end">
+        <input id="poolFreeQuery" placeholder="Free-form query..." style="padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px;outline:none;width:220px;max-width:30vw" onkeydown="if(event.key==='Enter')runPoolFreeQuery()">
+        <button class="btn btn-sm" onclick="runPoolFreeQuery()" style="font-size:9px;padding:3px 8px">&#x1F50D; Search</button>
+        <select id="poolTopicFilter" style="font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text2);max-width:120px">
           <option value="">All topics</option>
         </select>
         <span style="color:var(--text3);font-size:10px">&#x2699;</span>
@@ -2331,6 +2333,30 @@ function updatePoolStats(papers){
   el('poolImported').textContent=papers.filter(p=>p.imported).length;
   el('poolNew').textContent=papers.filter(p=>p.is_new).length;
   el('poolBadge').textContent=papers.length+' observed';
+}
+
+// ── Free-form Pool Query ──
+async function runPoolFreeQuery(){
+  const q=el('poolFreeQuery').value.trim();
+  if(!q)return;
+  addLog('Searching pool: "'+q+'"...','INPROGRESS');
+  try{
+    const result=await api('/api/pool/query','POST',{query:q});
+    const papers=result.papers||[];
+    if(!papers.length){addLog('No results found for: '+q,'WARN');return}
+    addLog('Pool query: '+papers.length+' papers found','DONE');
+    // Show in sub-graph overlay
+    const topics=[...new Set(papers.flatMap(p=>p.topics||[]))];
+    const nodes=papers.map(p=>({id:p.arxiv_id,label:p.title,title:p.title,abstract:p.abstract,arxiv_id:p.arxiv_id,authors:p.authors_str,published:p.published,type:'paper',topics:p.topics||[],imported:p.imported}));
+    const edges=result.graph||[];
+    el('subgraphTopicName').textContent='"'+q.substring(0,60)+'"';
+    el('subgraphStats').textContent=papers.length+' papers';
+    el('topicSubgraphOverlay').style.display='flex';
+    // Use existing sub-graph renderer with topic color
+    const topic=(topics[0]||'query');
+    window._subgraphTopic=topic;
+    renderTopicSubgraph(nodes,edges,topic);
+  }catch(e){addLog('Pool query error: '+e.message,'ERROR');console.error(e)}
 }
 
 // ── Pool Node Preview ──

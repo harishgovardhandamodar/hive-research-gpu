@@ -664,6 +664,12 @@ info.textContent += ' | OK';
                 _json_response(self, {"error": "missing paper_id"}, 400)
                 return
             _json_response(self, self.org.collections.remove_favorite(pid))
+        elif path == "/api/pool/query":
+            query = data.get("query", "")
+            if not query:
+                _json_response(self, {"error": "missing query"}, 400)
+                return
+            _json_response(self, self.org.pool.query_pool(query))
         else:
             _json_response(self, {"error": "not found"}, 404)
 
