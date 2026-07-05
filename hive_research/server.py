@@ -594,6 +594,9 @@ info.textContent += ' | OK';
         elif path == "/api/definitions":
             result = self.org.generate_definitions()
             _json_response(self, result)
+        elif path == "/api/graph/detail":
+            result = self.org.detail_graph()
+            _json_response(self, result)
         elif path == "/api/pool/topics/add":
             name = data.get("name", "")
             query = data.get("query", "")
