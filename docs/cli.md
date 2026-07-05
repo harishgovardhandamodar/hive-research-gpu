@@ -107,6 +107,37 @@ python -m hive_research gpu
 
 Returns JSON with device count, per-GPU memory, utilization, temperature, and power.
 
+### `export`
+
+Export papers or knowledge graph.
+
+```bash
+python -m hive_research export --bibtex papers.bib --json graph.json --csv papers.csv --backup backup.zip [--no-pdfs]
+```
+
+Options:
+- `--bibtex [FILE]` — Export papers as BibTeX (default: `papers.bib`)
+- `--json [FILE]` — Export graph JSON dump (default: `graph.json`)
+- `--csv [FILE]` — Export papers as CSV (default: `papers.csv`)
+- `--backup [FILE]` — Create ZIP backup (optional path)
+- `--no-pdfs` — Exclude PDFs from backup
+
+### `collections`
+
+Manage paper collections, favorites, and saved searches.
+
+```bash
+python -m hive_research collections list
+python -m hive_research collections create "my-papers" --description "..."
+python -m hive_research collections delete "my-papers"
+python -m hive_research collections add "my-papers" 1706.03762
+python -m hive_research collections remove "my-papers" 1706.03762
+
+python -m hive_research favorites list
+python -m hive_research favorites add 1706.03762
+python -m hive_research favorites remove 1706.03762
+```
+
 ### `serve`
 
 Start the web dashboard server.

@@ -190,12 +190,14 @@ Optional field: `model` (string) — analysis model (same semantics as `/api/add
 
 ### `/api/similarity`
 
-Compute similarity matrix with optional filters.
+Compute similarity matrix with optional filters and result limiting.
 
 ```json
 POST /api/similarity
-{"paper_ids": ["1706.03762", "2106.09685"], "algorithm": "abstract"}
+{"paper_ids": ["1706.03762", "2106.09685"], "algorithm": "abstract", "top_k": 10}
 ```
+
+Optional field: `top_k` (int) — limit results to top-K pairs (significantly improves performance).
 
 ### `/api/refresh`
 
@@ -258,3 +260,50 @@ Batch import papers from the pool.
 POST /api/pool/import_batch
 {"arxiv_ids": ["2409.13004", "2409.13005"]}
 ```
+
+### `/api/query`
+
+RAG question answering with search mode selection.
+
+```json
+POST /api/query
+{"question": "What is the transformer architecture?", "mode": "hybrid"}
+```
+
+Optional field: `mode` (string) — `"vector"` (semantic), `"keyword"` (BM25), or `"hybrid"` (RRF fusion). Default: `"hybrid"`.
+
+### `/api/collections`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/collections` | GET | List all collections |
+| `/api/collections/papers?collection=` | GET | Get papers in a collection |
+| `/api/collections/create` | POST | `{"name", "description"}` |
+| `/api/collections/delete` | POST | `{"name"}` |
+| `/api/collections/add` | POST | `{"collection", "paper_id"}` |
+| `/api/collections/remove` | POST | `{"collection", "paper_id"}` |
+
+### `/api/favorites`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/favorites` | GET | List favorite paper IDs |
+| `/api/favorites/add` | POST | `{"paper_id"}` |
+| `/api/favorites/remove` | POST | `{"paper_id"}` |
+
+### `/api/searches`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/searches` | GET | List saved searches |
+| `/api/searches/save` | POST | `{"query", "name"}` |
+| `/api/searches/delete` | POST | `{"index"}` |
+
+### Export Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/export/bibtex` | GET | Download BibTeX file (`papers.bib`) |
+| `/api/export/json` | GET | Download graph JSON |
+| `/api/export/csv` | GET | Download papers CSV (`papers.csv`) |
+| `/api/export/backup` | GET | Download backup ZIP |

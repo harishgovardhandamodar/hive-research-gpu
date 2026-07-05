@@ -100,3 +100,32 @@ From the dashboard:
 4. The pipeline will: fetch metadata → download PDF → extract text → analyze with LLM → populate graph → write vault notes → index for RAG
 
 Repeat with more papers. The knowledge graph grows automatically, deduplicating concepts and linking related work.
+
+## Programmatic Access (Python Client)
+
+```python
+from hive_research import HiveClient
+
+# Remote mode (server must be running)
+client = HiveClient("http://localhost:7777")
+
+# Check system status
+stats = client.stats()
+print(f"Papers: {stats['papers']}, Concepts: {stats['concepts']}")
+
+# Add a paper
+result = client.add_paper("1706.03762")
+print(result)
+
+# Ask a question
+answer = client.query("What methods are used for graph classification?", mode="hybrid")
+print(answer["answer"])
+```
+
+## Chrome Extension
+
+Install the Chrome extension for one-click web ingestion:
+
+1. Open `chrome://extensions` → Developer mode → Load unpacked
+2. Select `chrome-extension/` from the project directory
+3. Click the 🐝 icon on any webpage → **Send to Hive Research**

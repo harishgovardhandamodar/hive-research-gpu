@@ -71,21 +71,38 @@ Pairwise paper similarity computation:
 
 ### Chat
 
-RAG question-answering interface:
+RAG question-answering interface with three search modes:
 
+- **Vector** — Semantic cosine similarity search (default)
+- **Keyword** — BM25 keyword search for exact term matching
+- **Hybrid** — Reciprocal Rank Fusion of vector + keyword results (recommended)
 - Ask questions in natural language
-- System retrieves relevant chunks via cosine similarity
+- System retrieves relevant chunks via FAISS (if installed) or numpy
 - LLM generates answer with `[1]`, `[2]` source citations
 - Sources link back to arXiv
 
-### About
+### Collections & Favorites
 
-System information:
+Paper organization features:
 
-- Paper/concept/edge/chunk counts (stat cards)
-- Platform info (OS, Python version)
-- Ollama connection status and model availability
-- GPU status with per-device memory, utilization, temperature
+- **Collections** — Create named collections, add/remove papers
+- **Favorites** — Star papers for quick access
+- **Saved Searches** — Persist search queries for reuse
+- Accessible via CLI, API, and Python client
+
+### Help
+
+Rich documentation panel available via the **❓ Help** sidebar button:
+
+- Feature cards with color-coded descriptions
+- Quick Start guide with numbered steps
+- Ingestion pipeline flow diagram
+- CLI command reference
+- API quick reference with method badges (GET/POST)
+- Python code examples with `requests` library
+- Jupyter notebook examples
+- Data storage locations
+- Keyboard shortcuts
 
 ## Activity Log
 

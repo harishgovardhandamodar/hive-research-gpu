@@ -84,6 +84,44 @@ ALGORITHMS["new_algo"] = {
 2. Add a subparser with `sub.add_parser()`
 3. Wire it up with `set_defaults(func=cmd_*)`
 
+## Testing
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run all tests
+python -m pytest hive_research/tests/ -v
+
+# Run with coverage
+python -m pytest hive_research/tests/ --cov=hive_research
+```
+
+The test suite uses mock fixtures from `tests/conftest.py`:
+
+| File | Tests | What it covers |
+|------|-------|----------------|
+| `test_similarity.py` | 18 | All scoring functions and paper_similarity_matrix |
+| `test_graph.py` | 11 | Mock graph operations |
+| `test_exporter.py` | 13 | BibTeX, JSON, CSV, backup export |
+| `test_collections.py` | 20 | Collections, favorites, saved searches |
+| `test_rag.py` | 18 | BM25, vector/keyword/hybrid search |
+| `test_client.py` | 20 | HiveClient remote + embedded modes |
+| `test_faiss.py` | 2 | FAISS with numpy fallback |
+
+## Frontend Development
+
+The dashboard SPA is served at `/hive`. Static assets at `/static/`:
+
+- `static/css/style.css` — All styles
+- `static/js/nav.js` — Bootstrap helpers, theme, nav, dashboard, similarity, import
+- `static/js/graph.js` — D3 force-directed graph
+- `static/js/papers.js` — Paper list + detail overlay
+- `static/js/chat.js` — RAG chat
+- `static/js/help.js` — Help panel + init
+
+No build step required — edit files and refresh the browser.
+
 ## Dependencies
 
 The project depends on `hive-datatype` for graph data structures, which must be available on `PYTHONPATH`. The `__init__.py` attempts to auto-discover it at `../hive-datatype/` relative to the package.
