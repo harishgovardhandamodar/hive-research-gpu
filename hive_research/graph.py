@@ -170,4 +170,10 @@ class KnowledgeGraph:
         }
 
     def to_node_link(self) -> dict[str, Any]:
-        return self._hive.to_node_link_dict()
+        data = self._hive.to_node_link_dict()
+        valid_ids = {n["id"] for n in data.get("nodes", [])}
+        data["links"] = [
+            l for l in data.get("links", [])
+            if l.get("source") in valid_ids and l.get("target") in valid_ids
+        ]
+        return data
