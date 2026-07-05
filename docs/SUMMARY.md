@@ -1,0 +1,18 @@
+# Hive Research GPU
+
+- [Introduction](README.md)
+- [Getting Started](getting-started.md)
+- [Configuration](configuration.md)
+- [Architecture](architecture.md)
+  - [Module Reference](modules/README.md)
+  - [Data Flow](data-flow.md)
+- [CLI Reference](cli.md)
+- [Web Dashboard](dashboard.md)
+- [Research Pool](research-pool.md)
+- [RAG Engine](rag.md)
+- [Similarity](similarity.md)
+- [GPU Management](gpu.md)
+- [Docker Deployment](docker.md)
+- [Development](development.md)
+  - [Benchmarking](benchmarking.md)
+- [API Reference](api.md)
