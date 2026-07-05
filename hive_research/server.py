@@ -84,6 +84,34 @@ class RouteHandler(BaseHTTPRequestHandler):
             if isinstance(paper_ids, str):
                 paper_ids = [x.strip() for x in paper_ids.split(",") if x.strip()]
             _json_response(self, self.org.similarity(paper_ids=paper_ids, algorithm=algorithm))
+        elif path == "/api/export/bibtex":
+            bibtex = self.org.export_bibtex()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-bibtex")
+            self.send_header("Content-Disposition", 'attachment; filename="papers.bib"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(bibtex.encode())
+        elif path == "/api/export/json":
+            data = self.org.export_json()
+            _json_response(self, json.loads(data))
+        elif path == "/api/export/csv":
+            csv = self.org.export_csv()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", 'attachment; filename="papers.csv"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(csv.encode())
+        elif path == "/api/export/backup":
+            zip_path = self.org.export_backup(include_pdfs=False)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{Path(zip_path).name}"')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            with open(zip_path, "rb") as f:
+                self.wfile.write(f.read())
         elif path == "/api/papers":
             from .pipeline import _sanitize_id
             has_lineage = set()
