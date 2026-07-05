@@ -1,12 +1,20 @@
+"""Research pool with local caching, import tracking, and similarity suggestions.
+
+Monitors arXiv topics in the background, caches results locally with
+both in-memory (LRU) and disk (SQLite) caches, tracks which papers get
+imported to learn topic effectiveness, and suggests similar papers from
+the pool when new papers are added to the knowledge graph.
+"""
+
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
-import threading
 import time
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
+from threading import Lock, Thread
 from typing import Any
 
 from .arxiv_fetcher import search_arxiv
@@ -17,6 +25,8 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 12 * 3600
 REFRESH_INTERVAL = 12 * 3600
 MAX_PER_TOPIC = 100
+SIMILARITY_THRESHOLD = 0.12
+SUGGESTION_COUNT = 8
 
 DEFAULT_TOPICS = [
     {"name": "Knowledge graphs", "query": "knowledge graph embedding"},
@@ -29,17 +39,13 @@ DEFAULT_TOPICS = [
     {"name": "Vision-language models", "query": "vision language model"},
 ]
 
-TOPIC_COLORS = [
-    "#60a5fa", "#34d399", "#fbbf24", "#f87171",
-    "#c084fc", "#22d3ee", "#fb923c", "#a78bfa",
-]
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS topics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     query TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    color TEXT NOT NULL DEFAULT '#60a5fa'
 );
 
 CREATE TABLE IF NOT EXISTS papers (
@@ -67,108 +73,189 @@ CREATE TABLE IF NOT EXISTS cache (
     value TEXT NOT NULL,
     timestamp REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS similars (
+    paper_a TEXT NOT NULL,
+    paper_b TEXT NOT NULL,
+    score REAL NOT NULL,
+    updated TEXT NOT NULL,
+    PRIMARY KEY (paper_a, paper_b)
+);
+
+CREATE INDEX IF NOT EXISTS idx_similars_a ON similars(paper_a);
+CREATE INDEX IF NOT EXISTS idx_similars_score ON similars(score DESC);
 """
+
+TOPIC_COLORS = [
+    "#60a5fa", "#34d399", "#fbbf24", "#f87171",
+    "#c084fc", "#22d3ee", "#fb923c", "#a78bfa",
+]
+
+
+class LRUCache:
+    """Simple thread-safe LRU cache with optional TTL."""
+
+    def __init__(self, maxsize: int = 128, ttl: float = 300) -> None:
+        self._data: OrderedDict = OrderedDict()
+        self._lock = Lock()
+        self.maxsize = maxsize
+        self.ttl = ttl
+
+    def get(self, key: str) -> Any | None:
+        with self._lock:
+            if key not in self._data:
+                return None
+            value, ts = self._data[key]
+            if self.ttl > 0 and time.time() - ts > self.ttl:
+                del self._data[key]
+                return None
+            self._data.move_to_end(key)
+            return value
+
+    def put(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._data[key] = (value, time.time())
+            self._data.move_to_end(key)
+            while len(self._data) > self.maxsize:
+                self._data.popitem(last=False)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
 
 
 class ResearchPool:
+    """Monitors arXiv topics with local caching, import-aware learning, and suggestions."""
+
     def __init__(self, store_dir: str | Path) -> None:
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
 
+        import sqlite3
         self._db_path = str(self.store_dir / "pool.db")
-        self._local = threading.local()
         self._init_db()
 
-        self._lock = threading.Lock()
+        self._lock = Lock()
+        self._mem_cache = LRUCache(maxsize=64, ttl=300)
+        self._sim_cache: dict[str, list[dict[str, Any]]] = {}
+        self._sim_cache_dirty = True
 
         if not self._has_topics():
             self._seed_default_topics()
 
-        self._bg_thread = threading.Thread(target=self._bg_loop, daemon=True)
+        self._bg_thread = Thread(target=self._bg_loop, daemon=True)
         self._bg_thread.start()
 
-    @property
-    def _db(self) -> sqlite3.Connection:
-        if not hasattr(self._local, "conn") or self._local.conn is None:
-            conn = sqlite3.connect(self._db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            self._local.conn = conn
-        return self._local.conn
+    def _db_conn(self) -> Any:
+        import sqlite3
+        conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
 
     def _init_db(self) -> None:
+        import sqlite3
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         conn.executescript(SCHEMA)
         conn.commit()
         conn.close()
 
     def _has_topics(self) -> bool:
-        row = self._db.execute("SELECT COUNT(*) AS cnt FROM topics").fetchone()
+        conn = self._db_conn()
+        row = conn.execute("SELECT COUNT(*) AS cnt FROM topics").fetchone()
+        conn.close()
         return row["cnt"] > 0
 
     def _seed_default_topics(self) -> None:
+        conn = self._db_conn()
         now = datetime.utcnow().isoformat()
-        for t in DEFAULT_TOPICS:
-            self._db.execute(
-                "INSERT OR IGNORE INTO topics (name, query, created_at) VALUES (?, ?, ?)",
-                (t["name"], t["query"], now),
+        for i, t in enumerate(DEFAULT_TOPICS):
+            color = TOPIC_COLORS[i % len(TOPIC_COLORS)]
+            conn.execute(
+                "INSERT OR IGNORE INTO topics (name, query, created_at, color) VALUES (?, ?, ?, ?)",
+                (t["name"], t["query"], now, color),
             )
-        self._db.commit()
+        conn.commit()
+        conn.close()
+
+    # ── Topic Management ──
 
     def get_topics(self) -> list[dict[str, Any]]:
-        rows = self._db.execute(
-            "SELECT name, query FROM topics ORDER BY id"
-        ).fetchall()
-        return [{"name": r["name"], "query": r["query"]} for r in rows]
+        cached = self._mem_cache.get("topics")
+        if cached:
+            return cached
+        conn = self._db_conn()
+        rows = conn.execute("SELECT name, query, color FROM topics ORDER BY id").fetchall()
+        conn.close()
+        result = [dict(r) for r in rows]
+        self._mem_cache.put("topics", result)
+        return result
 
     def add_topic(self, name: str, query: str, **kwargs: Any) -> None:
-        with self._lock:
-            self._db.execute(
-                "DELETE FROM topics WHERE name = ?", (name,)
-            )
-            self._db.execute(
-                "INSERT INTO topics (name, query) VALUES (?, ?)",
-                (name, query),
-            )
-            self._db.commit()
+        colors = TOPIC_COLORS
+        conn = self._db_conn()
+        existing = conn.execute("SELECT color FROM topics WHERE name = ?", (name,)).fetchone()
+        color = existing["color"] if existing else colors[hash(name) % len(colors)]
+        conn.execute("DELETE FROM topics WHERE name = ?", (name,))
+        conn.execute(
+            "INSERT INTO topics (name, query, color) VALUES (?, ?, ?)",
+            (name, query, color),
+        )
+        conn.commit()
+        conn.close()
+        self._mem_cache.clear()
 
     def remove_topic(self, name: str) -> None:
-        with self._lock:
-            self._db.execute("DELETE FROM topics WHERE name = ?", (name,))
-            self._db.commit()
+        conn = self._db_conn()
+        conn.execute("DELETE FROM topics WHERE name = ?", (name,))
+        conn.commit()
+        conn.close()
+        self._mem_cache.clear()
+
+    # ── Feed & Caching ──
 
     def get(self) -> dict[str, Any]:
-        row = self._db.execute(
+        cached_feed = self._mem_cache.get("feed")
+        if cached_feed:
+            return cached_feed
+        conn = self._db_conn()
+        row = conn.execute(
             "SELECT value, timestamp FROM cache WHERE key = 'feed'"
         ).fetchone()
-        age = time.time() - (row["timestamp"] if row else 0) if row else float("inf")
+        conn.close()
+        age = time.time() - row["timestamp"] if row else float("inf")
+        data = json.loads(row["value"]) if row else {}
         if row and age < CACHE_TTL:
-            return json.loads(row["value"])
+            self._mem_cache.put("feed", data)
         if age > CACHE_TTL:
             self._bg_refresh()
-        return json.loads(row["value"]) if row else {}
+        return data
 
     def refresh(self) -> dict[str, Any]:
         return self._do_refresh()
 
     def _bg_refresh(self) -> None:
-        threading.Thread(target=self._do_refresh, daemon=True).start()
+        Thread(target=self._do_refresh, daemon=True).start()
 
     def _do_refresh(self) -> dict[str, Any]:
         try:
             data = self._fetch_all()
-            self._db.execute(
+            conn = self._db_conn()
+            conn.execute(
                 "INSERT OR REPLACE INTO cache (key, value, timestamp) VALUES ('feed', ?, ?)",
                 (json.dumps(data), time.time()),
             )
-            self._db.commit()
+            conn.commit()
+            conn.close()
+            self._mem_cache.put("feed", data)
+            self._rebuild_similarity_cache()
             return data
         except Exception as e:
             logger.error("Pool refresh failed: %s", e)
-            row = self._db.execute(
-                "SELECT value FROM cache WHERE key = 'feed'"
-            ).fetchone()
+            conn = self._db_conn()
+            row = conn.execute("SELECT value FROM cache WHERE key = 'feed'").fetchone()
+            conn.close()
             return json.loads(row["value"]) if row else {}
 
     def _fetch_all(self) -> dict[str, Any]:
@@ -178,7 +265,7 @@ class ResearchPool:
             name = topic.get("name", "untitled")
             query = topic.get("query", "")
             if i > 0:
-                time.sleep(4)
+                time.sleep(3.5)
             try:
                 papers = search_arxiv(query, max_results=MAX_PER_TOPIC)
                 entries = []
@@ -209,46 +296,116 @@ class ResearchPool:
             time.sleep(REFRESH_INTERVAL)
             self._bg_refresh()
 
+    # ── Paper Observation ──
+
     def _observe(self, entry: dict[str, Any], topic: str) -> None:
         aid = entry["arxiv_id"]
         now = datetime.utcnow().isoformat()
-        with self._lock:
-            row = self._db.execute(
-                "SELECT topics, imported FROM papers WHERE arxiv_id = ?", (aid,)
-            ).fetchone()
-            if row:
-                topics = json.loads(row["topics"])
-                if topic not in topics:
-                    topics.append(topic)
-                self._db.execute(
-                    "UPDATE papers SET topics = ?, last_seen = ? WHERE arxiv_id = ?",
-                    (json.dumps(topics), now, aid),
-                )
-            else:
-                self._db.execute(
-                    "INSERT INTO papers (arxiv_id, title, authors, authors_str, "
-                    "published, abstract, categories, pdf_url, topics, first_seen, last_seen) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        aid,
-                        entry.get("title", ""),
-                        json.dumps(entry.get("authors", [])),
-                        entry.get("authors_str", ""),
-                        entry.get("published", ""),
-                        entry.get("abstract", "")[:500],
-                        json.dumps(entry.get("categories", [])),
-                        entry.get("pdf_url", ""),
-                        json.dumps([topic]),
-                        now,
-                        now,
-                    ),
-                )
-            self._db.commit()
+        conn = self._db_conn()
+        row = conn.execute(
+            "SELECT topics, imported FROM papers WHERE arxiv_id = ?", (aid,)
+        ).fetchone()
+        if row:
+            topics = json.loads(row["topics"])
+            if topic not in topics:
+                topics.append(topic)
+            conn.execute(
+                "UPDATE papers SET topics = ?, last_seen = ? WHERE arxiv_id = ?",
+                (json.dumps(topics), now, aid),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO papers (arxiv_id, title, authors, authors_str, "
+                "published, abstract, categories, pdf_url, topics, first_seen, last_seen) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    aid,
+                    entry.get("title", ""),
+                    json.dumps(entry.get("authors", [])),
+                    entry.get("authors_str", ""),
+                    entry.get("published", ""),
+                    entry.get("abstract", "")[:500],
+                    json.dumps(entry.get("categories", [])),
+                    entry.get("pdf_url", ""),
+                    json.dumps([topic]),
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+        conn.close()
+        self._sim_cache_dirty = True
+
+    # ── Similarity Cache ──
+
+    def _rebuild_similarity_cache(self) -> None:
+        """Pre-compute pairwise similarities for all pool papers and cache them."""
+        papers = self.get_observed_papers()
+        if len(papers) < 2:
+            return
+        conn = self._db_conn()
+        conn.execute("DELETE FROM similars")
+        inserted = 0
+        for i in range(len(papers)):
+            for j in range(i + 1, len(papers)):
+                ta = (papers[i]["title"] or "") + " " + (papers[i]["abstract"] or "")
+                tb = (papers[j]["title"] or "") + " " + (papers[j]["abstract"] or "")
+                score = jaccard_tokens(ta, tb)
+                if score >= SIMILARITY_THRESHOLD:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO similars (paper_a, paper_b, score, updated) VALUES (?, ?, ?, ?)",
+                        (papers[i]["arxiv_id"], papers[j]["arxiv_id"], round(score, 4),
+                         datetime.utcnow().isoformat()),
+                    )
+                    inserted += 1
+        conn.commit()
+        conn.close()
+        self._sim_cache.clear()
+        self._sim_cache_dirty = False
+        logger.info("Pool similarity cache: %d edges for %d papers", inserted, len(papers))
+
+    def get_pool_graph(self) -> dict[str, Any]:
+        """Return pool graph with similarity edges (uses cached similars)."""
+        papers = self.get_observed_papers()
+        nodes = []
+        for p in papers:
+            nodes.append({
+                "id": p["arxiv_id"],
+                "label": (p.get("title", "") or "")[:60],
+                "type": "paper",
+                "title": p.get("title", ""),
+                "abstract": (p.get("abstract", "") or "")[:300],
+                "imported": p.get("imported", False),
+                "is_new": p.get("is_new", False),
+                "topics": p.get("topics", []),
+            })
+
+        if self._sim_cache_dirty and len(papers) >= 2:
+            Thread(target=self._rebuild_similarity_cache, daemon=True).start()
+
+        conn = self._db_conn()
+        rows = conn.execute(
+            "SELECT paper_a, paper_b, score FROM similars ORDER BY score DESC LIMIT 2000"
+        ).fetchall()
+        conn.close()
+        edges = [{"source": r["paper_a"], "target": r["paper_b"], "similarity": r["score"]} for r in rows]
+        return {"nodes": nodes, "edges": edges}
+
+    # ── Import Tracking & Insights ──
+
+    def mark_imported(self, arxiv_id: str) -> None:
+        conn = self._db_conn()
+        conn.execute(
+            "UPDATE papers SET imported = 1, imported_at = ? WHERE arxiv_id = ?",
+            (datetime.utcnow().isoformat(), arxiv_id),
+        )
+        conn.commit()
+        conn.close()
 
     def get_observed_papers(self) -> list[dict[str, Any]]:
-        rows = self._db.execute(
-            "SELECT * FROM papers ORDER BY last_seen DESC"
-        ).fetchall()
+        conn = self._db_conn()
+        rows = conn.execute("SELECT * FROM papers ORDER BY last_seen DESC").fetchall()
+        conn.close()
         now_ts = time.time()
         papers = []
         for r in rows:
@@ -266,47 +423,96 @@ class ResearchPool:
             papers.append(p)
         return papers
 
-    def mark_imported(self, arxiv_id: str) -> None:
-        with self._lock:
-            self._db.execute(
-                "UPDATE papers SET imported = 1, imported_at = ? WHERE arxiv_id = ?",
-                (datetime.utcnow().isoformat(), arxiv_id),
-            )
-            self._db.commit()
-
     def update_tags(self, arxiv_id: str, tags: list[str]) -> None:
-        with self._lock:
-            self._db.execute(
-                "UPDATE papers SET tags = ? WHERE arxiv_id = ?",
-                (json.dumps(tags), arxiv_id),
-            )
-            self._db.commit()
+        conn = self._db_conn()
+        conn.execute(
+            "UPDATE papers SET tags = ? WHERE arxiv_id = ?",
+            (json.dumps(tags), arxiv_id),
+        )
+        conn.commit()
+        conn.close()
 
-    def get_pool_graph(self) -> dict[str, Any]:
+    def get_insights(self) -> dict[str, Any]:
+        """Return topic-level performance and import statistics."""
         papers = self.get_observed_papers()
-        nodes = []
+        total = len(papers)
+        imported = sum(1 for p in papers if p["imported"])
+        # Per-topic stats
+        topic_stats: dict[str, dict[str, Any]] = {}
         for p in papers:
-            nodes.append({
-                "id": p["arxiv_id"],
-                "label": p.get("title", "")[:60],
-                "type": "paper",
-                "title": p.get("title", ""),
-                "abstract": (p.get("abstract", "") or "")[:300],
-                "imported": p.get("imported", False),
-                "is_new": p.get("is_new", False),
-                "topics": p.get("topics", []),
-            })
-        edges = []
-        n = len(nodes)
-        for i in range(n):
-            for j in range(i + 1, n):
-                ti = (nodes[i]["title"] or "") + " " + (nodes[i]["abstract"] or "")
-                tj = (nodes[j]["title"] or "") + " " + (nodes[j]["abstract"] or "")
-                score = jaccard_tokens(ti, tj)
-                if score >= 0.12:
-                    edges.append({
-                        "source": nodes[i]["id"],
-                        "target": nodes[j]["id"],
-                        "similarity": round(score, 4),
-                    })
-        return {"nodes": nodes, "edges": edges}
+            for t in p.get("topics", []):
+                if t not in topic_stats:
+                    topic_stats[t] = {"observed": 0, "imported": 0, "papers": [], "imported_papers": []}
+                topic_stats[t]["observed"] += 1
+                topic_stats[t]["papers"].append(p["arxiv_id"])
+                if p["imported"]:
+                    topic_stats[t]["imported"] += 1
+                    topic_stats[t]["imported_papers"].append(p["arxiv_id"])
+        # Recent activity
+        recent = [p for p in papers if p.get("is_new")]
+        return {
+            "total_papers": total,
+            "imported_papers": imported,
+            "conversion_rate": round(imported / max(total, 1), 3),
+            "recent_new": len(recent),
+            "topics": {
+                name: {
+                    "observed": s["observed"],
+                    "imported": s["imported"],
+                    "conversion_rate": round(s["imported"] / max(s["observed"], 1), 3),
+                }
+                for name, s in sorted(topic_stats.items(), key=lambda x: x[1]["observed"], reverse=True)
+            },
+        }
+
+    # ── Suggestions ──
+
+    def get_suggestions(self, paper_id: str, top_k: int = SUGGESTION_COUNT) -> list[dict[str, Any]]:
+        """Find similar papers from the pool for a given paper ID.
+
+        Returns top-K pool papers ranked by Jaccard similarity.
+        """
+        conn = self._db_conn()
+
+        # First try cached similars from the pool graph
+        rows = conn.execute(
+            "SELECT paper_a, paper_b, score FROM similars WHERE paper_a = ? OR paper_b = ? "
+            "ORDER BY score DESC LIMIT ?",
+            (paper_id, paper_id, top_k),
+        ).fetchall()
+
+        if rows:
+            conn.close()
+            results = []
+            seen = set()
+            for r in rows:
+                other = r["paper_b"] if r["paper_a"] == paper_id else r["paper_a"]
+                if other in seen:
+                    continue
+                seen.add(other)
+                results.append({"arxiv_id": other, "score": r["score"]})
+            return results[:top_k]
+
+        conn.close()
+
+        # Fallback: find the paper in pool and compute on-the-fly
+        pool_papers = self.get_observed_papers()
+        target = None
+        for p in pool_papers:
+            if p["arxiv_id"] == paper_id:
+                target = p
+                break
+        if not target:
+            return []
+
+        target_text = (target["title"] or "") + " " + (target["abstract"] or "")
+        scored = []
+        for p in pool_papers:
+            if p["arxiv_id"] == paper_id:
+                continue
+            pt = (p["title"] or "") + " " + (p["abstract"] or "")
+            score = jaccard_tokens(target_text, pt)
+            if score >= SIMILARITY_THRESHOLD:
+                scored.append({"arxiv_id": p["arxiv_id"], "score": round(score, 4)})
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
