@@ -71,6 +71,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div id="legend"></div>
     <div id="load"><div><div class="sp"></div><p>Loading research landscape...</p></div></div>
   </div>
+  </div>
 </div>
 
 <script>
@@ -89,26 +90,26 @@ let fetchOk=false, fetchErr=false;
 const P=['#60a5fa','#2dd4bf','#fb923c','#c084fc','#34d399','#f472b6','#fbbf24','#f87171','#a78bfa','#22d3ee','#4ade80','#facc15'];
 const dpr=()=>window.devicePixelRatio||1;
 
-// ── Init ──
-document.addEventListener('DOMContentLoaded',()=>{
-  canvas=document.getElementById('c');
-  ctx=canvas.getContext('2d');
-  resize();
-  window.addEventListener('resize',resize);
-  // DPR change (multimonitor)
+// ── Init (DOM ready — script at end of body) ──
+canvas=document.getElementById('c');
+ctx=canvas.getContext('2d');
+resize();
+window.addEventListener('resize',resize);
+// DPR change (multimonitor)
+try{
   const mm=window.matchMedia('(resolution: 1dppx)');
-  mm.addEventListener('change',()=>{for(let i=1;i<=4;i++){const m=window.matchMedia(`(resolution: ${i}dppx)`);if(m.matches&&i!==dpr()){resize();break}}});
-  // Events
-  canvas.addEventListener('mousedown',md);
-  canvas.addEventListener('mousemove',mmv);
-  canvas.addEventListener('mouseup',mu);
-  canvas.addEventListener('wheel',wh,{passive:false});
-  canvas.addEventListener('click',cl);
-  document.getElementById('btnR').addEventListener('click',fetch);
-  document.getElementById('btnF').addEventListener('click',()=>{tx=0;ty=0;k=1;draw()});
-  document.getElementById('srch').addEventListener('input',onSearch);
-  fetch();
-});
+  mm.addEventListener('change',()=>{resize();if(nodes.length)draw()});
+}catch(e){}
+// Events
+canvas.addEventListener('mousedown',md);
+canvas.addEventListener('mousemove',mmv);
+canvas.addEventListener('mouseup',mu);
+canvas.addEventListener('wheel',wh,{passive:false});
+canvas.addEventListener('click',cl);
+document.getElementById('btnR').addEventListener('click',fetch);
+document.getElementById('btnF').addEventListener('click',()=>{tx=0;ty=0;k=1;draw()});
+document.getElementById('srch').addEventListener('input',onSearch);
+fetch();
 
 function resize(){
   const el=document.getElementById('main');
@@ -392,7 +393,7 @@ function wh(e){
   e.preventDefault();
   const r=canvas.getBoundingClientRect();
   const mx=e.clientX-r.left,my=e.clientY-r.top;
-  const d=e.deltaY>0?.88:1.12;
+  const d=e.deltaY>0?0.88:1.12;
   const nk=Math.max(.15,Math.min(6,k*d));
   tx=mx-(mx-tx)/k*nk;ty=my-(my-ty)/k*nk;k=nk;
   // Re-run hover
@@ -454,7 +455,7 @@ function closeSide(){
 
 // ── Search ──
 let st=null;
-let onSearch=function(){
+function onSearch(){
   clearTimeout(st);
   st=setTimeout(()=>{
     const q=document.getElementById('srch').value.toLowerCase().trim();
@@ -462,7 +463,7 @@ let onSearch=function(){
     const m=nodes.filter(n=>(n.label||'').toLowerCase().includes(q)||(n.authors||'').toLowerCase().includes(q));
     if(m.length)selectNode(m[0]);
   },150);
-};
+}
 
 // ── Helpers ──
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
