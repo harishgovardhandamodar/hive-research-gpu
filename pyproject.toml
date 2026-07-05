@@ -26,3 +26,6 @@ cuda = [
 
 [tool.setuptools.packages.find]
 include = ["hive_research*"]
+
+[tool.setuptools.package-data]
+hive_research = ["*.html"]

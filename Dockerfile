@@ -4,7 +4,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3.12 python3.12-venv curl && \
+    software-properties-common curl && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv && \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3.12 -m venv /venv && \
