@@ -26,16 +26,72 @@ class Organizer:
         self.config = config
         self.gpu_mgr = gpu_mgr
         self.llm = LLMInterface(config, gpu_mgr)
-        self.kg = KnowledgeGraph(config)
-        self.pipeline = PaperPipeline(config, self.llm, self.kg, gpu_mgr)
-        self.rag = RAGEngine(config, self.llm, self.kg)
-        self.pool = ResearchPool(config.root_dir / "pool")
-        self.web = WebIngester(self.llm, self.kg)
-        self.collections = CollectionStore(Path(config.root_dir) / "collections.json")
-        self.ingestion = IngestionQueue(config, self.llm, self.kg, self.pipeline, self.rag, gpu_mgr)
+        self._default_kg = KnowledgeGraph(config)
+        self._default_pipeline = None
+        self._default_rag = None
+        self._default_pool = None
+        self._default_web = None
+        self._default_collections = None
+        self._default_ingestion = None
+        # Current user context — None means default/global
+        self._current_user_id: int | None = None
+        self._user_instances: dict[str, dict[str, Any]] = {}
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
+
+    @property
+    def kg(self) -> KnowledgeGraph:
+        return self._get_user_instance("kg", lambda: KnowledgeGraph(self.config))
+
+    @property
+    def pipeline(self):
+        return self._get_user_instance("pipeline", lambda: PaperPipeline(self.config, self.llm, self.kg, self.gpu_mgr))
+
+    @property
+    def rag(self):
+        return self._get_user_instance("rag", lambda: RAGEngine(self.config, self.llm, self.kg))
+
+    @property
+    def pool(self):
+        return self._get_user_instance("pool", lambda: ResearchPool(self._user_data_dir() / "pool"))
+
+    @property
+    def web(self):
+        return self._get_user_instance("web", lambda: WebIngester(self.llm, self.kg))
+
+    @property
+    def collections(self):
+        return self._get_user_instance("collections", lambda: CollectionStore(self._user_data_dir() / "collections.json"))
+
+    @property
+    def ingestion(self):
+        return self._get_user_instance("ingestion", lambda: IngestionQueue(self.config, self.llm, self.kg, self.pipeline, self.rag, self.gpu_mgr))
+
+    def _user_data_dir(self) -> Path:
+        if self._current_user_id is not None:
+            d = Path(self.config.root_dir) / f"user_{self._current_user_id}"
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+        return Path(self.config.root_dir)
+
+    def _user_key(self) -> str:
+        return str(self._current_user_id or "default")
+
+    def _get_user_instance(self, name: str, factory):
+        key = self._user_key()
+        if key not in self._user_instances:
+            self._user_instances[key] = {}
+        cache = self._user_instances[key]
+        if name not in cache:
+            cache[name] = factory()
+        return cache[name]
+
+    def set_user_context(self, user_id: int | None) -> None:
+        self._current_user_id = user_id
+
+    def get_user_context(self) -> int | None:
+        return self._current_user_id
 
     def add_by_id(self, arxiv_id: str, with_lineage: bool = False, model: str | None = None) -> dict[str, Any]:
         result = fetch_by_id_with_meta(arxiv_id)

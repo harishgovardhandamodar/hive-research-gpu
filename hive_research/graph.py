@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,7 @@ class KnowledgeGraph:
             abstract=abstract,
             categories=categories or [],
             affiliations=affiliations,
+            created_at=time.time(),
         )
         self._hive.nodes.append(node)
         return node
@@ -98,6 +100,7 @@ class KnowledgeGraph:
             graph_id=self.graph_id,
             definition=definition,
             concept_type=concept_type,
+            created_at=time.time(),
         )
         self._hive.nodes.append(node)
         return node

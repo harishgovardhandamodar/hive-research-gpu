@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import urllib.parse
+from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ import requests
 from .gpu import GPUManager
 from .logs import get_capture
 from .organizer import Organizer
+from .users import UserManager
 
 # Optional auth: set HIVE_AUTH_TOKEN env var to enable
 AUTH_TOKEN = os.environ.get("HIVE_AUTH_TOKEN", "")
@@ -99,10 +101,19 @@ class RouteHandler(BaseHTTPRequestHandler):
                     params[k] = urllib.parse.unquote(v)
         return path, params
 
+    def _resolve_user(self) -> None:
+        token = self.headers.get("X-Session-Token", "")
+        if token and hasattr(self, "org") and self.org:
+            user = getattr(self, "user_manager", None)
+            if user:
+                u = user.get_user_by_token(token)
+                self.org.set_user_context(u["id"] if u else None)
+
     def do_GET(self) -> None:
         path, params = self._parse_path()
         if not _require_auth(self):
             return
+        self._resolve_user()
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
         elif path == "/hive":
@@ -513,6 +524,7 @@ info.textContent += ' | OK';
         path, params = self._parse_path()
         if not _require_auth(self):
             return
+        self._resolve_user()
         body = self._read_body()
         try:
             data = json.loads(body) if body else {}
@@ -617,10 +629,13 @@ info.textContent += ' | OK';
             if not arxiv_id:
                 _json_response(self, {"error": "missing arxiv_id"}, 400)
                 return
-            result = self.org.add_by_id(arxiv_id)
-            if result.get("status") == "added" or result.get("status") == "exists":
-                self.org.pool.mark_imported(arxiv_id)
-            _json_response(self, result)
+            try:
+                result = self.org.add_by_id(arxiv_id)
+                if result.get("status") == "added" or result.get("status") == "exists":
+                    self.org.pool.mark_imported(arxiv_id)
+                _json_response(self, result)
+            except Exception as e:
+                _json_response(self, {"error": str(e)}, 500)
         elif path == "/api/pool/import_batch":
             arxiv_ids = data.get("arxiv_ids", [])
             if not arxiv_ids:
@@ -628,10 +643,13 @@ info.textContent += ' | OK';
                 return
             results = []
             for aid in arxiv_ids:
-                r = self.org.add_by_id(aid)
-                if r.get("status") in ("added", "exists"):
-                    self.org.pool.mark_imported(aid)
-                results.append({"arxiv_id": aid, "status": r.get("status")})
+                try:
+                    r = self.org.add_by_id(aid)
+                    if r.get("status") in ("added", "exists"):
+                        self.org.pool.mark_imported(aid)
+                    results.append({"arxiv_id": aid, "status": r.get("status")})
+                except Exception as e:
+                    results.append({"arxiv_id": aid, "error": str(e)})
             _json_response(self, {"results": results})
         elif path == "/api/collections/create":
             name = data.get("name", "")
@@ -699,6 +717,157 @@ info.textContent += ' | OK';
         elif path == "/api/ingestion/clear":
             cleared = self.org.ingestion.clear_done()
             _json_response(self, {"status": "cleared", "count": cleared})
+        elif path == "/api/notes/analyze":
+            content = data.get("content", "")
+            heading = data.get("heading", "")
+            if not content:
+                _json_response(self, {"error": "missing content"}, 400)
+                return
+            try:
+                from .llm import LLMInterface
+                llm = self.org.llm
+
+                # Extract concepts from content using fast model
+                concept_prompt = (
+                    "Extract key concepts/terms from the following text. "
+                    "Return ONLY valid JSON: {\"concepts\": [{\"name\": \"...\", \"definition\": \"...\"}]}\n\n"
+                    f"{content[:2000]}"
+                )
+                concepts_result = llm.extract_structured(
+                    concept_prompt,
+                    model=self.org.config.ollama_fast_model,
+                )
+                concepts = concepts_result.get("concepts", [])
+
+                # Try to link heading to existing graph nodes
+                linked_nodes = []
+                if heading:
+                    heading_lower = heading.lower().strip()
+                    for node in self.org.kg.graph.nodes:
+                        if heading_lower in node.label.lower() or heading_lower in node.id.lower():
+                            linked_nodes.append({
+                                "id": node.id,
+                                "label": node.label,
+                                "type": str(node.type) if hasattr(node, "type") else "",
+                            })
+                            if len(linked_nodes) >= 3:
+                                break
+
+                # Create concept nodes and edges in the graph
+                new_concepts = []
+                for c in concepts:
+                    cname = c.get("name", "").strip().lower()
+                    if not cname:
+                        continue
+                    cid = re.sub(r"[^a-z0-9]+", "_", cname).strip("_")[:60]
+                    existing = self.org.kg.graph.get_node(cid)
+                    if not existing:
+                        self.org.kg.add_concept(cid, c.get("name", cname), c.get("definition", ""), "concept")
+                    new_concepts.append({"id": cid, "name": c.get("name", cname), "definition": c.get("definition", "")})
+
+                # Create edges between linked nodes and new concepts
+                for ln in linked_nodes:
+                    for nc in new_concepts:
+                        try:
+                            self.org.kg.add_edge(ln["id"], nc["id"], "related_to")
+                        except Exception:
+                            pass
+
+                if new_concepts or linked_nodes:
+                    self.org.kg.save()
+
+                # Save note as markdown file
+                notes_dir = Path(self.org.config.root_dir) / "notes"
+                notes_dir.mkdir(parents=True, exist_ok=True)
+                safe_heading = re.sub(r"[^a-z0-9]+", "_", (heading or "untitled").lower()).strip("_")[:40] or "note"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"notes_{safe_heading}_{timestamp}.md"
+                filepath = notes_dir / filename
+
+                # Build YAML frontmatter
+                frontmatter_lines = [
+                    "---",
+                    f"heading: \"{heading}\"",
+                    f"created: {datetime.now().isoformat()}",
+                    "concepts:",
+                ]
+                for nc in new_concepts:
+                    frontmatter_lines.append(f"  - {nc['name']}")
+                frontmatter_lines.append("linked_nodes:")
+                for ln in linked_nodes:
+                    frontmatter_lines.append(f"  - id: {ln['id']}")
+                    frontmatter_lines.append(f"    label: \"{ln['label']}\"")
+                frontmatter_lines.append("---")
+                frontmatter_lines.append("")
+                frontmatter_lines.append(content)
+
+                filepath.write_text("\n".join(frontmatter_lines), encoding="utf-8")
+
+                _json_response(self, {
+                    "status": "ok",
+                    "concepts": new_concepts,
+                    "linked_nodes": linked_nodes,
+                    "file_path": str(filepath),
+                    "filename": filename,
+                })
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                _json_response(self, {"error": str(e)}, 500)
+        elif path == "/api/user/register":
+            username = data.get("username", "")
+            password = data.get("password", "")
+            if not username or not password:
+                _json_response(self, {"error": "missing username or password"}, 400)
+                return
+            um = getattr(self, "user_manager", None)
+            if not um:
+                _json_response(self, {"error": "user manager not available"}, 500)
+                return
+            result = um.register(username, password)
+            if "error" in result:
+                _json_response(self, result, 400)
+            else:
+                _json_response(self, result)
+        elif path == "/api/user/login":
+            username = data.get("username", "")
+            password = data.get("password", "")
+            if not username or not password:
+                _json_response(self, {"error": "missing username or password"}, 400)
+                return
+            um = getattr(self, "user_manager", None)
+            if not um:
+                _json_response(self, {"error": "user manager not available"}, 500)
+                return
+            result = um.login(username, password)
+            if "error" in result:
+                _json_response(self, result, 401)
+            else:
+                _json_response(self, result)
+        elif path == "/api/user/logout":
+            token = data.get("token", "") or self.headers.get("X-Session-Token", "")
+            if token:
+                um = getattr(self, "user_manager", None)
+                if um:
+                    um.logout(token)
+            _json_response(self, {"status": "ok"})
+        elif path == "/api/user/me":
+            token = data.get("token", "") or self.headers.get("X-Session-Token", "")
+            um = getattr(self, "user_manager", None)
+            if um and token:
+                u = um.get_user_by_token(token)
+                if u:
+                    _json_response(self, {"user": u})
+                    return
+            _json_response(self, {"user": None})
+        elif path == "/api/user/status":
+            token = self.headers.get("X-Session-Token", "")
+            um = getattr(self, "user_manager", None)
+            users_list = um.get_all_users() if um else []
+            current = None
+            if um and token:
+                current = um.get_user_by_token(token)
+            _json_response(self, {"current_user": current, "users": users_list})
         else:
             _json_response(self, {"error": "not found"}, 404)
 
@@ -747,10 +916,14 @@ def run_server(
     port: int = 7777,
 ) -> None:
     get_capture()
+    um = UserManager(org.config.root_dir)
     RouteHandler.org = org
     RouteHandler.gpu_mgr = gpu_mgr
+    RouteHandler.user_manager = um
     server = HTTPServer((host, port), RouteHandler)
     logger.info("Server listening on http://%s:%d", host, port)
+    users = um.get_all_users()
+    logger.info("Users: %d registered", len(users))
     if gpu_mgr:
         gpu_status = gpu_mgr.get_status()
         logger.info("GPU: %d device(s) detected", gpu_status.get("count", 0))

@@ -38,6 +38,7 @@ DEFAULT_TOPICS = [
     {"name": "Adversarial ML", "query": "adversarial machine learning"},
     {"name": "Graph neural networks", "query": "graph neural network"},
     {"name": "Vision-language models", "query": "vision language model"},
+    {"name": "Photonic computing", "query": "photonic computing optical computing"},
 ]
 
 SCHEMA = """
@@ -90,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_similars_score ON similars(score DESC);
 TOPIC_COLORS = [
     "#60a5fa", "#34d399", "#fbbf24", "#f87171",
     "#c084fc", "#22d3ee", "#fb923c", "#a78bfa",
+    "#f472b6",
 ]
 
 
