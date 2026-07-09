@@ -6,9 +6,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import arxiv
-
 logger = logging.getLogger(__name__)
+
+_arxiv = None
+def _get_arxiv():
+    global _arxiv
+    if _arxiv is None:
+        import arxiv as _arxiv_module
+        _arxiv = _arxiv_module
+    return _arxiv
 
 ARXIV_ID_PATTERN = re.compile(r"(\d{4}\.\d{4,5})(?:v\d+)?")
 
@@ -23,7 +29,7 @@ def extract_arxiv_ids(text: str) -> list[str]:
 
 
 class PaperInfo:
-    def __init__(self, result: arxiv.Result) -> None:
+    def __init__(self, result: Any) -> None:
         self.entry_id: str = result.entry_id
         self.arxiv_id: str = result.get_short_id()
         self.title: str = result.title
@@ -45,15 +51,17 @@ class PaperInfo:
 
 
 def search_arxiv(query: str, max_results: int = 10) -> list[PaperInfo]:
-    client = arxiv.Client(delay_seconds=6, num_retries=8, page_size=min(max_results, 100))
-    search = arxiv.Search(query=query, max_results=max_results)
+    a = _get_arxiv()
+    client = a.Client(delay_seconds=6, num_retries=8, page_size=min(max_results, 100))
+    search = a.Search(query=query, max_results=max_results)
     return [PaperInfo(r) for r in client.results(search)]
 
 
 def fetch_by_id(arxiv_id: str) -> PaperInfo | None:
-    client = arxiv.Client(delay_seconds=6, num_retries=8)
+    a = _get_arxiv()
+    client = a.Client(delay_seconds=6, num_retries=8)
     try:
-        search = arxiv.Search(id_list=[arxiv_id])
+        search = a.Search(id_list=[arxiv_id])
         results = list(client.results(search))
         return PaperInfo(results[0]) if results else None
     except Exception as e:

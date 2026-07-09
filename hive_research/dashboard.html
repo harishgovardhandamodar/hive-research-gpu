@@ -526,6 +526,7 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="import" onclick="switchPanel('import')">&#x271A;<span class="tip">Import</span></div>
   <div class="nav-item" data-panel="browse" onclick="switchPanel('browse')">&#x2630;<span class="tip">Browse</span></div>
   <div class="nav-item" data-panel="similarity" onclick="switchPanel('similarity')">&#x2248;<span class="tip">Similarity</span></div>
+  <div class="nav-item" data-panel="analytics" onclick="switchPanel('analytics')">&#x25C8;<span class="tip">Analytics</span></div>
   <div class="nav-item" data-panel="query" onclick="switchPanel('query')">&#x1F4AC;<span class="tip">Chat</span></div>
   <div class="nav-item" data-panel="notes" onclick="switchPanel('notes')">&#x1F4DD;<span class="tip">Notes</span></div>
 
@@ -628,7 +629,7 @@ select{cursor:pointer}
 
 <!-- ── Browse Panel ── -->
 <div class="panel" id="panel-browse">
-  <div class="panel-header"><h2>Browse <span class="badge" id="browseBadge"></span></h2></div>
+  <div class="panel-header"><h2>Browse <span class="badge" id="browseBadge"></span> <button class="btn btn-sm" onclick="regenerateAllPapers()" id="btnRegenAll" title="Regenerate notes &amp; extractions for ALL papers" style="margin-left:auto;font-size:9px">&#x21BB; Regen All</button></h2></div>
   <div class="panel-body" style="padding:0;display:flex;flex-direction:row;overflow:hidden">
     <!-- Left: paper list (1/4) -->
     <div id="browseLeft" style="width:25%;min-width:220px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:width .2s,min-width .2s">
@@ -647,6 +648,13 @@ select{cursor:pointer}
         <div id="browseTopPanel" style="overflow:hidden;transition:max-height .25s ease">
           <div id="browseFileGroups" style="padding:6px 14px;overflow-y:auto;flex-shrink:0;max-height:180px"></div>
           <div id="browseLineage" style="display:none;padding:6px 14px;border-top:1px solid var(--border);flex-shrink:0;max-height:120px;overflow-y:auto;font-size:11px;background:var(--surface)"></div>
+          <div id="browseDigestHelp" style="display:none;padding:4px 14px;border-top:1px solid var(--border);flex-shrink:0;max-height:140px;overflow-y:auto;font-size:11px;background:var(--surface)">
+            <div style="display:flex;gap:8px;margin-bottom:2px">
+              <button class="btn-o" onclick="loadBrowseDigests()" style="font-size:9px">&#x1F4DD; Digests</button>
+              <button class="btn-o" onclick="loadBrowseHelpNoob()" style="font-size:9px">&#x1F4A1; Help-Noob</button>
+            </div>
+            <div id="browseDigestContent" style="font-size:10px;color:var(--text2);line-height:1.5"></div>
+          </div>
           <div id="browsePreviewToolbar" style="display:none;padding:4px 14px;border-top:1px solid var(--border);flex-shrink:0;gap:6px;align-items:center">
           <span id="browsePreviewPath" style="font-size:10px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
           <button class="btn btn-sm btn-outline" onclick="recreateCurrentNotes()" title="Regenerate vault notes for this paper">&#x21BB; Recreate Notes</button>
@@ -658,6 +666,28 @@ select{cursor:pointer}
         <div style="font-size:28px;opacity:.3">&#x1F4C2;</div>
         <div>Select a paper to preview its files</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Refresh Progress Overlay ── -->
+<div id="refreshOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 36px;min-width:380px;max-width:460px;box-shadow:0 8px 40px rgba(0,0,0,.4);text-align:center">
+    <div style="font-size:14px;font-weight:600;color:var(--accent);margin-bottom:12px">&#x21BB; Regenerating Papers</div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px">
+        <span id="regenProgressText">0 / 0</span>
+        <span id="regenPercentText">0%</span>
+      </div>
+      <div style="width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+        <div id="regenProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px;transition:width .3s ease"></div>
+      </div>
+    </div>
+    <div id="regenCurrentPaper" style="font-size:10px;color:var(--text3);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Starting...</div>
+    <div id="regenErrors" style="font-size:10px;color:var(--red);margin-bottom:10px;max-height:60px;overflow-y:auto;text-align:left"></div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button id="btnRegenCancel" class="btn btn-sm" onclick="cancelRefresh()" style="display:none">Cancel</button>
+      <button id="btnRegenClose" class="btn btn-sm" onclick="closeRefreshOverlay()">Close</button>
     </div>
   </div>
 </div>
@@ -779,6 +809,54 @@ select{cursor:pointer}
       </div>
     </div>
     <div id="simResults" style="flex:1;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ── Analytics Panel ── -->
+<div class="panel" id="panel-analytics">
+  <div class="panel-header"><h2>&#x25C8; Analytics <span class="badge" id="analyticsBadge">Overlaps &amp; Hives</span></h2></div>
+  <div class="panel-body" style="padding:0;display:flex;flex-direction:column;overflow:hidden">
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div class="analytics-subtab active" data-atab="overlaps" onclick="switchAnalyticsTab('overlaps',this)" style="padding:6px 14px;cursor:pointer;font-size:11px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:500">&#x1F4CA; Overlaps</div>
+      <div class="analytics-subtab" data-atab="metagraph" onclick="switchAnalyticsTab('metagraph',this)" style="padding:6px 14px;cursor:pointer;font-size:11px;color:var(--text3);border-bottom:2px solid transparent">&#x1F30D; Metagraph</div>
+    </div>
+    <!-- Overlaps Tab -->
+    <div id="analytics-overlaps" style="flex:1;overflow:hidden;padding:0;display:flex;flex-direction:column">
+      <div style="display:flex;gap:6px;padding:6px 12px;flex-shrink:0;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="loadOverlaps()">&#x1F504; Refresh</button>
+        <input id="overlapsFilter" placeholder="Filter concepts..." oninput="filterOverlaps()" style="flex:1;min-width:100px;max-width:200px;padding:3px 8px;font-size:10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text2)">
+        <span id="overlapsSummary" style="font-size:10px;color:var(--text3)"></span>
+        <div style="display:flex;gap:2px;margin-left:auto">
+          <div class="ov-subtab active" data-ovtab="list" onclick="switchOverlapsView('list',this)" style="padding:3px 10px;cursor:pointer;font-size:10px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:500">&#x1F4CB; List</div>
+          <div class="ov-subtab" data-ovtab="graph" onclick="switchOverlapsView('graph',this)" style="padding:3px 10px;cursor:pointer;font-size:10px;color:var(--text3);border-bottom:2px solid transparent">&#x1F578; Graph</div>
+        </div>
+      </div>
+      <div id="overlapsList" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:4px"></div>
+      <div id="overlapsGraphWrap" style="display:none;flex:1;position:relative;overflow:hidden;background:var(--poolgraph-bg)">
+        <svg id="overlapsSvg" width="100%" height="100%"></svg>
+        <div id="overlapsTooltip" style="position:absolute;background:var(--glass-bg3);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:10px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:20;box-shadow:var(--shadow);max-width:260px;line-height:1.5"></div>
+      </div>
+    </div>
+    <!-- Metagraph Tab -->
+    <div id="analytics-metagraph" style="display:none;flex:1;overflow:hidden;flex-direction:column;padding:0">
+      <div style="display:flex;gap:6px;padding:6px 12px;flex-shrink:0;border-bottom:1px solid var(--border);align-items:center">
+        <button class="btn btn-sm" onclick="loadMetagraph()">&#x1F504; Refresh</button>
+        <span id="metaSummary" style="font-size:10px;color:var(--text3)"></span>
+        <label style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);cursor:pointer">
+          <input type="checkbox" id="metaShowLabels" checked onchange="renderMetagraph()"> Labels
+        </label>
+      </div>
+      <div id="metagraphWrap" style="flex:1;min-height:300px;background:var(--poolgraph-bg);position:relative;overflow:hidden">
+        <div id="metagraphEmpty" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--text3);pointer-events:none;opacity:.6">
+          <div style="font-size:30px;margin-bottom:8px">&#x25C8;</div>
+          <div>Click Refresh to build the hive federation graph</div>
+        </div>
+        <svg id="metagraphSvg" width="100%" height="100%" style="display:none"></svg>
+        <div id="metagraphTooltip" style="display:none;position:absolute;background:var(--glass-bg3);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:10px;pointer-events:none;z-index:20;box-shadow:var(--shadow);max-width:280px;line-height:1.5"></div>
+        <div id="metagraphLegend" style="display:none;position:absolute;bottom:10px;left:10px;flex-wrap:wrap;gap:4px 10px;font-size:9px;color:var(--text3);z-index:10;background:var(--glass-bg);backdrop-filter:blur(8px);padding:5px 10px;border-radius:8px;border:1px solid var(--border);max-width:90%"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1166,6 +1244,12 @@ function switchPanel(name){
   if(name==='import'){document.getElementById('webUrlInput').focus();loadWebList();}
   if(name==='about')loadAbout();
   if(name==='notes')setTimeout(loadNotes,0);
+  if(name==='analytics'){
+    const st=document.querySelector('.analytics-subtab.active');
+    if(st&&st.dataset.atab==='metagraph')loadMetagraph();
+    else loadOverlaps();
+  }
+  if(name!=='graph')el('nodePreview').style.display='none';
 }
 
 // ── Notes 2D Matrix ──
@@ -1986,6 +2070,7 @@ function showNodePreview(d){
     const hasLineage=prior.length||citedBy.length;
     const tabs=[];
     tabs.push('Similarity');
+    tabs.push('Digests','Help-Noob');
     if(hasLineage)tabs.push('Prior Works','Cited By');
     if(tabs.length){
       let tabBar='<div class="preview-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:6px">';
@@ -2001,7 +2086,8 @@ function showNodePreview(d){
         const cItems=citedBy.slice(0,8).map(r=>'<li><a href="#" onclick="event.preventDefault();selectPaper(\''+esc(r.id)+'\')" style="color:var(--cyan);text-decoration:none">'+esc(r.label.substring(0,50))+'</a></li>').join('');
         contents.CitedBy='<ul style="margin:0;padding-left:16px">'+(cItems||'<li style="color:var(--text3)">None</li>')+'</ul>'+(citedBy.length>8?'<div style="color:var(--text3);font-size:10px;padding:2px 0 0 16px">+'+ (citedBy.length-8)+' more</div>':'');
       }
-      contents.Similarity='<div id="previewSimLoading" style="color:var(--text3);font-size:10px">Loading...</div><div id="previewSimResult"></div>';
+      contents.Digests='<div id="previewDigestsLoading" style="color:var(--text3);font-size:10px">Click to load digests</div><div id="previewDigestsResult"></div>';
+      contents['Help-Noob']='<div id="previewHelpLoading" style="color:var(--text3);font-size:10px">Click to load explanation</div><div id="previewHelpResult"></div>';
       // Render active tab
       const firstTab=tabs[0].replace(/\s/g,'');
       more+=tabBar+(contents[firstTab]||'')+'</div>';
@@ -2111,6 +2197,30 @@ function switchPreviewTab(tab,btn){
     }else{
       html='<div id="previewSimLoading" style="display:none"></div><div id="previewSimResult">'+buildPreviewSimHtml()+'</div>';
     }
+  }else if(tab==='Digests'){
+    html='<div id="previewDigestsLoading" style="color:var(--text3);font-size:10px">Loading...</div><div id="previewDigestsResult"></div>';
+    (async()=>{
+      try{
+        const data=await api('/api/digests/'+encodeURIComponent(_previewPaperId));
+        renderPreviewDigests(data);
+      }catch(e){
+        const r=el('previewDigestsResult');
+        if(r)r.innerHTML='<div style="color:var(--red);font-size:10px">Error: '+esc(e.message)+'</div>';
+        const ld=el('previewDigestsLoading');if(ld)ld.style.display='none';
+      }
+    })();
+  }else if(tab==='Help-Noob'){
+    html='<div id="previewHelpLoading" style="color:var(--text3);font-size:10px">Loading...</div><div id="previewHelpResult"></div>';
+    (async()=>{
+      try{
+        const data=await api('/api/help-noob/'+encodeURIComponent(_previewPaperId));
+        renderPreviewHelp(data);
+      }catch(e){
+        const r=el('previewHelpResult');
+        if(r)r.innerHTML='<div style="color:var(--red);font-size:10px">Error: '+esc(e.message)+'</div>';
+        const ld=el('previewHelpLoading');if(ld)ld.style.display='none';
+      }
+    })();
   }
   const tc=container.querySelector('.preview-tab-content');
   if(tc)tc.innerHTML=html;
@@ -2130,6 +2240,52 @@ function renderPreviewSimilarity(){
   const ld=el('previewSimLoading'); if(ld)ld.style.display='none';
   const r=el('previewSimResult'); if(!r)return;
   r.innerHTML=buildPreviewSimHtml();
+}
+
+function renderPreviewDigests(data){
+  const ld=el('previewDigestsLoading'); if(ld)ld.style.display='none';
+  const r=el('previewDigestsResult'); if(!r)return;
+  if(!data||data.error){r.innerHTML='<div style="color:var(--text3);font-size:10px">'+(data?esc(data.error):'No data')+'</div>';return}
+  let html='';
+  for(const [type,content] of Object.entries(data)){
+    if(!content)continue;
+    const label=type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    html+='<div style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px">'+
+      '<div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">'+esc(label)+'</div>'+
+      '<div style="font-size:11px;color:var(--text2);line-height:1.5">'+esc(String(content).substring(0,500))+'</div></div>';
+  }
+  r.innerHTML=html||'<div style="color:var(--text3);font-size:10px">No digests available</div>';
+}
+
+function renderPreviewHelp(data){
+  const ld=el('previewHelpLoading'); if(ld)ld.style.display='none';
+  const r=el('previewHelpResult'); if(!r)return;
+  if(!data||data.error){r.innerHTML='<div style="color:var(--text3);font-size:10px">'+(data?esc(data.error):'No data')+'</div>';return}
+  let html='';
+  if(data.eli5_summary)html+='<div style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px"><div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">ELI5 Summary</div><div style="font-size:11px;color:var(--text2);line-height:1.5">'+esc(data.eli5_summary)+'</div></div>';
+  if(data.what_you_need_to_know_first&&data.what_you_need_to_know_first.length){
+    html+='<div style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px"><div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Prerequisites</div>';
+    data.what_you_need_to_know_first.forEach(p=>{
+      html+='<div style="margin-bottom:4px"><b style="font-size:10px;color:var(--text2)">'+esc(p.topic||'')+'</b><br><span style="font-size:10px;color:var(--text3)">'+esc((p.why||'').substring(0,200))+'</span></div>';
+    });
+    html+='</div>';
+  }
+  if(data.concepts_explained&&data.concepts_explained.length){
+    html+='<div style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px"><div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Concepts Explained</div>';
+    data.concepts_explained.forEach(c=>{
+      html+='<div style="margin-bottom:4px;background:var(--surface);padding:4px 6px;border-radius:4px"><b style="font-size:10px">'+esc(c.name||'')+'</b><br><span style="font-size:10px;color:var(--text2)">'+esc((c.simple_definition||'').substring(0,200))+'</span>';
+      if(c.analogy)html+='<br><span style="font-size:9px;color:var(--text3);font-style:italic">Analogies: '+esc(c.analogy.substring(0,150))+'</span>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  if(data.learning_path&&data.learning_path.length){
+    html+='<div style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px"><div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Learning Path</div><ol style="margin:0;padding-left:16px;font-size:10px;color:var(--text2)">'+data.learning_path.map(s=>'<li>'+esc(s.substring(0,200))+'</li>').join('')+'</ol></div>';
+  }
+  if(data.glossary&&data.glossary.length){
+    html+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Glossary</div><table style="width:100%;font-size:10px;border-collapse:collapse">'+data.glossary.slice(0,15).map(g=>'<tr><td style="padding:2px 4px;color:var(--accent);white-space:nowrap;vertical-align:top;border-bottom:1px solid var(--border)">'+esc(g.term||'')+'</td><td style="padding:2px 4px;color:var(--text2);border-bottom:1px solid var(--border)">'+esc((g.definition||'').substring(0,200))+'</td></tr>').join('')+'</table>'+(data.glossary.length>15?'<div style="color:var(--text3);font-size:9px;padding:2px 0">+ '+(data.glossary.length-15)+' more</div>':'')+'</div>';
+  }
+  r.innerHTML=html||'<div style="color:var(--text3);font-size:10px">No explanation available</div>';
 }
 
 // ── Add Paper ──
@@ -2335,6 +2491,80 @@ async function refreshPaperNote(paperId){
   }
 }
 
+// ── Batch Regenerate All ──
+let _regenPollTimer=null;
+
+async function regenerateAllPapers(){
+  const ov=el('refreshOverlay');
+  if(ov.style.display==='flex'){
+    if(!confirm('Regeneration is already running. Start a new one?'))return;
+    if(_regenPollTimer){clearInterval(_regenPollTimer);_regenPollTimer=null;}
+  }
+  const m=getSelectedModel();
+  const body={force:true};
+  if(m)body.model=m;
+  try{
+    const r=await api('/api/refresh','POST',body);
+    if(r.status!=='started'){addLog('Regen All failed: '+(r.message||'unknown'),'ERROR');return}
+    addLog('Regenerating '+r.target+' papers...','INPROGRESS');
+    el('btnRegenCancel').style.display='inline-block';
+    el('btnRegenClose').style.display='none';
+    ov.style.display='flex';
+    el('regenProgressText').textContent='0 / '+r.target;
+    el('regenPercentText').textContent='0%';
+    el('regenProgressBar').style.width='0%';
+    el('regenCurrentPaper').textContent='Starting...';
+    el('regenErrors').innerHTML='';
+    _regenPollTimer=setInterval(pollRefreshProgress,800);
+  }catch(e){
+    addLog('Regen All error: '+e.message,'ERROR');
+  }
+}
+
+async function pollRefreshProgress(){
+  try{
+    const s=await api('/api/refresh/status','GET');
+    if(!s)return;
+    const total=s.total||1;
+    const cur=s.current||0;
+    const pct=Math.round((cur/total)*100);
+    el('regenProgressText').textContent=cur+' / '+total;
+    el('regenPercentText').textContent=pct+'%';
+    el('regenProgressBar').style.width=pct+'%';
+    el('regenCurrentPaper').textContent=s.message||s.current_paper||'';
+    if(s.errors&&s.errors.length){
+      el('regenErrors').innerHTML=s.errors.slice(-5).map(id=>'<div>&#x2716; '+esc(id)+'</div>').join('');
+    }
+    if(!s.running){
+      clearInterval(_regenPollTimer);
+      _regenPollTimer=null;
+      el('btnRegenCancel').style.display='none';
+      el('btnRegenClose').style.display='inline-block';
+      el('regenCurrentPaper').textContent=s.message||'Done';
+      addLog('Regen All complete: '+s.message,'DONE');
+      // Refresh browse data
+      await loadBrowse();
+    }
+  }catch(e){
+    // Connection might drop during refresh — keep polling
+    console.warn('pollRefreshProgress error:',e);
+  }
+}
+
+function cancelRefresh(){
+  if(!confirm('Stop regeneration? Papers already processed will be kept.'))return;
+  if(_regenPollTimer){clearInterval(_regenPollTimer);_regenPollTimer=null;}
+  el('btnRegenCancel').style.display='none';
+  el('btnRegenClose').style.display='inline-block';
+  closeRefreshOverlay();
+  addLog('Regen All cancelled by user','WARN');
+}
+
+function closeRefreshOverlay(){
+  el('refreshOverlay').style.display='none';
+  if(_regenPollTimer){clearInterval(_regenPollTimer);_regenPollTimer=null;}
+}
+
 async function recreateCurrentNotes(){
   if(!_selectedPaper){addLog('No paper selected','ERROR');return}
   const pid=_selectedPaper.id;
@@ -2456,6 +2686,11 @@ function selectPaper(paperId){
   _currentPreviewFile=null;
   // render lineage from graph data
   renderLineage(paperId);
+  // show digest/help section
+  const dh=el('browseDigestHelp');
+  dh.style.display='block';
+  el('browseDigestContent').innerHTML='<span style="color:var(--text3)">Click Digests or Help-Noob to load</span>';
+  _browseDigestPaperId=paperId;
   // show top panel toggle bar
   el('browseTopToggle').style.display='block';
 }
@@ -2522,6 +2757,53 @@ function toggleFG(el){
   el.classList.toggle('collapsed');
   const body=el.nextElementSibling;
   if(body)body.style.display=body.style.display==='none'?'':'none';
+}
+
+let _browseDigestPaperId=null;
+
+async function loadBrowseDigests(){
+  const c=el('browseDigestContent');
+  if(!_browseDigestPaperId){c.innerHTML='<span style="color:var(--text3)">No paper selected</span>';return}
+  c.innerHTML='<span style="color:var(--text3)">Loading digests...</span>';
+  try{
+    const data=await api('/api/digests/'+encodeURIComponent(_browseDigestPaperId));
+    if(!data||data.error){c.innerHTML='<span style="color:var(--text3)">'+(data?esc(data.error):'No data')+'</span>';return}
+    let html='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+    for(const [type,content] of Object.entries(data)){
+      if(!content)continue;
+      const label=type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      html+='<div style="background:var(--surface2);border-radius:4px;padding:4px 8px;flex:1;min-width:120px"><b style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.3px">'+esc(label)+'</b><br><span style="font-size:10px;color:var(--text2)">'+esc(String(content).substring(0,200))+'</span></div>';
+    }
+    html+='</div>';
+    c.innerHTML=html;
+  }catch(e){c.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>'}
+}
+
+async function loadBrowseHelpNoob(){
+  const c=el('browseDigestContent');
+  if(!_browseDigestPaperId){c.innerHTML='<span style="color:var(--text3)">No paper selected</span>';return}
+  c.innerHTML='<span style="color:var(--text3)">Loading explanation...</span>';
+  try{
+    const data=await api('/api/help-noob/'+encodeURIComponent(_browseDigestPaperId));
+    if(!data||data.error){c.innerHTML='<span style="color:var(--text3)">'+(data?esc(data.error):'No data')+'</span>';return}
+    let html='';
+    if(data.eli5_summary)html+='<div style="margin-bottom:4px"><b style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.3px">ELI5 Summary</b><br><span style="font-size:10px;color:var(--text2)">'+esc(data.eli5_summary)+'</span></div>';
+    if(data.what_you_need_to_know_first&&data.what_you_need_to_know_first.length){
+      html+='<div style="margin-bottom:4px"><b style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.3px">Prerequisites</b><br>';
+      data.what_you_need_to_know_first.forEach(p=>{
+        html+='<div style="margin-bottom:2px;font-size:10px"><b>'+esc(p.topic||'')+'</b>: <span style="color:var(--text3)">'+esc((p.why||'').substring(0,150))+'</span></div>';
+      });
+      html+='</div>';
+    }
+    if(data.concepts_explained&&data.concepts_explained.length){
+      html+='<div><b style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.3px">Concepts</b><br><div style="display:flex;flex-wrap:wrap;gap:3px">';
+      data.concepts_explained.slice(0,8).forEach(c=>{
+        html+='<span style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:9px" title="'+esc((c.simple_definition||'').substring(0,200))+'">'+esc(c.name||'')+'</span>';
+      });
+      html+='</div>'+(data.concepts_explained.length>8?'<div style="color:var(--text3);font-size:9px">+ '+(data.concepts_explained.length-8)+' more</div>':'')+'</div>';
+    }
+    c.innerHTML=html||'<span style="color:var(--text3)">No explanation available</span>';
+  }catch(e){c.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>'}
 }
 
 async function openPaperFile(reqPath, ext){
@@ -3467,9 +3749,323 @@ async function removePoolTopic(name){
   await api('/api/pool/topics/remove','POST',{name});loadPoolTopics();
 }
 
+// ── Analytics ──
+function switchAnalyticsTab(name,btn){
+  document.querySelectorAll('.analytics-subtab').forEach(t=>{
+    t.style.color='var(--text3)';t.style.borderBottom='2px solid transparent';t.style.fontWeight='400'
+  });
+  if(btn){btn.style.color='var(--accent)';btn.style.borderBottom='2px solid var(--accent)';btn.style.fontWeight='500'}
+  const sections=['overlaps','metagraph'];
+  sections.forEach(s=>{
+    const sec=document.getElementById('analytics-'+s);
+    if(sec)sec.style.display=s===name?'flex':'none';
+  });
+  if(name==='metagraph'&&_metaData)renderMetagraph();
+  if(name==='overlaps'&&_overlapsData)renderOverlapsGraph();
+}
+
+// ── Overlaps ──
+let _overlapsData=null;
+
+async function loadOverlaps(){
+  _overlapsData=null;
+  renderOverlapsList([]);
+  const c=el('overlapsList');
+  c.innerHTML='<div style="color:var(--text3);padding:20px;text-align:center">Loading...</div>';
+  try{
+    const data=await api('/api/overlaps');
+    _overlapsData=data;
+    if(!data||!data.overlaps||!data.overlaps.length){
+      c.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:30px">No shared topics or concepts found between papers</div>';
+      el('overlapsSummary').textContent='';
+      return;
+    }
+    el('overlapsSummary').textContent=data.overlaps.length+' shared items';
+    el('overlapsFilter').value='';
+    renderOverlapsList(data.overlaps);
+  }catch(e){
+    c.innerHTML='<div style="color:var(--red);font-size:12px;padding:20px;text-align:center">Error: '+esc(e.message)+'</div>';
+  }
+}
+
+function switchOverlapsView(view,btn){
+  document.querySelectorAll('.ov-subtab').forEach(t=>{
+    t.style.color='var(--text3)';t.style.borderBottom='2px solid transparent';
+  });
+  if(btn){btn.style.color='var(--accent)';btn.style.borderBottom='2px solid var(--accent)';btn.style.fontWeight='500'}
+  el('overlapsList').style.display=view==='list'?'flex':'none';
+  el('overlapsGraphWrap').style.display=view==='graph'?'block':'none';
+  if(view==='graph')renderOverlapsGraph();
+}
+
+function filterOverlaps(){
+  const q=el('overlapsFilter').value.trim().toLowerCase();
+  if(!_overlapsData||!_overlapsData.overlaps)return;
+  if(!q){renderOverlapsList(_overlapsData.overlaps);return}
+  const filtered=_overlapsData.overlaps.filter(o=>o.name.toLowerCase().includes(q));
+  renderOverlapsList(filtered,q);
+}
+
+function renderOverlapsList(items,filterHint){
+  const c=el('overlapsList');
+  if(!items||!items.length){
+    c.innerHTML=!filterHint?'<div style="color:var(--text3);font-size:12px;text-align:center;padding:30px">No shared topics or concepts found between papers</div>'
+      :'<div style="color:var(--text3);font-size:11px;text-align:center;padding:20px">No items matching &quot;'+esc(filterHint)+'&quot;</div>';
+    return;
+  }
+  const topics=items.filter(o=>o.type==='topic');
+  const concepts=items.filter(o=>o.type==='concept');
+  let html='';
+  if(topics.length){
+    html+='<div class="card"><div class="card-header">&#x1F4CB; Shared Topics ('+topics.length+')</div>';
+    topics.slice(0,30).forEach(t=>{
+      html+='<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:11px">'+
+        '<span style="background:rgba(192,132,252,.12);color:var(--purple);padding:1px 7px;border-radius:4px;font-size:10px;white-space:nowrap">'+esc(t.name)+'</span>'+
+        '<span class="badge2" style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:9px;white-space:nowrap">'+t.count+' papers</span>'+
+        '<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px">'+t.papers.map(id=>esc(id)).join(', ')+'</span></div>';
+    });
+    if(topics.length>30)html+='<div style="color:var(--text3);font-size:10px;padding:4px 0;text-align:center">+ '+(topics.length-30)+' more</div>';
+    html+='</div>';
+  }
+  if(concepts.length){
+    html+='<div class="card"><div class="card-header">&#x1F4A1; Shared Concepts ('+concepts.length+')</div>';
+    concepts.slice(0,50).forEach(t=>{
+      html+='<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:11px">'+
+        '<span style="background:rgba(96,165,250,.12);color:var(--accent);padding:1px 7px;border-radius:4px;font-size:10px;white-space:nowrap">'+esc(t.name)+'</span>'+
+        '<span class="badge2" style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:9px;white-space:nowrap">'+t.count+' papers</span>'+
+        '<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px">'+t.papers.map(id=>esc(id)).join(', ')+'</span></div>';
+    });
+    if(concepts.length>50)html+='<div style="color:var(--text3);font-size:10px;padding:4px 0;text-align:center">+ '+(concepts.length-50)+' more</div>';
+    html+='</div>';
+  }
+  if(_overlapsData.cross_relations&&_overlapsData.cross_relations.length){
+    html+='<div class="card"><div class="card-header">&#x1F517; Cross Relations ('+_overlapsData.cross_relations.length+')</div>';
+    _overlapsData.cross_relations.forEach(r=>{
+      html+='<div style="padding:3px 0;font-size:10px;color:var(--text2)">'+
+        esc(r.source_id)+' <span style="color:var(--accent)">'+esc(r.relation)+'</span> '+esc(r.target_id)+'</div>';
+    });
+    html+='</div>';
+  }
+  c.innerHTML=html;
+}
+
+function renderOverlapsGraph(){
+  const data=_overlapsData;
+  if(!data||!data.overlaps||!data.overlaps.length)return;
+  const wrap=el('overlapsGraphWrap');
+  const W=wrap.clientWidth-4,H=wrap.clientHeight-4;
+  if(W<50||H<50)return;
+  const svg=d3.select('#overlapsSvg'); svg.selectAll('*').remove();
+  svg.attr('viewBox','0 0 '+W+' '+H);
+
+  // Top concepts by count, limit to 40
+  const concepts=data.overlaps.filter(o=>o.type==='concept').sort((a,b)=>b.count-a.count).slice(0,40);
+  if(!concepts.length)return;
+
+  const paperSet=new Set();
+  concepts.forEach(c=>c.papers.forEach(pid=>paperSet.add(pid)));
+  const paperIds=Array.from(paperSet);
+
+  const nodes=[],nodeMap={},links=[];
+  concepts.forEach(c=>{
+    const id='c_'+c.name.replace(/[^a-z0-9]/gi,'_');
+    nodeMap[id]={id,name:c.name,type:'concept',count:c.count,r:Math.min(6+c.count*2,18)};
+    nodes.push(nodeMap[id]);
+  });
+  paperIds.forEach((pid,i)=>{
+    const id='p_'+pid.replace(/[^a-z0-9]/gi,'_');
+    nodeMap[id]={id,name:pid,type:'paper',paperId:pid,r:3};
+    nodes.push(nodeMap[id]);
+  });
+  concepts.forEach(c=>{
+    const src='c_'+c.name.replace(/[^a-z0-9]/gi,'_');
+    c.papers.forEach(pid=>{
+      const tgt='p_'+pid.replace(/[^a-z0-9]/gi,'_');
+      if(nodeMap[src]&&nodeMap[tgt])links.push({source:src,target:tgt});
+    });
+  });
+
+  const sim=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>d.source.type==='concept'?25:50))
+    .force('charge',d3.forceManyBody().strength(-50))
+    .force('center',d3.forceCenter(W/2,H/2))
+    .force('collide',d3.forceCollide().radius(d=>d.r+1))
+    .alphaDecay(0.04);
+
+  const g=svg.append('g');
+  const tooltip=d3.select('#overlapsTooltip');
+
+  const linkEl=g.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke','var(--accent)').attr('stroke-width',0.7).attr('stroke-opacity',0.45);
+  const nodeEl=g.append('g').selectAll('circle').data(nodes).join('circle')
+    .attr('r',d=>d.r).attr('fill',d=>d.type==='concept'?'var(--accent)':'var(--cyan)')
+    .attr('stroke','var(--text)').attr('stroke-width',.8).attr('stroke-opacity',.5).attr('opacity',1)
+    .style('cursor','pointer')
+    .on('mouseover',function(e,d){
+      d3.select(this).attr('opacity',1).attr('stroke','var(--accent)');
+      const rect=wrap.getBoundingClientRect();
+      let tip='';
+      if(d.type==='concept'){
+        const c=concepts.find(x=>x.name===d.name);
+        tip='<b>'+esc(d.name)+'</b> <span style="color:var(--text3)">('+(c?c.count+' papers':'')+')</span>';
+        if(c)tip+='<br><span style="font-size:9px;color:var(--text3)">'+c.papers.map(p=>esc(p)).join(', ')+'</span>';
+      }else{
+        const title=gData&&gData.nodes?gData.nodes.find(n=>n.id===d.paperId)?.label||d.paperId:d.paperId;
+        tip='<b>'+esc(title)+'</b>';
+      }
+      tooltip.style('opacity',1).html(tip)
+        .style('left',Math.min(e.clientX-rect.left+12,W-200)+'px')
+        .style('top',Math.max(e.clientY-rect.top-30,10)+'px');
+    })
+    .on('mouseout',function(){d3.select(this).attr('opacity',1).attr('stroke','var(--text)').attr('stroke-opacity',.5);tooltip.style('opacity',0);})
+    .on('click',function(e,d){if(d.type==='paper'&&gData)showNodePreview(gData.nodes.find(n=>n.id===d.paperId));});
+
+  sim.on('tick',()=>{
+    linkEl.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    nodeEl.attr('cx',d=>d.x).attr('cy',d=>d.y);
+  });
+}
+
+// ── Metagraph ──
+let _metaData=null;
+let _metaSimulation=null;
+
+async function loadMetagraph(){
+  const svg=el('metagraphSvg'); svg.style.display='none';
+  el('metagraphEmpty').style.display='block';
+  el('metaSummary').textContent='Building graph...';
+  try{
+    _metaData=await api('/api/metagraph');
+    if(_metaSimulation)_metaSimulation.stop();
+    el('metaSummary').textContent=_metaData.summary.papers+' papers, '+_metaData.summary.hives+' hives, '+_metaData.summary.shared_concepts+' shared concepts';
+    renderMetagraph();
+  }catch(e){
+    el('metaSummary').textContent='Error: '+e.message;
+  }
+}
+
+function renderMetagraph(){
+  const data=_metaData;
+  if(!data||!data.hives||!data.hives.length||!data.papers||!data.papers.length)return;
+  const svg=el('metagraphSvg'); svg.style.display='block';
+  const wrap=el('metagraphWrap');
+  const W=wrap.clientWidth-2,H=wrap.clientHeight-2;
+  if(W<100||H<100)return;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.innerHTML='';
+  el('metagraphEmpty').style.display='none';
+
+  // Hive colors
+  const hiveColors=['#60a5fa','#34d399','#fbbf24','#f87171','#c084fc','#22d3ee','#fb923c','#a78bfa'];
+  const colorMap={};
+  data.hives.forEach((h,i)=>{colorMap[h.id]=hiveColors[h.color_idx%hiveColors.length]||hiveColors[i%hiveColors.length];});
+
+  // Legend
+  const legend=el('metagraphLegend');
+  legend.style.display='flex';
+  legend.innerHTML=data.hives.map(h=>'<span class="pl"><span class="psw" style="background:'+(colorMap[h.id]||'var(--text3)')+';border-radius:3px"></span>'+esc(h.label)+' <span style="color:var(--text3)">('+h.paper_ids.length+')</span></span>').join('');
+
+  // Compute degree (number of connections per paper)
+  const links=data.links||[];
+  const degree={};
+  links.forEach(l=>{degree[l.source]=(degree[l.source]||0)+1;degree[l.target]=(degree[l.target]||0)+1;});
+
+  // Build simulation nodes & links
+  const paperMap={};
+  data.papers.forEach(p=>{paperMap[p.id]=p;});
+
+  const simNodes=data.papers.map(p=>({
+    id:p.id,title:p.title||p.id,hive:p.hive||'all',
+    r:Math.min(3+Math.sqrt(degree[p.id]||0)*1.5,10),
+    topics:p.topics||[],concepts:p.concepts||[]
+  }));
+  const nodeIndex={};
+  simNodes.forEach((n,i)=>{nodeIndex[n.id]=i;});
+  const simLinks=links.filter(l=>nodeIndex[l.source]!==undefined&&nodeIndex[l.target]!==undefined).map(l=>({
+    source:nodeIndex[l.source],target:nodeIndex[l.target],type:l.type,label:l.label,weight:l.weight||1
+  }));
+
+  // Force simulation
+  if(_metaSimulation)_metaSimulation.stop();
+  _metaSimulation=d3.forceSimulation(simNodes)
+    .force('link',d3.forceLink(simLinks).distance(d=>80/(d.weight||1)).strength(d=>0.3*(d.weight||1)))
+    .force('charge',d3.forceManyBody().strength(-40))
+    .force('center',d3.forceCenter(W/2,H/2))
+    .force('collide',d3.forceCollide().radius(d=>d.r+2))
+    .alphaDecay(0.03);
+
+  // Zoom behavior
+  const zoomG=svg.querySelector('g.zoom-g')?svg.querySelector('g.zoom-g'):svg.appendChild(
+    (()=>{const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','zoom-g');return g;})()
+  );
+  zoomG.innerHTML='';
+  const _g=d3.select(zoomG);
+  const zoom=d3.zoom().scaleExtent([0.3,4]).on('zoom',(e)=>_g.attr('transform',e.transform));
+  d3.select(svg).call(zoom);
+
+  // Draw
+  const linkG=_g.append('g');
+  const nodeG=_g.append('g');
+  const labelG=_g.append('g');
+  const tooltip=el('metagraphTooltip');
+
+  const linkEl=linkG.selectAll('line').data(simLinks).join('line')
+    .attr('stroke',d=>{
+      if(d.type==='shared_topic')return 'var(--purple)';
+      if(d.type==='shared_concept')return 'var(--cyan)';
+      if(d.type==='shared_theory')return 'var(--yellow)';
+      if(d.type==='cross_relation')return 'var(--green)';
+      return 'var(--accent)';
+    }).attr('stroke-width',d=>Math.min(0.6+0.6*(d.weight||1),2.5))
+    .attr('stroke-opacity',0.45);
+
+  const nodeEl=nodeG.selectAll('circle').data(simNodes).join('circle')
+    .attr('r',d=>d.r).attr('fill',d=>colorMap[d.hive]||'var(--accent)')
+    .attr('stroke','var(--text)').attr('stroke-width',1).attr('stroke-opacity',.4).attr('opacity',1)
+    .style('cursor','pointer')
+    .on('mouseover',function(e,d){
+      d3.select(this).attr('opacity',1).attr('stroke','#fff').attr('r',d.r+2);
+      linkEl.attr('stroke-opacity',l=>l.source&&l.target&&(l.source.id===d.id||l.target.id===d.id)?.6:.08);
+      const pt=d.topics.length?'<br>Topics: '+d.topics.slice(0,5).join(', '):'';
+      const pc=d.concepts.length?'<br>Concepts: '+d.concepts.slice(0,5).join(', '):'';
+      tooltip.style.display='block'
+        .html('<b>'+esc(d.title)+'</b><br><span style="color:var(--text3)">'+d.id+'</span>'+pt+pc)
+        .style('left',(e.offsetX+10)+'px').style('top',(e.offsetY-10)+'px');
+    })
+    .on('mouseout',function(){
+      d3.select(this).attr('opacity',1).attr('stroke','var(--text)').attr('stroke-opacity',.4).attr('r',d=>d.r);
+      linkEl.attr('stroke-opacity',.45);
+      tooltip.style.display='none';
+    })
+    .on('click',function(e,d){
+      if(gData)showNodePreview(gData.nodes.find(n=>n.id===d.id));
+    });
+
+  const showLabels=el('metaShowLabels').checked;
+  const labelEl=labelG.selectAll('text').data(showLabels?simNodes.filter(d=>d.r>4):[]).join('text')
+    .attr('text-anchor','middle').attr('dy','-.3em').attr('font-size','5')
+    .attr('fill','var(--text3)').attr('opacity',.6)
+    .text(d=>{const t=d.title;return t.length>30?t.substring(0,27)+'...':t;});
+
+  _metaSimulation.on('tick',()=>{
+    linkEl.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    nodeEl.attr('cx',d=>d.x).attr('cy',d=>d.y);
+    labelEl.attr('x',d=>d.x).attr('y',d=>d.y-d.r-2);
+  });
+}
+
 // ── Refresh ──
 async function refreshAll(){
   await Promise.all([loadHeaderStats(),loadGraph(),loadGpuStatus(),loadPool()]);
+  // Refresh analytics data in background if panel exists
+  if(el('panel-analytics').classList.contains('active')){
+    const activeTab=document.querySelector('.analytics-subtab.active');
+    if(activeTab){
+      const tab=activeTab.dataset.atab;
+      if(tab==='overlaps')loadOverlaps();
+      else if(tab==='metagraph')loadMetagraph();
+    }
+  }
 }
 let _graphRenderQueued=false;
 async function loadGraph(){
@@ -3489,7 +4085,7 @@ function _scheduleGraphRender(){
   },50);
 }
 
-let _resizeTimer,_notesResizeTimer;
+let _resizeTimer,_notesResizeTimer,_metaResizeTimer;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
   _resizeTimer=setTimeout(_scheduleGraphRender,300);
@@ -3498,6 +4094,8 @@ window.addEventListener('resize',()=>{
     const panel=el('panel-notes');
     if(panel&&panel.classList.contains('active'))renderNotes();
   },200);
+  clearTimeout(_metaResizeTimer);
+  _metaResizeTimer=setTimeout(()=>{if(_metaData&&el('analytics-metagraph').style.display!=='none')renderMetagraph();},300);
 });
 
 // ── Init ──

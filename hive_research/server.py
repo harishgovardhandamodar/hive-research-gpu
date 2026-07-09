@@ -126,12 +126,45 @@ class RouteHandler(BaseHTTPRequestHandler):
             _json_response(self, self.org.graph_data())
         elif path == "/api/stats":
             _json_response(self, self.org.stats())
+        elif path == "/api/digest-types":
+            _json_response(self, self.org.digest_types())
+        elif path.startswith("/api/digests/"):
+            try:
+                paper_id = path[len("/api/digests/"):]
+                types = params.get("types", "")
+                refresh = params.get("refresh", "false").lower() == "true"
+                _json_response(self, self.org.digests(paper_id, types=types, refresh=refresh))
+            except Exception as ex:
+                logger.exception("Digests endpoint failed")
+                _json_response(self, {"error": str(ex)}, status=500)
+        elif path.startswith("/api/help-noob/"):
+            try:
+                paper_id = path[len("/api/help-noob/"):]
+                refresh = params.get("refresh", "false").lower() == "true"
+                _json_response(self, self.org.help_noob(paper_id, refresh=refresh))
+            except Exception as ex:
+                logger.exception("Help-noob endpoint failed")
+                _json_response(self, {"error": str(ex)}, status=500)
+        elif path == "/api/overlaps":
+            try:
+                _json_response(self, self.org.overlaps())
+            except Exception as ex:
+                logger.exception("Overlaps endpoint failed")
+                _json_response(self, {"error": str(ex)}, status=500)
+        elif path == "/api/metagraph":
+            try:
+                _json_response(self, self.org.metagraph())
+            except Exception as ex:
+                logger.exception("Metagraph endpoint failed")
+                _json_response(self, {"error": str(ex)}, status=500)
         elif path == "/api/similarity":
             paper_ids = params.get("paper_ids", None)
             algorithm = params.get("algorithm", "combined")
             if isinstance(paper_ids, str):
                 paper_ids = [x.strip() for x in paper_ids.split(",") if x.strip()]
             _json_response(self, self.org.similarity(paper_ids=paper_ids, algorithm=algorithm))
+        elif path == "/api/refresh/status":
+            _json_response(self, self.org.refresh_progress)
         elif path == "/api/export/bibtex":
             bibtex = self.org.export_bibtex()
             self.send_response(200)
@@ -588,8 +621,10 @@ info.textContent += ' | OK';
             _json_response(self, self.org.similarity(paper_ids=paper_ids, algorithm=algorithm))
         elif path == "/api/refresh":
             model_param = data.get("model", params.get("model", None))
+            raw_force = data.get("force", params.get("force", "false"))
+            force = raw_force if isinstance(raw_force, bool) else str(raw_force).lower() in ("true", "1", "yes")
             model = self.org.config.resolve_model(model_param)
-            result = self.org.refresh_papers(model=model)
+            result = self.org.refresh_papers(model=model, force=force)
             _json_response(self, result)
         elif path == "/api/papers/refresh":
             paper_id = data.get("paper_id", params.get("paper_id", ""))

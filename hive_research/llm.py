@@ -119,36 +119,6 @@ class LLMInterface:
 
         return results
 
-    def extract_structured(
-        self,
-        prompt: str,
-        model: str | None = None,
-        gpu_id: int | None = None,
-    ) -> dict[str, Any]:
-        system = (
-            "You are a precise information extraction system. "
-            "Respond ONLY with valid JSON. No markdown, no explanation."
-        )
-        text = self.generate(prompt, model=model, system=system, temperature=0.0, gpu_id=gpu_id)
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.startswith("json"):
-                text = text[4:]
-        text = text.strip()
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-        repaired = self._repair_json(text)
-        if repaired is not None:
-            logger.warning("Repaired truncated JSON from LLM (%d chars) keys=%s",
-                           len(text), list(repaired.keys()))
-            return repaired
-        logger.error("Failed to parse JSON from LLM response (len=%d): %s",
-                     len(text), text[:500])
-        return {}
-
     @staticmethod
     def _repair_json(text: str) -> dict[str, Any] | None:
         if not text or text[0] != '{':
@@ -331,3 +301,148 @@ class LLMInterface:
             return r.status_code == 200
         except Exception:
             return False
+
+    # ── Digest types ──
+
+    DIGEST_TYPES = {
+        "tldr": "One sentence capturing the absolute core finding.",
+        "concept_digest": "Bulleted overview of the 5-8 most important concepts/terms with brief definitions.",
+        "topic_digest": "Thematic breakdown of 3-5 topic areas. Explain how the paper engages with each.",
+        "deep_digest": "Comprehensive 2-3 paragraph analysis covering: problem statement, methodology, key results, significance.",
+        "methodology_digest": "Step-by-step breakdown of the methodology, proofs, or experimental setup. 2-3 paragraphs.",
+        "findings_digest": "Bulleted list of key findings, results, and contributions.",
+        "notation_digest": "List of important notation, symbols, and mathematical objects introduced.",
+        "prerequisite_digest": "Background knowledge assumed by the paper. List 3-5 prerequisite topics.",
+    }
+
+    def generate_digests(
+        self,
+        text: str,
+        digest_types: list[str] | None = None,
+        model: str | None = None,
+    ) -> dict[str, str]:
+        types = digest_types or list(self.DIGEST_TYPES.keys())
+        spec_lines = []
+        for i, k in enumerate(types, 1):
+            desc = self.DIGEST_TYPES.get(k, k)
+            spec_lines.append(f"{i}. {k} (string): {desc}")
+        system = (
+            "You are a research paper analyst. Generate multiple digest views of the same paper. "
+            "Respond ONLY with a valid JSON object. No markdown."
+        )
+        prompt = (
+            "Analyze the following research paper and produce the following digest views as a JSON object:\n"
+            f"{chr(10).join(spec_lines)}\n\n"
+            f"Paper text:\n{self._compose_paper_text(text)}\n"
+        )
+        return self.extract_structured(prompt, system=system, temperature=0.2, model=model)
+
+    # ── Help Noob: beginner-friendly explanations ──
+
+    def generate_help_noob(
+        self,
+        text: str,
+        analysis: dict | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        analysis_hint = ""
+        if analysis:
+            analysis_hint = (
+                "\n\nThe structured analysis already extracted these. Make sure to explain ALL of them:\n"
+                f"Title: {analysis.get('title', '')}\n"
+                f"Topics: {json.dumps(analysis.get('topics', []))}\n"
+                f"Concepts: {json.dumps([c.get('name', '') for c in analysis.get('concepts', [])])}\n"
+                f"Theories: {json.dumps([t.get('name', '') for t in analysis.get('theories', [])])}\n"
+            )
+        system = (
+            "You are a patient teacher who explains advanced research papers to a complete beginner. "
+            "Use simple analogies, plain language, concrete examples. Avoid jargon — define it immediately. "
+            "Respond ONLY with a valid JSON object. No markdown."
+        )
+        prompt = (
+            "A beginner wants to understand this research paper. They have NO background in this field. "
+            "Read the paper and produce a JSON object that teaches them everything they need to know:\n\n"
+            "- title (string): the paper's title\n"
+            "- eli5_summary (string): explain like they're 5 years old. 2-3 sentences. Use a simple analogy.\n"
+            "- what_you_need_to_know_first (array of {topic, why}): 2-5 prerequisite topics to learn BEFORE reading this paper. For each, explain WHY it matters.\n"
+            "- topics_explained (array of {name, simple_definition, analogy, why_it_matters}): for EACH broad topic area, give a plain-language definition, a real-world analogy, and why it matters.\n"
+            "- concepts_explained (array of {name, simple_definition, analogy, why_it_matters}): for EACH key concept, explain it simply with an analogy and why it matters.\n"
+            "- theories_explained (array of {name, eli5_explanation, example}): for each theory, give an ELI5 explanation and a concrete real-world example.\n"
+            "- learning_path (array of strings): step-by-step ordered list of what to learn to fully understand this paper.\n"
+            "- glossary (array of {term, definition}): every technical term, defined in one simple sentence.\n\n"
+            f"{analysis_hint}"
+            f"Paper text:\n{self._compose_paper_text(text)}\n"
+        )
+        return self.extract_structured(prompt, system=system, temperature=0.3, model=model)
+
+    # ── Hive categorization ──
+
+    def categorize_papers(
+        self,
+        paper_data: list[dict[str, Any]],
+        model: str | None = None,
+    ) -> list[dict[str, Any]]:
+        system = (
+            "You are a research librarian. Group papers into topic-based clusters (hives). "
+            "Respond ONLY with a valid JSON array of objects. No markdown."
+        )
+        prompt = (
+            "Group these research papers into 2-4 topic-based clusters (hives). "
+            "Each hive should group papers that share a common topic area. "
+            "EVERY paper MUST be assigned to exactly one hive. "
+            "Return a JSON array of objects (MUST be an array), each with:\n"
+            "  id: short unique id (e.g., 'complex-analysis')\n"
+            "  label: human-readable label for the hive\n"
+            "  paper_ids: array of paper IDs belonging to this hive\n\n"
+            "IMPORTANT: Every paper_id from the input MUST appear in exactly one hive's paper_ids.\n"
+            "Use the exact paper_id values provided, not titles.\n\n"
+            f"Papers:\n{json.dumps(paper_data, indent=2)[:24000]}\n"
+        )
+        result = self.extract_structured(prompt, system=system, temperature=0.1, model=model)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return [result]
+        return []
+
+    @staticmethod
+    def _compose_paper_text(text: str, head: int = 12000, tail: int = 6000) -> str:
+        if len(text) <= head + tail:
+            return text
+        return (
+            text[:head]
+            + "\n\n[... middle of paper truncated for length ...]\n\n"
+            + text[-tail:]
+        )
+
+    def extract_structured(
+        self,
+        prompt: str,
+        system: str | None = None,
+        model: str | None = None,
+        gpu_id: int | None = None,
+        temperature: float | None = None,
+    ) -> dict[str, Any]:
+        system_msg = system or (
+            "You are a precise information extraction system. "
+            "Respond ONLY with valid JSON. No markdown, no explanation."
+        )
+        text = self.generate(prompt, model=model, system=system_msg, temperature=temperature, gpu_id=gpu_id)
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        repaired = self._repair_json(text)
+        if repaired is not None:
+            logger.warning("Repaired truncated JSON from LLM (%d chars) keys=%s",
+                           len(text), list(repaired.keys()))
+            return repaired
+        logger.error("Failed to parse JSON from LLM response (len=%d): %s",
+                     len(text), text[:500])
+        return {}
