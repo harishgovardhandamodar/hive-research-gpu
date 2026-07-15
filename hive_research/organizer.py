@@ -41,7 +41,7 @@ class Organizer:
         self._refresh_progress: dict[str, Any] = {"running": False, "total": 0, "current": 0, "current_paper": "", "errors": [], "message": ""}
 
         if gpu_mgr and config.gpu_enabled:
-            gpu_mgr.launch_ollama_instances()
+            logger.info("GPU monitoring active; inference routed via Hive Server at %s", config.hive_base_url)
 
     @property
     def kg(self) -> KnowledgeGraph:
@@ -101,8 +101,7 @@ class Organizer:
         if result["status"] == "error":
             return result
         paper = result["paper"]
-        gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-        result = self.pipeline.process_paper(paper, gpu_id=gpu_id, model=model)
+        result = self.pipeline.process_paper(paper, model=model)
         if result["status"] == "added":
             pdf_text = ""
             pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
@@ -235,8 +234,7 @@ class Organizer:
             figures_dir = Path(self.config.vault_dir) / safe_title / "figures"
             figures = extract_images_from_pdf(pdf_path, figures_dir)
 
-            gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id)
+            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model)
             notes = analysis.get("notes", "")
             experiment = analysis.get("experiment", {})
             results = analysis.get("results", {})
@@ -388,8 +386,7 @@ class Organizer:
                 f"based on these papers:\n{context}\n\n"
                 'Respond with JSON: {"definition": "..."}'
             )
-            gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-            result = self.llm.extract_structured(prompt, model=self.config.ollama_fast_model, gpu_id=gpu_id)
+            result = self.llm.extract_structured(prompt, model=self.config.ollama_fast_model)
             definition = result.get("definition", "")
             if definition:
                 node.definition = definition[:200]

@@ -89,12 +89,13 @@ List ingested web resources.
 
 ### `/api/ollama`
 
-Ollama connection status and model availability.
+Hive Serving cluster health and model availability.
 
 ```json
 {
   "connected": true,
-  "base_url": "http://localhost:11434",
+  "hive_url": "http://localhost:8081",
+  "backend": "hive-server-go",
   "model": "qwen3.6:35b-mlx",
   "model_available": true,
   "platform": "Linux-...",

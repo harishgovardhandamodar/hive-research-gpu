@@ -4,6 +4,7 @@
 
 - Python 3.12+
 - [Ollama](https://ollama.ai) installed and running
+- [Hive Serving](https://github.com/hive-cluster/hive-serving) cluster running on port 8081 (see Step 1b)
 - NVIDIA GPU(s) with CUDA 12.4+ (optional — falls back to CPU)
 - Internet access for arXiv API and PDF downloads
 
@@ -19,7 +20,31 @@ ollama pull qwen3.6:35b-mlx     # Main model for deep analysis
 ollama pull nomic-embed-text     # Embeddings for RAG
 ```
 
-Ollama's default port is `11434`. For dual-GPU setups, a second instance runs on `11435`.
+Ollama's default port is `11434`.
+
+## Step 1b: Start the Hive Serving Cluster
+
+The Hive Serving cluster (hive-server-go) provides job queuing and load balancing for Ollama inference requests.
+
+### Docker
+```bash
+cd ../hive-serving-local-Cluster
+docker build -t hive-server-go -f hive-server-go/Dockerfile .
+docker run -d --name hive-server --network host \
+  -e OLLAMA_BASE_URL=http://localhost:11434 \
+  -e OLLAMA_MODEL=qwen3.6:35b-mlx \
+  -e SERVER_PORT=8081 \
+  -e MAX_CONCURRENT=4 \
+  hive-server-go:latest
+```
+
+Or using docker-compose:
+```bash
+cd hive-research-gpu
+docker-compose up --build
+```
+
+The Hive Server listens on port `8081` and accepts inference jobs via its REST API.
 
 ## Step 2: Install Hive Research GPU
 
@@ -49,7 +74,7 @@ cp config.yaml config.local.yaml
 ```
 
 Key settings:
-- `ollama.base_url` — Ollama endpoint (default: `http://localhost:11434`)
+- `hive.base_url` — Hive Server endpoint (default: `http://localhost:8081`)
 - `ollama.model` — Main LLM for paper analysis
 - `ollama.fast_model` — Smaller LLM for tag extraction
 - `ollama.embed_model` — Embedding model
@@ -57,7 +82,7 @@ Key settings:
 - `gpu.parallel_papers` — Number of papers to process concurrently
 
 Environment variable overrides:
-- `OLLAMA_BASE_URL`
+- `HIVE_BASE_URL`
 - `OLLAMA_MODEL`
 - `OLLAMA_FAST_MODEL`
 - `OLLAMA_EMBED_MODEL`

@@ -13,10 +13,11 @@ docker-compose up --build
 ```
 
 This will:
-1. Build the Docker image from `Dockerfile`
-2. Start two Ollama instances (GPU 0 on port 11434, GPU 1 on port 11435)
-3. Start the Hive Research GPU web server on port 7777
-4. Mount a persistent volume `hive_data` at `/app/data`
+1. Build the Hive Server image from `hive-serving-local-Cluster/hive-server-go/Dockerfile`
+2. Start the Hive Server on port 8081 (job queue + load balancing for Ollama)
+3. Build the Hive Research GPU image from `Dockerfile`
+4. Start the web server on port 7777
+5. Mount a persistent volume `hive_data` at `/app/data`
 
 ## Configuration
 
@@ -24,6 +25,7 @@ This will:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `HIVE_BASE_URL` | `http://localhost:8081` | Hive Server endpoint |
 | `OLLAMA_MODEL` | `llama3.2:3b` | Main LLM model |
 | `OLLAMA_FAST_MODEL` | `llama3.2:3b` | Fast model for tags |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model |
@@ -46,43 +48,44 @@ docker exec -it hive-research-gpu-hive-research-gpu-1 ollama pull qwen3.6:35b-ml
 
 ```yaml
 services:
+  hive-server:
+    build:
+      context: ../hive-serving-local-Cluster
+      dockerfile: hive-server-go/Dockerfile
+    network_mode: host
+    environment:
+      - OLLAMA_BASE_URL=http://localhost:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:35b}
+      - SERVER_PORT=8081
+      - MAX_CONCURRENT=4
+      - MAX_CLIENTS=10
+      - MESH_ENABLED=false
+    restart: unless-stopped
+
   hive-research-gpu:
     build:
       context: ..
       dockerfile: hive-research-gpu/Dockerfile
-    ports:
-      - "7777:7777"
+    network_mode: host
     volumes:
       - hive_data:/app/data
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 2
-              capabilities: [gpu]
-    runtime: nvidia
+      - HIVE_BASE_URL=http://localhost:8081
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:35b}
+      - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     shm_size: 8gb
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7777/api/stats"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+    depends_on:
+      - hive-server
 ```
 
 ## Dockerfile Structure
 
 1. Base: `nvidia/cuda:12.4.1-runtime-ubuntu22.04`
 2. Python 3.12 in a virtual environment at `/venv`
-3. Ollama installed via official installer script
-4. Application code and `hive-datatype` copied into `/app`
-5. `entrypoint.sh` starts both Ollama instances before launching the Python server
-6. Non-root user `hive` for security
+3. Application code and `hive-datatype` copied into `/app`
+4. Environment configured to connect to the Hive Server at `HIVE_BASE_URL`
 
 ## Persistent Data
 

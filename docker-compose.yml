@@ -1,4 +1,18 @@
 services:
+  hive-server:
+    build:
+      context: ../hive-serving-local-Cluster
+      dockerfile: hive-server-go/Dockerfile
+    network_mode: host
+    environment:
+      - OLLAMA_BASE_URL=http://localhost:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:35b}
+      - SERVER_PORT=8081
+      - MAX_CONCURRENT=4
+      - MAX_CLIENTS=10
+      - MESH_ENABLED=false
+    restart: unless-stopped
+
   hive-research-gpu:
     build:
       context: ..
@@ -7,12 +21,14 @@ services:
     volumes:
       - hive_data:/app/data
     environment:
-      - OLLAMA_BASE_URL=http://localhost:11434
+      - HIVE_BASE_URL=http://localhost:8081
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:35b}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     shm_size: 8gb
     restart: unless-stopped
+    depends_on:
+      - hive-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7777/api/stats"]
       interval: 30s

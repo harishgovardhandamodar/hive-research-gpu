@@ -8,6 +8,9 @@ arxiv:
   download_pdf: true
   max_results: 10
 
+hive:
+  base_url: http://localhost:8081
+
 ollama:
   base_url: http://localhost:11434
   model: qwen3.6:35b
@@ -21,19 +24,6 @@ gpu:
   device_count: 2
   memory_fraction: 0.95
   parallel_papers: 2
-  ollama_instances:
-    gpu_0:
-      base_url: http://localhost:11434
-      cuda_device: 0
-      model: qwen3.6:35b-mlx
-      embed_model: nomic-embed-text
-    gpu_1:
-      base_url: http://localhost:11435
-      cuda_device: 1
-      model: llama3.2:3b
-      embed_model: nomic-embed-text
-  embedding_device: 0
-  llm_device: 1
 
 graph:
   similarity_threshold: 0.85

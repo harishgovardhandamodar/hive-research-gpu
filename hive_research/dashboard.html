@@ -778,6 +778,21 @@ select{cursor:pointer}
   </div>
 </div>
 
+<!-- ── Analytics Graph Node Preview Overlay ── -->
+<div id="analyticsNodePreview" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-width:90vw;max-height:70vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);z-index:120;box-shadow:0 12px 48px rgba(0,0,0,.5);flex-direction:column;overflow:hidden">
+  <div style="display:flex;align-items:flex-start;gap:8px;padding:14px 16px 8px;border-bottom:1px solid var(--border)">
+    <div style="flex:1;min-width:0">
+      <div id="anpTitle" style="font-size:14px;font-weight:600;color:var(--accent);margin-bottom:2px;line-height:1.3"></div>
+      <div id="anpMeta" style="font-size:11px;color:var(--text3)"></div>
+    </div>
+    <span onclick="closeAnalyticsPreview()" style="cursor:pointer;color:var(--text3);font-size:18px;flex-shrink:0;padding:2px">&#x2716;</span>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:12px 16px">
+    <div id="anpBody" style="font-size:12px;color:var(--text2);line-height:1.6"></div>
+  </div>
+  <div id="anpActions" style="display:flex;gap:6px;padding:8px 16px;border-top:1px solid var(--border);flex-wrap:wrap"></div>
+</div>
+
 <!-- ── Similarity Panel ── -->
 <div class="panel" id="panel-similarity">
   <div class="panel-header"><h2>Similarity <span class="badge" id="simBadge">Compare</span></h2></div>
@@ -2045,6 +2060,66 @@ function applyFilter(val){
 function findNode(id){return gData.nodes.find(d=>d.id===id)}
 
 // ── Node Preview ──
+function closeAnalyticsPreview(){el('analyticsNodePreview').style.display='none'}
+async function showAnalyticsPreview(d, source){
+  // source: 'overlaps' or 'metagraph'
+  const overlay=el('analyticsNodePreview');
+  const title=el('anpTitle'), meta=el('anpMeta'), body=el('anpBody'), actions=el('anpActions');
+  actions.innerHTML='';
+  if(d.type==='paper'||source==='metagraph'){
+    // Delegate to main graph preview when possible
+    const paperId=d.paperId||d.id;
+    if(gData){
+      const gn=gData.nodes.find(n=>n.id===paperId);
+      if(gn){closeAnalyticsPreview();showNodePreview(gn);return}
+    }
+    // Fallback: fetch paper info
+    try{
+      const pp=await api('/api/papers');
+      const match=pp.find(p=>p.id===paperId);
+      if(match){
+        title.textContent=match.label||match.id||'';
+        meta.textContent=(match.arxiv_id||match.id)+(match.authors?' by '+esc(match.authors).substring(0,120):'');
+        body.textContent=(match.abstract||'No abstract.').substring(0,2000);
+        if(match.arxiv_id)actions.innerHTML='<a href="https://arxiv.org/abs/'+match.arxiv_id+'" target="_blank" class="btn btn-sm">arXiv</a> <a href="https://arxiv.org/pdf/'+match.arxiv_id+'" target="_blank" class="btn btn-sm btn-o">PDF</a>';
+        overlay.style.display='flex';
+        return;
+      }
+    }catch(_){}
+    // Use metagraph data if available
+    if(d.topics||d.concepts||d.hive){
+      title.textContent=d.title||paperId;
+      meta.textContent='Hive: '+(d.hive||'');
+      let extra='';
+      if(d.topics&&d.topics.length)extra+='<b>Topics:</b> '+d.topics.join(', ')+'<br>';
+      if(d.concepts&&d.concepts.length)extra+='<b>Concepts:</b> '+d.concepts.join(', ');
+      body.innerHTML=extra||'(no details available)';
+      overlay.style.display='flex';
+      return;
+    }
+    title.textContent=paperId; meta.textContent=''; body.textContent='(no details available)';
+    overlay.style.display='flex';
+    return;
+  }
+  // Concept/hive node
+  title.textContent=d.name||d.label||d.id;
+  if(d.type==='concept'){
+    const c=_overlapsData&&_overlapsData.overlaps.find(o=>o.type==='concept'&&o.name===d.name);
+    if(c){
+      meta.textContent=c.count+' paper'+(c.count!==1?'s':'')+' share this concept';
+      body.innerHTML='<b>Papers:</b><ul style="margin:6px 0 0 16px">'+c.papers.map(pid=>'<li><a href="#" onclick="event.preventDefault();event.stopPropagation();closeAnalyticsPreview();selectPaper(\''+esc(pid)+'\')" style="color:var(--accent);text-decoration:none">'+esc(pid)+'</a></li>').join('')+'</ul>';
+    }else{
+      meta.textContent='concept'; body.textContent='';
+    }
+  }else if(d.type==='hive'){
+    meta.textContent=(d.paperCount||0)+' papers';
+    body.textContent=d.description||'';
+  }else{
+    meta.textContent=d.type||''; body.textContent='';
+  }
+  overlay.style.display='flex';
+}
+
 function closePreview(){el('nodePreview').style.display='none'}
 function showNodePreview(d){
   const p=el('nodePreview');
@@ -3198,7 +3273,7 @@ async function loadAbout(){
     el('sysInfo').innerHTML='Platform: '+o.platform+'<br>Processor: '+o.processor+'<br>Python: '+o.python;
     const oi=el('ollamaInfo');
     if(o.connected){oi.innerHTML='Status: <span style="color:var(--green)">Connected</span><br>Model: '+o.model+(o.model_available?' <span style="color:var(--green)">&#x2713;</span>':' <span style="color:var(--red)">not found</span>')+'<br>Fast: '+o.fast_model+(o.fast_available?' <span style="color:var(--green)">&#x2713;</span>':' <span style="color:var(--red)">not found</span>')+'<br>Embed: '+o.embed_model+(o.embed_available?' <span style="color:var(--green)">&#x2713;</span>':' <span style="color:var(--red)">not found</span>')}
-    else{oi.innerHTML='Status: <span style="color:var(--red)">Disconnected</span> (tried '+o.base_url+')'}
+    else{oi.innerHTML='Status: <span style="color:var(--red)">Disconnected</span> (tried '+o.hive_url+')'}
     const gi=el('gpuInfo');
     if(g.nvidia){
       let h='Backend: <span style="color:var(--green)">NVIDIA CUDA</span>';
@@ -3918,11 +3993,17 @@ function renderOverlapsGraph(){
         .style('top',Math.max(e.clientY-rect.top-30,10)+'px');
     })
     .on('mouseout',function(){d3.select(this).attr('opacity',1).attr('stroke','var(--text)').attr('stroke-opacity',.5);tooltip.style('opacity',0);})
-    .on('click',function(e,d){if(d.type==='paper'&&gData)showNodePreview(gData.nodes.find(n=>n.id===d.paperId));});
+    .on('click',function(e,d){showAnalyticsPreview(d,'overlaps');});
+
+  const labelEl=g.append('g').selectAll('text').data(nodes.filter(d=>d.type==='concept')).join('text')
+    .attr('text-anchor','middle').attr('dy','-.3em').attr('font-size','5')
+    .attr('fill','var(--text2)').attr('opacity',.7)
+    .text(d=>{const n=d.name;return n.length>18?n.substring(0,15)+'...':n;});
 
   sim.on('tick',()=>{
     linkEl.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
     nodeEl.attr('cx',d=>d.x).attr('cy',d=>d.y);
+    labelEl.attr('x',d=>d.x).attr('y',d=>d.y-d.r-3);
   });
 }
 
@@ -3975,7 +4056,7 @@ function renderMetagraph(){
   data.papers.forEach(p=>{paperMap[p.id]=p;});
 
   const simNodes=data.papers.map(p=>({
-    id:p.id,title:p.title||p.id,hive:p.hive||'all',
+    id:p.id,title:p.title||p.id,hive:p.hive||'all',type:'paper',
     r:Math.min(3+Math.sqrt(degree[p.id]||0)*1.5,10),
     topics:p.topics||[],concepts:p.concepts||[]
   }));
@@ -4038,7 +4119,7 @@ function renderMetagraph(){
       tooltip.style.display='none';
     })
     .on('click',function(e,d){
-      if(gData)showNodePreview(gData.nodes.find(n=>n.id===d.id));
+      showAnalyticsPreview(d,'metagraph');
     });
 
   const showLabels=el('metaShowLabels').checked;

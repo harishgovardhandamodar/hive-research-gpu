@@ -432,22 +432,24 @@ class RouteHandler(BaseHTTPRequestHandler):
             _json_response(self, {"error": "not found"}, 404)
 
     def _handle_ollama_status(self) -> None:
-        base = self.org.config.ollama_base_url
+        hive_url = self.org.config.hive_base_url
         model = self.org.config.ollama_model
         fast = self.org.config.ollama_fast_model
         embed = self.org.config.ollama_embed_model
         connected = False
         models = []
         try:
-            r = requests.get(f"{base}/api/tags", timeout=5)
+            r = requests.get(f"{hive_url}/api/ollama/health", timeout=5)
             if r.status_code == 200:
-                connected = True
-                models = [m["name"] for m in r.json().get("models", [])]
+                data = r.json()
+                connected = data.get("status") == "healthy"
+                models = data.get("models", [])
         except Exception:
             pass
         _json_response(self, {
             "connected": connected,
-            "base_url": base,
+            "hive_url": hive_url,
+            "backend": "hive-server-go",
             "model": model,
             "fast_model": fast,
             "embed_model": embed,

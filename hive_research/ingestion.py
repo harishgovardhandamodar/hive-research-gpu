@@ -178,12 +178,9 @@ class IngestionQueue:
 
             # 3. Download PDF
             self._set_status(pid, STATUS_DOWNLOADING, "Downloading PDF", 20)
-            import threading as _t
-            gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-
             # 4. Process through pipeline
             self._set_status(pid, STATUS_EXTRACTING, "Extracting text from PDF", 35)
-            pipeline_result = self.pipeline.process_paper(paper, gpu_id=gpu_id, model=model)
+            pipeline_result = self.pipeline.process_paper(paper, model=model)
 
             if pipeline_result.get("status") == "added":
                 # 5. RAG indexing

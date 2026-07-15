@@ -57,7 +57,7 @@ JSON repair handles truncated responses, trailing commas, unquoted values, missi
 
 ## `hive_research.gpu`
 
-NVIDIA GPU monitoring and Ollama instance lifecycle.
+NVIDIA GPU monitoring (inference is routed via the Hive Serving cluster).
 
 ```python
 from hive_research.gpu import GPUManager
@@ -69,11 +69,7 @@ gpu_mgr = GPUManager(config)
 | `get_devices()` | List of `GPUDevice` objects with current metrics |
 | `get_device(index)` | Single device info |
 | `get_status()` | Dict with device count, per-device memory/util/temp/power |
-| `get_next_llm_gpu()` | Round-robin GPU assignment for LLM |
-| `get_next_embed_gpu()` | Round-robin GPU assignment for embedding |
 | `device_count()` | Number of detected GPUs |
-| `launch_ollama_instances()` | Start one Ollama `serve` process per GPU |
-| `get_ollama_url(gpu_id)` | URL for GPU-specific Ollama instance |
 
 Background monitor thread refreshes `nvidia-smi` data every 5 seconds.
 

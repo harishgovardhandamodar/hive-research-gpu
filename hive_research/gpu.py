@@ -34,8 +34,6 @@ class GPUManager:
         self._lock = threading.Lock()
         self._devices: list[GPUDevice] = []
         self._nvidia_available = self._check_nvidia()
-        self._next_llm_gpu = 0
-        self._next_embed_gpu = 0
 
         if self._nvidia_available:
             self._refresh_devices()
@@ -149,69 +147,9 @@ class GPUManager:
             "python": platform.python_version(),
         }
 
-    def get_next_llm_gpu(self) -> int:
-        with self._lock:
-            gpu = self._next_llm_gpu
-            count = max(len(self._devices), 1)
-            self._next_llm_gpu = (self._next_llm_gpu + 1) % count
-            return gpu
-
-    def get_next_embed_gpu(self) -> int:
-        with self._lock:
-            gpu = self._next_embed_gpu
-            count = max(len(self._devices), 1)
-            self._next_embed_gpu = (self._next_embed_gpu + 1) % count
-            return gpu
-
     def device_count(self) -> int:
         return len(self._devices)
 
     def set_cuda_device(self, device_id: int) -> None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
         os.environ["HIP_VISIBLE_DEVICES"] = str(device_id)
-
-    def get_ollama_url(self, gpu_id: int) -> str:
-        instance = self.config.gpu_ollama_instance(gpu_id)
-        if instance and "base_url" in instance:
-            return instance["base_url"]
-        port = 11434 + gpu_id
-        return f"http://localhost:{port}"
-
-    def launch_ollama_instances(self) -> None:
-        if not self._nvidia_available:
-            return
-        count = self.device_count()
-        if count < 1:
-            return
-        logger.info("Launching %d Ollama instance(s) — one per GPU", count)
-        for gpu_id in range(count):
-            port = 11434 + gpu_id
-            url = f"http://localhost:{port}"
-            try:
-                r = subprocess.run(
-                    ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", f"{url}/api/tags"],
-                    capture_output=True, text=True, timeout=3,
-                )
-                if r.stdout.strip() == "200":
-                    logger.info("  Ollama already running on GPU %d at %s", gpu_id, url)
-                    continue
-            except Exception:
-                pass
-            env = os.environ.copy()
-            env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-            env["OLLAMA_HOST"] = f"127.0.0.1:{port}"
-            env["OLLAMA_KEEP_ALIVE"] = "24h"
-            env["OLLAMA_NUM_PARALLEL"] = "4"
-            env["OLLAMA_MAX_LOADED_MODELS"] = "2"
-            try:
-                proc = subprocess.Popen(
-                    ["ollama", "serve"],
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                logger.info("  Launched Ollama on GPU %d (PID %d, port %d)", gpu_id, proc.pid, port)
-            except FileNotFoundError:
-                logger.warning("  'ollama' binary not found; please start Ollama manually for GPU %d", gpu_id)
-                break
-        time.sleep(3)

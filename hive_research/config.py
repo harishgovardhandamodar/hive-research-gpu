@@ -51,6 +51,12 @@ class Config:
         return bool(self._get("arxiv", "download_pdf", default=True))
 
     @property
+    def hive_base_url(self) -> str:
+        return os.environ.get("HIVE_BASE_URL") or str(
+            self._get("hive", "base_url", default="http://localhost:8081")
+        )
+
+    @property
     def ollama_base_url(self) -> str:
         return os.environ.get("OLLAMA_BASE_URL") or str(
             self._get("ollama", "base_url", default="http://localhost:11434")

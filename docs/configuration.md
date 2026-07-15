@@ -1,6 +1,6 @@
 # Configuration
 
-Hive Research GPU uses `config.yaml` for persistent settings with environment variable overrides for Ollama parameters. By default, it looks for `config.yaml` in the current working directory.
+Hive Research GPU uses `config.yaml` for persistent settings with environment variable overrides for Hive Serving and Ollama parameters. By default, it looks for `config.yaml` in the current working directory.
 
 ## Full Reference
 
@@ -17,9 +17,13 @@ arxiv:
   download_pdf: true        # Download PDF after fetching metadata
   max_results: 10           # Default result count for searches
 
+# ── Hive Serving Settings ──
+hive:
+  base_url: http://localhost:8081    # Hive Server endpoint (hive-server-go)
+
 # ── Ollama LLM Settings ──
 ollama:
-  base_url: http://localhost:11434   # Ollama API endpoint
+  base_url: http://localhost:11434   # Ollama API endpoint (used by Hive Server internally)
   model: qwen3.6:35b-mlx            # Main analysis model
   fast_model: llama3.2:3b           # Fast model for tags
   embed_model: nomic-embed-text     # Embedding model
@@ -32,19 +36,6 @@ gpu:
   device_count: 2            # Number of NVIDIA GPUs
   memory_fraction: 0.95      # Max memory usage per GPU
   parallel_papers: 2         # Concurrent paper processing
-  ollama_instances:
-    gpu_0:
-      base_url: http://localhost:11434
-      cuda_device: 0
-      model: qwen3.6:35b-mlx
-      embed_model: nomic-embed-text
-    gpu_1:
-      base_url: http://localhost:11435
-      cuda_device: 1
-      model: llama3.2:3b
-      embed_model: nomic-embed-text
-  embedding_device: 0        # GPU for embedding tasks
-  llm_device: 1              # GPU for LLM inference
 
 # ── Graph Settings ──
 graph:
@@ -78,7 +69,7 @@ This is used by all API endpoints (`model` parameter) and the `--model` CLI flag
 
 | Variable | Overrides | Default |
 |----------|-----------|---------|
-| `OLLAMA_BASE_URL` | `ollama.base_url` | `http://localhost:11434` |
+| `HIVE_BASE_URL` | `hive.base_url` | `http://localhost:8081` |
 | `OLLAMA_MODEL` | `ollama.model` | `llama3.2:3b` |
 | `OLLAMA_FAST_MODEL` | `ollama.fast_model` | `llama3.2:3b` |
 | `OLLAMA_EMBED_MODEL` | `ollama.embed_model` | `nomic-embed-text` |

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`GPUManager` provides NVIDIA GPU monitoring and orchestrates Ollama instances across multiple GPUs for parallel LLM inference and embedding.
+`GPUManager` provides NVIDIA GPU monitoring for observability. Inference routing is handled by the Hive Serving cluster (hive-server-go), which manages job queuing, load balancing, and GPU orchestration.
 
 ## Monitoring
 
@@ -21,41 +21,16 @@ gpu_mgr.get_device(0)      # → GPUDevice for GPU 0
 gpu_mgr.get_status()       # → dict with all device info
 ```
 
-## GPU Assignment
-
-Two round-robin counters track GPU allocation:
-
-- `get_next_llm_gpu()` — For LLM generation tasks (analysis, chat, RAG answer)
-- `get_next_embed_gpu()` — For embedding tasks
-
-This spreads workload evenly across available GPUs.
-
-## Ollama Instance Lifecycle
-
-For dual-GPU setups, `launch_ollama_instances()` starts one Ollama server per GPU:
-
-```
-GPU 0 → CUDA_VISIBLE_DEVICES=0 → Ollama on port 11434
-GPU 1 → CUDA_VISIBLE_DEVICES=1 → Ollama on port 11435
-```
-
-Each instance has:
-- `OLLAMA_KEEP_ALIVE=24h` — Models stay loaded
-- `OLLAMA_NUM_PARALLEL=4` — Concurrent requests per instance
-- `OLLAMA_MAX_LOADED_MODELS=2` — Model slots per instance
-
-If an instance is already running on the target port, it is detected and left untouched.
-
 ## Parallelism
 
-The system leverages multiple GPUs in several ways:
+The system uses the Hive Serving cluster for all inference. The job queue handles concurrency and load balancing internally.
 
 | Operation | Parallelism Strategy |
 |-----------|---------------------|
-| Paper ingestion | One GPU per paper, thread pool up to `parallel_papers` |
-| Chunk embedding | Round-robin chunks across GPUs, concurrent threads |
-| LLM generation | Round-robin across GPUs per request |
-| `generate_parallel()` | Concurrent threads, one GPU per prompt |
+| Paper ingestion | Thread pool up to `parallel_papers` |
+| Chunk embedding | Concurrent job submissions to Hive Server |
+| LLM generation | Hive Server queue manages concurrency |
+| `generate_parallel()` | Concurrent threads submitting Hive jobs |
 
 ## CUDA Device Management
 
@@ -67,7 +42,7 @@ gpu_mgr.set_cuda_device(0)  # Sets CUDA_VISIBLE_DEVICES=0
 
 ## Fallback
 
-When no NVIDIA GPU is detected (`nvidia-smi` not found or returns error), the system operates in CPU-only mode. All LLM and embedding requests go to the single Ollama instance at `base_url`.
+When no NVIDIA GPU is detected (`nvidia-smi` not found or returns error), the system operates in CPU-only mode. All LLM and embedding requests route through the Hive Server, which forwards to Ollama running on CPU.
 
 ## API
 

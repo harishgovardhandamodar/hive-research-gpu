@@ -1,13 +1,13 @@
 # Hive Research GPU
 
-> Lightweight research knowledge base powered by dual NVIDIA RTX 5080 GPUs, local LLMs (Ollama), and a Hive knowledge graph.
+> Lightweight research knowledge base powered by dual NVIDIA RTX 5080 GPUs, local LLMs (Ollama via Hive Serving), and a Hive knowledge graph.
 
 Hive Research GPU ingests academic papers from arXiv, extracts structured knowledge using local LLMs, builds a knowledge graph of concepts and citations, indexes content for RAG-based semantic search, and automatically monitors research topics — all running on consumer GPU hardware.
 
 ## Features
 
 - **arXiv Ingestion** — Search, fetch metadata, download PDFs, extract text and figures
-- **LLM-powered Analysis** — Extract summaries, concepts, tags, experiments, results, and relations using local Ollama models (llama3.2, qwen3.6, nomic-embed-text)
+- **LLM-powered Analysis** — Extract summaries, concepts, tags, experiments, results, and relations using local Ollama models through a Hive Serving cluster (llama3.2, qwen3.6, nomic-embed-text)
 - **Knowledge Graph** — Papers, concepts, tags, and web resources stored in a typed Hive graph with deduplication and similarity matching
 - **RAG Search** — Chunk + embed pipeline with cosine similarity search; ask questions over your paper library
 - **Research Pool** — Automatically monitor arXiv topics; observe new papers, batch-import into your knowledge base
@@ -16,7 +16,7 @@ Hive Research GPU ingests academic papers from arXiv, extracts structured knowle
 - **Python Client Library** — `HiveClient` with remote (REST) and embedded modes for programmatic access
 - **Hybrid Search** — BM25 keyword search fused with vector cosine similarity via Reciprocal Rank Fusion
 - **Paper Collections** — Create collections, save searches, and favorite papers with CLI and API
-- **Dual GPU** — Two Ollama instances (one per GPU) for parallel LLM inference and embedding
+- **Hive Serving** — Inference routed through the Hive Serving cluster (hive-server-go) for job queuing, load balancing, and GPU orchestration
 - **Figure Extraction** — Extract figures, tables, and diagrams from PDFs with caption detection
 - **Citation Lineage** — Automatically fetch and link cited papers, build citation graphs
 - **Web Ingestion** — Add web articles/blog posts as graph nodes with LLM extraction
@@ -29,6 +29,7 @@ Hive Research GPU ingests academic papers from arXiv, extracts structured knowle
   - `llama3.2:3b` (fast tagging)
   - `qwen3.6:35b-mlx` or similar (main analysis)
   - `nomic-embed-text` (embeddings)
+- [Hive Serving](https://github.com/hive-cluster/hive-serving) cluster running on port 8081 (or configured via `HIVE_BASE_URL`)
 - NVIDIA GPU(s) with CUDA 12.4+ (optional, falls back to CPU)
 - Internet access (arXiv API, PDF downloads)
 
@@ -67,6 +68,9 @@ arxiv:
   download_pdf: true
   max_results: 10
 
+hive:
+  base_url: http://localhost:8081
+
 ollama:
   base_url: http://localhost:11434
   model: qwen3.6:35b-mlx
@@ -79,15 +83,6 @@ gpu:
   enabled: true
   device_count: 2
   parallel_papers: 2
-  ollama_instances:
-    gpu_0:
-      base_url: http://localhost:11434
-      model: qwen3.6:35b-mlx
-      embed_model: nomic-embed-text
-    gpu_1:
-      base_url: http://localhost:11435
-      model: llama3.2:3b
-      embed_model: nomic-embed-text
 
 graph:
   similarity_threshold: 0.85
@@ -98,7 +93,7 @@ rag:
   top_k: 5
 ```
 
-Environment variables override Ollama settings: `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_FAST_MODEL`, `OLLAMA_EMBED_MODEL`.
+Environment variables override settings: `HIVE_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_FAST_MODEL`, `OLLAMA_EMBED_MODEL`.
 
 ## Usage
 
@@ -153,7 +148,13 @@ The dashboard provides:
 docker-compose up --build
 ```
 
-This launches two Ollama instances (one per GPU) and the web server with NVIDIA GPU passthrough.
+This launches the Hive Serving cluster (hive-server-go) and the web server with NVIDIA GPU passthrough. The Hive Server handles job queuing and load balancing for Ollama inference requests.
+
+To build the Hive Server image separately:
+```bash
+cd ../hive-serving-local-Cluster
+docker build -t hive-server-go -f hive-server-go/Dockerfile .
+```
 
 ## Architecture
 
@@ -179,17 +180,17 @@ This launches two Ollama instances (one per GPU) and the web server with NVIDIA 
 │  │          │ │ datatype)│ │          │ │       │  │
 │  └────┬─────┘ └──────────┘ └────┬─────┘ └───────┘  │
 │       │                         │                    │
-│  ┌────┴─────┐            ┌──────┴──────┐             │
-│  │  LLM     │            │  Embedding  │             │
-│  │Interface │            │  (parallel) │             │
-│  └────┬─────┘            └──────┬──────┘             │
-│       │                         │                    │
 │  ┌────┴─────────────────────────┴──────┐             │
-│  │          GPUManager                  │             │
-│  │    Ollama GPU 0 :11434              │             │
-│  │    Ollama GPU 1 :11435              │             │
-│  └─────────────────────────────────────┘             │
-└─────────────────────────────────────────────────────┘
+│  │          LLMInterface                │             │
+│  │   (Hive Server job API client)       │             │
+│  └────────────────┬─────────────────────┘             │
+│                   │                                  │
+└───────────────────┼──────────────────────────────────┘
+                    │
+┌───────────────────┴──────────────────────────────────┐
+│            Hive Server (hive-server-go :8081)          │
+│   Job queue → load balancing → Ollama instance(s)     │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Modules
@@ -198,8 +199,8 @@ This launches two Ollama instances (one per GPU) and the web server with NVIDIA 
 |--------|------|-------------|
 | `arxiv_fetcher` | `hive_research/arxiv_fetcher.py` | arXiv API client: search, fetch by ID, download PDF |
 | `parser` | `hive_research/parser.py` | PDF text/figure extraction via PyMuPDF |
-| `llm` | `hive_research/llm.py` | Ollama client: generate, embed, structured extraction, parallel inference |
-| `gpu` | `hive_research/gpu.py` | NVIDIA GPU monitoring (nvidia-smi), Ollama instance lifecycle |
+| `llm` | `hive_research/llm.py` | Hive Server API client: generate, embed, structured extraction, parallel inference |
+| `gpu` | `hive_research/gpu.py` | NVIDIA GPU monitoring (nvidia-smi) |
 | `graph` | `hive_research/graph.py` | Knowledge graph wrapper around HiveGraph |
 | `pipeline` | `hive_research/pipeline.py` | Paper ingestion pipeline: analysis, graph population, note writing |
 | `rag` | `hive_research/rag.py` | RAG engine: chunking, embedding, cosine similarity, answer generation |

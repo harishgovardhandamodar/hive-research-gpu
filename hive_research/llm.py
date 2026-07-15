@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -10,49 +11,66 @@ from typing import Any
 import requests
 
 from .config import Config
-from .gpu import GPUManager
 
 logger = logging.getLogger(__name__)
 
 
 class LLMInterface:
-    def __init__(self, config: Config, gpu_mgr: GPUManager | None = None) -> None:
+    def __init__(self, config: Config, gpu_mgr: Any = None) -> None:
         self.config = config
         self.gpu_mgr = gpu_mgr
-        self.base_url = config.ollama_base_url.rstrip("/")
+        self.base_url = config.hive_base_url.rstrip("/")
+        self.client_id = f"hive-research-gpu-{os.uname().nodename}" if hasattr(os, 'uname') else "hive-research-gpu"
         self._lock = threading.Lock()
 
-    def _get_base_url(self, gpu_id: int | None = None) -> str:
-        if gpu_id is not None and self.gpu_mgr and self.gpu_mgr.device_count() > 0:
-            return self.gpu_mgr.get_ollama_url(gpu_id).rstrip("/")
-        return self.base_url
+    def _submit_job(self, job_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = requests.post(
+            f"{self.base_url}/api/jobs",
+            json={"client_id": self.client_id, "job_type": job_type, "payload": payload},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()
 
-    def _request(
+    def _poll_job(self, job_id: str, timeout: int = 300, interval: float = 0.3) -> dict[str, Any]:
+        start = time.time()
+        while time.time() - start < timeout:
+            resp = requests.get(f"{self.base_url}/api/jobs/{job_id}", timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") in ("completed", "failed"):
+                if data["status"] == "failed":
+                    raise RuntimeError(f"Hive job {job_id} failed: {data.get('error', 'unknown')}")
+                result = data.get("result", {})
+                if isinstance(result, dict):
+                    return result
+                return {"result": result}
+            time.sleep(interval)
+        raise TimeoutError(f"Hive job {job_id} timed out after {timeout}s")
+
+    def _hive_request(
         self,
-        endpoint: str,
+        job_type: str,
         payload: dict[str, Any],
-        retries: int = 3,
-        gpu_id: int | None = None,
+        retries: int = 2,
+        timeout: int = 300,
     ) -> dict[str, Any]:
-        base_url = self._get_base_url(gpu_id)
-        url = f"{base_url}/api/{endpoint}"
+        last_error: Exception | None = None
         for attempt in range(retries):
             try:
-                resp = requests.post(url, json=payload, timeout=180)
-                resp.raise_for_status()
-                return resp.json()
-            except requests.RequestException as e:
+                job = self._submit_job(job_type, payload)
+                return self._poll_job(job["job_id"], timeout=timeout)
+            except Exception as e:
+                last_error = e
                 logger.warning(
-                    "Ollama request failed to %s (attempt %d/%d, GPU %s): %s",
-                    url, attempt + 1, retries,
-                    str(gpu_id) if gpu_id is not None else "default",
-                    e,
+                    "Hive request failed (attempt %d/%d): %s",
+                    attempt + 1, retries, e,
                 )
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
         raise RuntimeError(
-            f"Ollama request to {endpoint} on GPU {gpu_id} failed after {retries} retries"
-        )
+            f"Hive request ({job_type}) failed after {retries} retries"
+        ) from last_error
 
     def generate(
         self,
@@ -78,9 +96,7 @@ class LLMInterface:
                 else self.config.ollama_max_tokens,
             },
         }
-        if gpu_id is None and self.gpu_mgr:
-            gpu_id = self.gpu_mgr.get_next_llm_gpu()
-        data = self._request("chat", payload, gpu_id=gpu_id)
+        data = self._hive_request("chat", payload)
         return data.get("message", {}).get("content", "")
 
     def generate_parallel(
@@ -95,14 +111,12 @@ class LLMInterface:
 
         def _run(idx: int, prompt: str) -> None:
             try:
-                gpu_id = idx if self.gpu_mgr and self.gpu_mgr.device_count() > 0 else None
                 results[idx] = self.generate(
                     prompt,
                     model=model,
                     system=system,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    gpu_id=gpu_id,
                 )
             except Exception as e:
                 logger.error("Parallel generate task %d failed: %s", idx, e)
@@ -234,20 +248,17 @@ class LLMInterface:
     def embed(self, text: str, model: str | None = None, gpu_id: int | None = None) -> list[float]:
         payload = {
             "model": model or self.config.ollama_embed_model,
-            "input": text,
+            "prompt": text,
         }
-        if gpu_id is None and self.gpu_mgr:
-            gpu_id = self.gpu_mgr.get_next_embed_gpu()
-        data = self._request("embed", payload, gpu_id=gpu_id)
-        return data.get("embeddings", [data.get("embedding", [])])[0] if isinstance(data.get("embeddings"), list) else data.get("embedding", [])
+        data = self._hive_request("embed", payload)
+        return data.get("embedding", [])
 
     def embed_parallel(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         results: list[list[float]] = [[] for _ in texts]
 
         def _run(idx: int, text: str) -> None:
             try:
-                gpu_id = idx % max(self.gpu_mgr.device_count(), 1) if self.gpu_mgr else None
-                results[idx] = self.embed(text, model=model, gpu_id=gpu_id)
+                results[idx] = self.embed(text, model=model)
             except Exception as e:
                 logger.error("Parallel embed task %d failed: %s", idx, e)
                 results[idx] = []
@@ -271,8 +282,6 @@ class LLMInterface:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        base_url = self._get_base_url(gpu_id)
-        url = f"{base_url}/api/chat"
         payload: dict[str, Any] = {
             "model": model or self.config.ollama_model,
             "messages": messages,
@@ -286,19 +295,18 @@ class LLMInterface:
         if options:
             payload["options"] = options
         try:
-            resp = requests.post(url, json=payload, timeout=120)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._hive_request("chat", payload, timeout=120)
             return data.get("message", {}).get("content", "")
-        except requests.RequestException as e:
-            logger.error("Chat request failed on GPU %s: %s", str(gpu_id), e)
+        except Exception as e:
+            logger.error("Chat request failed: %s", e)
             return ""
 
     def health_check(self, gpu_id: int | None = None) -> bool:
         try:
-            base_url = self._get_base_url(gpu_id)
-            r = requests.get(f"{base_url}/api/tags", timeout=5)
-            return r.status_code == 200
+            r = requests.get(f"{self.base_url}/api/ollama/health", timeout=5)
+            if r.status_code == 200:
+                return r.json().get("status") == "healthy"
+            return False
         except Exception:
             return False
 
