@@ -8,4 +8,5 @@ data/
 dist/
 build/
 .venv/
+gui/node_modules/
 venv/

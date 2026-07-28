@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 HTML = Path(__file__).parent / "dashboard.html"
 HIVE_UI_HTML = Path(__file__).parent / "index.html"
+GUI_DIST = Path(__file__).parent / "gui_dist"
 
 
 def _json_response(
@@ -114,12 +115,14 @@ class RouteHandler(BaseHTTPRequestHandler):
         if not _require_auth(self):
             return
         self._resolve_user()
-        if path == "/" or path == "" or path == "/index.html":
+        if path.startswith("/assets/"):
+            self._serve_vue_static(path)
+        elif path.startswith("/static/"):
+            self._serve_static(path)
+        elif path == "/" or path == "" or path == "/index.html" or path == "/legacy":
             self._serve_dashboard()
         elif path == "/hive":
             self._serve_hive_ui()
-        elif path.startswith("/static/"):
-            self._serve_static(path)
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -909,7 +912,10 @@ info.textContent += ' | OK';
             _json_response(self, {"error": "not found"}, 404)
 
     def _serve_dashboard(self) -> None:
-        if HTML.exists():
+        vue_index = GUI_DIST / "index.html"
+        if vue_index.exists():
+            _html_response(self, vue_index.read_text())
+        elif HTML.exists():
             _html_response(self, HTML.read_text())
         else:
             _html_response(self, _inline_dashboard())
@@ -919,6 +925,34 @@ info.textContent += ' | OK';
             _html_response(self, HIVE_UI_HTML.read_text())
         else:
             _html_response(self, "<html><body><p>Hive UI not found</p></body></html>")
+
+    def _serve_vue_static(self, path: str) -> None:
+        rel = path.lstrip("/")
+        filepath = GUI_DIST / rel
+        if not filepath.exists() or not filepath.is_file():
+            self.send_response(404)
+            self.end_headers()
+            return
+        suffix = filepath.suffix.lower()
+        mime = {
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".html": "text/html",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".ico": "image/x-icon",
+            ".json": "application/json",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".ttf": "font/ttf",
+        }.get(suffix, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(filepath.read_bytes())
 
     def _serve_static(self, path: str) -> None:
         rel = path.lstrip("/")

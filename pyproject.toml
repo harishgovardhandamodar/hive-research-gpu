@@ -32,4 +32,4 @@ test = [
 include = ["hive_research*"]
 
 [tool.setuptools.package-data]
-hive_research = ["*.html"]
+hive_research = ["*.html", "gui_dist/**/*"]
