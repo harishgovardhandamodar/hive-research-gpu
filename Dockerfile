@@ -15,8 +15,8 @@ RUN python3.12 -m venv /venv && \
 
 WORKDIR /app
 
-COPY hive-datatype/hive_datatype.py /app/hive_datatype/hive_datatype.py
-COPY hive-datatype/__init__.py /app/hive_datatype/__init__.py
+COPY hive-datatype/hive_datatype/hive_datatype.py /app/hive_datatype/hive_datatype.py
+COPY hive-datatype/hive_datatype/__init__.py /app/hive_datatype/__init__.py
 
 COPY hive-research-gpu/pyproject.toml /app/hive-research-gpu/pyproject.toml
 COPY hive-research-gpu/hive_research/ /app/hive-research-gpu/hive_research/
