@@ -34,7 +34,14 @@ class PaperPipeline:
         self.kg = kg
         self.gpu_mgr = gpu_mgr
 
-    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None, model: str | None = None) -> dict[str, Any]:
+    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None, model: str | None = None, progress: Any = None) -> dict[str, Any]:
+        def _prog(stage: str, status: str, detail: str = "") -> None:
+            if progress:
+                try:
+                    progress(stage, status, detail)
+                except Exception:
+                    pass
+
         paper_id = paper.arxiv_id
         existing = self.kg.get_paper(paper_id)
         if existing:
@@ -53,16 +60,25 @@ class PaperPipeline:
         pdf_text = ""
         pdf_path = None
         figures = []
+        _prog("parse", "running", "downloading PDF")
         if self.config.arxiv_download_pdf:
             pdf_path = download_pdf(paper_id, self.config.papers_dir)
             if pdf_path and pdf_path.exists():
                 pdf_text = extract_text(pdf_path)
                 safe_title = _sanitize_id(paper.title) or paper_id
                 figures_dir = Path(self.config.vault_dir) / safe_title / "figures"
+                _prog("parse", "running", f"{len(pdf_text)} chars extracted")
                 figures = extract_images_from_pdf(pdf_path, figures_dir)
-        text_for_analysis = pdf_text or paper.abstract
+                _prog("parse", "done", f"{len(figures)} figures")
+            else:
+                _prog("parse", "skipped", "PDF unavailable, using abstract")
+        else:
+            _prog("parse", "skipped", "pdf download disabled")
 
+        text_for_analysis = pdf_text or paper.abstract
+        _prog("analyze", "running", f"LLM analysis ({model or 'default model'})")
         analysis = self._analyze_text(text_for_analysis, paper.title, figures=figures, model=model, gpu_id=gpu_id)
+        _prog("analyze", "done")
 
         concepts = analysis.get("concepts", [])
         relations = analysis.get("relations", [])
@@ -118,13 +134,17 @@ class PaperPipeline:
                 tgt = self._resolve_id(raw_tgt, paper_id)
                 if src and tgt:
                     self.kg.add_edge(src, tgt, rel)
+        _prog("graph", "done", f"{len(concepts)} concepts, {len(relations)} relations")
 
         lineage_refs = []
         if pdf_text:
+            _prog("lineage", "running")
             lineage_refs = self.fetch_lineage(paper_id, pdf_text, gpu_id=gpu_id)
+            _prog("lineage", "done" if lineage_refs else "skipped", f"{len(lineage_refs)} refs linked")
             if lineage_refs:
                 logger.info("Lineage: %d prior papers linked for %s", len(lineage_refs), paper_id)
 
+        _prog("notes", "running")
         note_path = self._write_notes_multi(
             paper_id, paper, summary, tags, concepts,
             notes=notes, experiment=experiment, results=results,
@@ -132,6 +152,7 @@ class PaperPipeline:
             figures=figures,
         )
         self.kg.save()
+        _prog("notes", "done", str(note_path) if note_path else "no note written")
 
         result = {
             "status": "added",

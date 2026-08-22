@@ -28,6 +28,7 @@ fox:
   model: test-fox
   max_context_chunks: 4
   history_limit: 6
+  grounding_min_score: 0.05
 
 rag:
   chunk_size: 40

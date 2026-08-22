@@ -28,27 +28,47 @@ class Organizer:
         self.rag = RAGEngine(config, self.llm, self.kg)
         self.pool = ResearchPool(config.root_dir / "pool")
         self.web = WebIngester(self.llm, self.kg)
+        from .fox import Fox
+        self.fox = Fox(config, self.llm, self.kg, self.rag)
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
 
     def add_by_id(self, arxiv_id: str, with_lineage: bool = False, model: str | None = None) -> dict[str, Any]:
-        result = fetch_by_id_with_meta(arxiv_id)
-        if result["status"] == "error":
+        from .jobs import get_registry
+
+        registry = get_registry()
+        job = registry.start("ingest", f"arXiv {arxiv_id}", arxiv_id=arxiv_id)
+        try:
+            with registry.ctx(job, "fetch"):
+                result = fetch_by_id_with_meta(arxiv_id)
+            if result["status"] == "error":
+                return result
+            paper = result["paper"]
+            gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
+            # process_paper's return value is the authoritative response; the
+            # fetch dict may hold non-serializable objects (PaperInfo) so we
+            # never merge it into the payload.
+            result = self.pipeline.process_paper(
+                paper,
+                gpu_id=gpu_id,
+                model=model,
+                progress=lambda stage, status, detail="": registry.stage(job, stage, status, detail),
+            )
+            if result["status"] == "added":
+                pdf_text = ""
+                pdf_path = self._find_pdf(arxiv_id)
+                if pdf_path:
+                    from .parser import extract_text
+
+                    pdf_text = extract_text(pdf_path)
+                if pdf_text:
+                    with registry.ctx(job, "rag"):
+                        n = self.rag.index_paper(arxiv_id, pdf_text)
+                    result["rag_chunks"] = n
             return result
-        paper = result["paper"]
-        gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-        result = self.pipeline.process_paper(paper, gpu_id=gpu_id, model=model)
-        if result["status"] == "added":
-            pdf_text = ""
-            pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
-            if pdf_path.exists():
-                from .parser import extract_text
-                pdf_text = extract_text(pdf_path)
-            if pdf_text:
-                n = self.rag.index_paper(arxiv_id, pdf_text)
-                result["rag_chunks"] = n
-        return result
+        finally:
+            registry.finish(job)
 
     def add_by_search(self, query: str, max_results: int | None = None, model: str | None = None) -> list[dict[str, Any]]:
         mr = max_results or self.config.arxiv_max_results

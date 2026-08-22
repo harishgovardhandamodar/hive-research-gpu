@@ -285,6 +285,45 @@ class RouteHandler(BaseHTTPRequestHandler):
         elif path == "/api/pool/topics":
             topics = self.org.pool.get_topics()
             _json_response(self, {"topics": topics})
+        elif path == "/api/fox/modes":
+            from .fox import FOX_MODES
+            _json_response(self, {"modes": FOX_MODES, "default": "rag"})
+        elif path == "/api/fox/conversations":
+            _json_response(self, self.org.fox.list_conversations())
+        elif path.startswith("/api/fox/conversations/"):
+            conv_id = path.rsplit("/", 1)[-1]
+            if params.get("delete") == "1":
+                removed = self.org.fox.clear_conversation(conv_id)
+                _json_response(self, {"deleted": removed})
+            else:
+                conv = self.org.fox.get_conversation(conv_id)
+                _json_response(self, conv or {"error": "not found"}, 200 if conv else 404)
+        elif path.startswith("/api/fox/job/"):
+            job_id = path.rsplit("/", 1)[-1]
+            status = self.org.fox.job_status(job_id)
+            _json_response(self, status or {"error": "not found"}, 200 if status else 404)
+        elif path == "/api/feedback":
+            from .feedback import FeedbackStore
+            store = FeedbackStore(self.org.config)
+            kind = params.get("kind", "fox")
+            limit = int(params.get("limit", 100))
+            _json_response(self, store.summary(kind=kind, limit=limit))
+        elif path == "/api/jobs" or path.startswith("/api/jobs/"):
+            from .jobs import get_registry
+
+            registry = get_registry()
+            if path == "/api/jobs":
+                _json_response(self, {
+                    "summary": registry.summary(),
+                    "jobs": registry.list_jobs(
+                        active_only=params.get("active") == "1",
+                        kind=params.get("kind"),
+                    ),
+                })
+            else:
+                job_id = path.rsplit("/", 1)[-1]
+                job = registry.get(job_id)
+                _json_response(self, job.to_dict() if job else {"error": "not found"}, 200 if job else 404)
         else:
             _json_response(self, {"error": "not found"}, 404)
 
@@ -418,6 +457,8 @@ info.textContent += ' | OK';
         except json.JSONDecodeError:
             data = {}
 
+        from .feedback import FeedbackStore
+
         if path == "/api/add":
             arxiv_id = data.get("id", params.get("id", ""))
             if not arxiv_id:
@@ -528,6 +569,45 @@ info.textContent += ' | OK';
                     self.org.pool.mark_imported(aid)
                 results.append({"arxiv_id": aid, "status": r.get("status")})
             _json_response(self, {"results": results})
+        elif path == "/api/fox/chat":
+            message = data.get("message", "")
+            if not message:
+                _json_response(self, {"error": "missing message"}, 400)
+                return
+            result = self.org.fox.chat(
+                message,
+                mode=data.get("mode", "rag"),
+                conversation_id=data.get("conversation_id"),
+            )
+            if "error" in result and result["error"] == "empty message":
+                _json_response(self, result, 400)
+                return
+            _json_response(self, result)
+        elif path == "/api/fox/feedback":
+            from .feedback import parse_rating
+
+            rating = parse_rating(data.get("rating"))
+            if rating == 0:
+                _json_response(self, {"error": "rating must be 1-5"}, 400)
+                return
+            entry = FeedbackStore(self.org.config).record(
+                kind="fox",
+                rating=rating,
+                comment=data.get("comment", ""),
+                mode=data.get("mode", ""),
+                conversation_id=data.get("conversation_id", ""),
+            )
+            _json_response(self, {"status": "ok", "entry": entry})
+        elif path == "/api/fox/survey":
+            topic = data.get("topic", "")
+            if not topic:
+                _json_response(self, {"error": "missing topic"}, 400)
+                return
+            result = self.org.fox.start_survey(topic, data.get("conversation_id"))
+            if "error" in result:
+                _json_response(self, result, 400)
+                return
+            _json_response(self, result)
         else:
             _json_response(self, {"error": "not found"}, 404)
 
