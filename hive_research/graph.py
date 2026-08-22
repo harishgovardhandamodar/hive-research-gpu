@@ -108,6 +108,9 @@ class KnowledgeGraph:
         target: str,
         relation: str = "related_to",
     ) -> Edge:
+        from hive_datatype import validate_relation
+
+        relation = validate_relation(relation)
         for e in self._hive.edges:
             if e.source == source and e.target == target and e.relation == relation:
                 return e

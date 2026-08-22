@@ -10,12 +10,23 @@ import arxiv
 
 logger = logging.getLogger(__name__)
 
-ARXIV_ID_PATTERN = re.compile(r"(\d{4}\.\d{4,5})(?:v\d+)?")
+ARXIV_ID_PATTERN = re.compile(
+    r"(?:\barxiv\.org/(?:abs|pdf)/)?"
+    r"("
+    r"\d{4}\.\d{4,5}(?:v\d+)?"        # new style: 2401.12345, 2401.12345v2
+    r"|[a-z-]+(?:\.[A-Z]{2})?/\d{7}"  # old style: cs/0703125, math.GT/0309136
+    r")",
+    re.IGNORECASE,
+)
 
 
 def parse_arxiv_id(text: str) -> str | None:
     m = ARXIV_ID_PATTERN.search(text)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    arxiv_id = m.group(1)
+    # Strip version suffix so v1/v2 dedupe to one graph node.
+    return re.sub(r"v\d+$", "", arxiv_id)
 
 
 def extract_arxiv_ids(text: str) -> list[str]:
