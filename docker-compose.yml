@@ -10,10 +10,13 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:latest}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      # Set HIVE_TOKEN to require auth on every request; the healthcheck
+      # below automatically presents it.
+      - HIVE_TOKEN=${HIVE_TOKEN:-}
     shm_size: 8gb
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7777/api/stats"]
+      test: ["CMD-SHELL", "curl -f -s -o /dev/null -w '%{http_code}' -H \"X-Hive-Token: $${HIVE_TOKEN:-}\" http://localhost:7777/api/stats | grep -q 200"]
       interval: 30s
       timeout: 10s
       retries: 5
