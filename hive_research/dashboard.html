@@ -65,7 +65,7 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-s
 ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
 ::selection{background:rgba(96,165,250,.3);color:var(--text)}
 body{-webkit-overflow-scrolling:touch}
-#browsePapers,#browsePaperPreview,.chat-msgs,.log-bar-content{-webkit-overflow-scrolling:touch}
+#browsePapers,#browsePaperPreview,.log-bar-content,.fox-msgs{-webkit-overflow-scrolling:touch}
 input,textarea,select{font-family:inherit;font-size:inherit}
 
 /* ── Layout ── */
@@ -148,19 +148,6 @@ select{cursor:pointer}
 .result-card .cats{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .result-card .cats span{background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:9px;color:var(--text3)}
 
-/* ── Chat ── */
-.chat{flex:1;display:flex;flex-direction:column;gap:0;overflow:hidden}
-.chat-msgs{flex:1;overflow-y:auto;padding:12px 0;display:flex;flex-direction:column;gap:8px}
-.chat-msg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:12.5px;line-height:1.6;animation:msgIn .25s cubic-bezier(.4,0,.2,1)}
-@keyframes msgIn{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
-.chat-msg.user{background:linear-gradient(135deg,var(--accent),#3b82f6);color:#080c18;align-self:flex-end;border-bottom-right-radius:4px}
-.chat-msg.assistant{background:var(--surface2);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px;color:var(--text)}
-.chat-msg .src{font-size:10px;color:var(--text3);margin-top:4px}
-.chat-msg .src a{color:var(--accent);text-decoration:none}
-.chat-input{display:flex;gap:8px;padding:10px 0 0;flex-shrink:0}
-.chat-input input{flex:1}
-.chat-msg.typing{opacity:.6}
-
 /* ── Fox companion ── */
 .fox-root{display:flex;flex-direction:column;height:100%;min-height:0}
 .fox-toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:var(--glass-bg)}
@@ -177,6 +164,7 @@ select{cursor:pointer}
 .fox-desc{font-size:10.5px;color:var(--text3);padding:4px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .fox-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
 .fox-msg{max-width:88%;padding:10px 14px;border-radius:14px;font-size:12.5px;line-height:1.65;animation:msgIn .25s cubic-bezier(.4,0,.2,1)}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 .fox-msg.user{background:linear-gradient(135deg,var(--accent),#3b82f6);color:#080c18;align-self:flex-end;border-bottom-right-radius:4px;white-space:pre-wrap}
 .fox-msg.assistant{background:var(--surface2);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px;color:var(--text)}
 .fox-msg .md{white-space:pre-wrap;word-break:break-word}
@@ -506,9 +494,6 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="similarity" onclick="switchPanel('similarity')" aria-label="Similarity">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="12" height="12" rx="2.5"/><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/></svg>
     <span class="tip">Similarity</span></div>
-  <div class="nav-item" data-panel="query" onclick="switchPanel('query')" aria-label="Chat">
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5c0 4.1-3.6 7.5-8 7.5-1 0-2-.2-2.9-.5L4 20l1.6-3.8C4.6 15 4 13.3 4 11.5 4 7.4 7.6 4 12 4s8 3.4 8 7.5z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"/></svg>
-    <span class="tip">Chat</span></div>
   <div class="nav-item" data-panel="fox" onclick="switchPanel('fox')" aria-label="Fox — Research Companion">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5l4.6 3.9h6.8L20 3.5V12c0 4.6-3.4 8-8 9.5C7.4 20 4 16.6 4 12z"/><circle cx="9.2" cy="12" r="0.5" fill="currentColor" stroke="none"/><circle cx="14.8" cy="12" r="0.5" fill="currentColor" stroke="none"/><path d="M12 15.2l-1.1-1.3h2.2z" fill="currentColor" stroke="none"/></svg>
     <span class="tip">Fox — Research Companion</span></div>
@@ -729,22 +714,6 @@ select{cursor:pointer}
       </div>
     </div>
     <div id="simResults" style="flex:1;overflow-y:auto"></div>
-  </div>
-</div>
-
-<!-- ── Query/Chat Panel ── -->
-<div class="panel" id="panel-query">
-  <div class="panel-header"><h2>Chat <span class="badge">RAG</span></h2></div>
-  <div class="panel-body" style="padding-top:8px;overflow:hidden">
-    <div class="chat">
-      <div class="chat-msgs" id="chatMsgs">
-        <div class="chat-msg assistant">Ask a question about your papers. I'll search the knowledge base and answer with citations.</div>
-      </div>
-      <div class="chat-input">
-        <input id="chatInput" placeholder="Ask anything..." onkeydown="if(event.key==='Enter')askRag()">
-        <button class="btn" onclick="askRag()">Ask</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -2093,25 +2062,6 @@ async function loadSimilarity(){
 })();
 
 // ── RAG Chat ──
-async function askRag(){
-  const q=el('chatInput').value.trim();
-  if(!q)return;
-  el('chatInput').value='';
-  const msgs=el('chatMsgs');
-  msgs.innerHTML+='<div class="chat-msg user">'+esc(q)+'</div>';
-  msgs.innerHTML+='<div class="chat-msg assistant typing" id="typing">Thinking...</div>';
-  msgs.scrollTop=msgs.scrollHeight;
-  try{
-    const r=await api('/api/query','POST',{question:q});
-    el('typing').remove();
-    const ans=r.answer||'No answer generated';
-    const srcs=r.sources||[];
-    const srcHtml=srcs.length?'<div class="src">Sources: '+srcs.map(s=>'<a href="https://arxiv.org/abs/'+s.id+'" target="_blank">'+esc(s.title)+'</a>').join(', ')+'</div>':'';
-    msgs.innerHTML+='<div class="chat-msg assistant">'+esc(ans)+srcHtml+'</div>';
-  }catch(e){el('typing').remove();msgs.innerHTML+='<div class="chat-msg assistant" style="color:var(--red)">Error: '+e+'</div>'}
-  msgs.scrollTop=msgs.scrollHeight;
-}
-
 // ── About ──
 async function loadAbout(){
   try{
