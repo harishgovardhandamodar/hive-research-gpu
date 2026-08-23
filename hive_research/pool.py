@@ -5,7 +5,7 @@ import logging
 import sqlite3
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,10 @@ from .arxiv_fetcher import search_arxiv
 from .similarity import jaccard_tokens
 
 logger = logging.getLogger(__name__)
+
+def utcnow() -> datetime:
+    """Naive UTC now (datetime.utcnow() is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 CACHE_TTL = 12 * 3600
 REFRESH_INTERVAL = 12 * 3600
@@ -118,7 +122,7 @@ class ResearchPool:
         return row["cnt"] > 0
 
     def _seed_default_topics(self) -> None:
-        now = datetime.utcnow().isoformat()
+        now = utcnow().isoformat()
         for t in DEFAULT_TOPICS:
             self._db.execute(
                 "INSERT OR IGNORE INTO topics (name, query, created_at) VALUES (?, ?, ?)",
@@ -235,7 +239,7 @@ class ResearchPool:
 
     def _observe(self, entry: dict[str, Any], topic: str) -> None:
         aid = entry["arxiv_id"]
-        now = datetime.utcnow().isoformat()
+        now = utcnow().isoformat()
         with self._lock:
             row = self._db.execute(
                 "SELECT topics, imported FROM papers WHERE arxiv_id = ?", (aid,)
@@ -294,7 +298,7 @@ class ResearchPool:
         with self._lock:
             self._db.execute(
                 "UPDATE papers SET imported = 1, imported_at = ? WHERE arxiv_id = ?",
-                (datetime.utcnow().isoformat(), arxiv_id),
+                (utcnow().isoformat(), arxiv_id),
             )
             self._db.commit()
 

@@ -13,13 +13,17 @@ import json
 import logging
 import threading
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .config import Config
 
 logger = logging.getLogger(__name__)
+
+def utcnow() -> datetime:
+    """Naive UTC now (datetime.utcnow() is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class FeedbackStore:
@@ -37,7 +41,7 @@ class FeedbackStore:
         **context: Any,
     ) -> dict[str, Any]:
         entry = {
-            "ts": datetime.utcnow().isoformat(),
+            "ts": utcnow().isoformat(),
             "kind": kind,
             "rating": int(rating),
             "comment": comment[:500],

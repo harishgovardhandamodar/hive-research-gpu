@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,10 @@ from .similarity import paper_similarity_matrix
 from .web_ingest import WebIngester
 
 logger = logging.getLogger(__name__)
+
+def utcnow() -> datetime:
+    """Naive UTC now (datetime.utcnow() is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Organizer:
@@ -396,10 +401,10 @@ class Organizer:
     def daily_digest(self, hours: int | None = None) -> dict[str, Any]:
         """New pool papers since the digest window, grouped by topic,
         persisted to the vault so a researcher can skim what happened."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         hours = hours or self.config.digest_hours
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = utcnow() - timedelta(hours=hours)
         by_topic: dict[str, list[dict[str, Any]]] = {}
         total_new = 0
         for p in self.pool.get_observed_papers():
@@ -415,7 +420,7 @@ class Organizer:
                 by_topic.setdefault(topic, []).append(p)
 
         lines = [
-            f"# Research Digest — {datetime.utcnow():%Y-%m-%d %H:%M} UTC",
+            f"# Research Digest — {utcnow():%Y-%m-%d %H:%M} UTC",
             "",
             f"{total_new} papers observed in the last {hours}h across {len(by_topic)} topics.",
             "",
@@ -437,7 +442,7 @@ class Organizer:
 
         digest_dir = Path(self.config.vault_dir) / "digests"
         digest_dir.mkdir(parents=True, exist_ok=True)
-        digest_path = digest_dir / f"digest_{datetime.utcnow():%Y%m%d_%H%M}.md"
+        digest_path = digest_dir / f"digest_{utcnow():%Y%m%d_%H%M}.md"
         digest_path.write_text("\n".join(lines))
         return {
             "total_new": total_new,

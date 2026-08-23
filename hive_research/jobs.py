@@ -15,8 +15,12 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
+def utcnow() -> datetime:
+    """Naive UTC now (datetime.utcnow() is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 STAGE_ORDER = [
     "fetch",     # arXiv metadata fetch
@@ -56,7 +60,7 @@ class Job:
     label: str
     meta: dict[str, Any] = field(default_factory=dict)
     status: str = "running"    # running | done | error | cancelled
-    created: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created: str = field(default_factory=lambda: utcnow().isoformat())
     stages: dict[str, Stage] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
