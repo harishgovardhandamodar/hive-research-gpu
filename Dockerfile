@@ -18,11 +18,11 @@ WORKDIR /app
 COPY hive-datatype/hive_datatype.py /app/hive_datatype/hive_datatype.py
 COPY hive-datatype/__init__.py /app/hive_datatype/__init__.py
 
-COPY hive-research-gpu/pyproject.toml /app/hive-research-gpu/pyproject.toml
-COPY hive-research-gpu/hive_research/ /app/hive-research-gpu/hive_research/
-COPY hive-research-gpu/config.yaml /app/config.yaml
+COPY pyproject.toml /app/pyproject.toml
+COPY hive_research/ /app/hive_research/
+COPY config.yaml /app/config.yaml
 
-RUN /venv/bin/pip install --no-cache-dir /app/hive-research-gpu/
+RUN /venv/bin/pip install --no-cache-dir /app/
 
 ENV PATH=/venv/bin:$PATH
 ENV PYTHONPATH=/app
