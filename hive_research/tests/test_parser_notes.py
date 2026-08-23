@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from hive_research.parser import (
     CAPTION_PREFIX,
@@ -126,7 +127,7 @@ class TestNotesTemplates(TempDirTestCase):
         ]
 
     def _write(self, pipeline) -> object:
-        paper = unittest.mock.Mock()
+        paper = mock.Mock()
         paper.title = "Swarm Coordination Study"
         paper.authors_str = "A. Fox"
         paper.published = "2024-01-01"
@@ -196,13 +197,42 @@ class TestNotesTemplates(TempDirTestCase):
 
     def test_empty_optional_fields_do_not_crash(self) -> None:
         pipeline = make_pipeline(self.tmp)
-        paper = unittest.mock.Mock()
+        paper = mock.Mock()
         paper.title = "Minimal"
         paper.authors_str = ""
         paper.published = ""
         path = pipeline._write_notes_multi("2402.1", paper, "", [], [])
         self.assertIsNotNone(path)
         self.assertIn("## Reproduction Checklist", path.read_text())
+
+
+class TestSectionAwareContext(TempDirTestCase):
+    def _pipeline(self):
+        return make_pipeline(self.tmp)
+
+    def _long_paper(self) -> str:
+        intro = "1. Introduction\n" + ("We survey many loosely related prior directions. " * 400) + "\n"
+        method = "2. Method\nOur approach uses multi-agent debate with verifier models.\n"
+        experiments = "3. Experiments\nWe evaluate on SMAC and MPE with 5 seeds; win-rate improves 12.3% over baselines.\n"
+        results = "4. Results\nGRPO achieves 87.4 win-rate vs 75.1 for the strongest baseline.\n"
+        return intro + method + experiments + results
+
+    def test_short_text_untouched(self) -> None:
+        p = self._pipeline()
+        self.assertEqual(p._select_analysis_context("short text"), "short text")
+
+    def test_experiments_survive_when_intro_is_huge(self) -> None:
+        p = self._pipeline()
+        ctx = p._select_analysis_context(self._long_paper(), max_chars=6000)
+        self.assertIn("SMAC", ctx, "Experiments section must reach the LLM")
+        self.assertIn("Results", ctx)
+        # intro filler should be the thing that gets cut
+        self.assertLess(ctx.count("loosely related"), 100)
+
+    def test_budget_respected(self) -> None:
+        p = self._pipeline()
+        ctx = p._select_analysis_context(self._long_paper(), max_chars=3000)
+        self.assertLessEqual(len(ctx), 3200)
 
 
 if __name__ == "__main__":

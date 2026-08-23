@@ -274,6 +274,64 @@ class PaperPipeline:
         lines.append("")
         return "\n".join(lines)
 
+    # Section-name → selection priority for the analysis context.
+    # Experiments/Results sit mid-paper; blind head-truncation loses them.
+    SECTION_PRIORITY = [
+        ("abstract", 1),
+        ("introduction", 2),
+        ("method", 2), ("approach", 2), ("architecture", 2), ("model", 3),
+        ("experiment", 1), ("evaluation", 1), ("setup", 2),
+        ("result", 1), ("finding", 1),
+        ("discussion", 3), ("limitation", 2), ("conclusion", 3), ("ablation", 2),
+    ]
+
+    def _select_analysis_context(self, text: str, max_chars: int = 12000) -> str:
+        """Pick the most analysis-relevant sections within a char budget.
+
+        Uses heading heuristics so Experiments/Results reach the LLM even in
+        long papers where naive head-truncation would drop them.
+        """
+        if len(text) <= max_chars:
+            return text
+        try:
+            sections = extract_sections(text)
+        except Exception:
+            return text[:max_chars]
+        if len(sections) < 2:
+            return text[:max_chars]
+
+        def priority(heading: str) -> int:
+            h = heading.lower()
+            for needle, prio in self.SECTION_PRIORITY:
+                if needle in h:
+                    return prio
+            return 4
+
+        # Highest-priority sections first; prio-1 (abstract/experiments/
+        # results) may use the full budget, others are capped so one huge
+        # low-priority section cannot starve the rest.
+        scored = sorted(
+            ((priority(s["heading"]), s) for s in sections),
+            key=lambda t: t[0],
+        )
+        chosen: list[str] = []
+        budget = max_chars
+        for prio, sec in scored:
+            body = sec.get("content") or ""
+            if not body:
+                continue
+            allowance = budget if prio == 1 else min(budget, max_chars // 2)
+            take = min(len(body), allowance)
+            if take < 40:
+                continue
+            chosen.append(f"## {sec['heading']}\n{body[:take]}")
+            budget -= take
+            if budget <= 200:
+                break
+        if not chosen:
+            return text[:max_chars]
+        return "\n\n".join(chosen)
+
     def _analyze_text(
         self,
         text: str,
@@ -283,8 +341,7 @@ class PaperPipeline:
         gpu_id: int | None = None,
         hints: list[str] | None = None,
     ) -> dict[str, Any]:
-        max_chars = 12000
-        truncated = text[:max_chars]
+        truncated = self._select_analysis_context(text)
 
         fast_prompt = (
             f"Paper: {title}\n\n"
