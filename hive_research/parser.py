@@ -205,6 +205,23 @@ def extract_text(pdf_path: str | Path) -> str:
     return text
 
 
+def extract_text_pages(pdf_path: str | Path) -> list[dict[str, Any]]:
+    """Page-preserving text extraction.
+
+    Returns [{"page": 1-based page number, "text": page text}, ...].
+    Used so RAG chunks can carry page numbers for citations.
+    """
+    import fitz
+    doc = fitz.open(str(pdf_path))
+    pages = []
+    for i, page in enumerate(doc):
+        text = page.get_text().strip()
+        if text:
+            pages.append({"page": i + 1, "text": text})
+    doc.close()
+    return pages
+
+
 def extract_metadata(pdf_path: str | Path) -> dict[str, Any]:
     import fitz
     doc = fitz.open(str(pdf_path))

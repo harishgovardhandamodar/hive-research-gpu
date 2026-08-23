@@ -2515,6 +2515,7 @@ function addFoxMsg(role,text,data={}){
     inner+=`<div class="fox-cites">${data.sources.map((s,i)=>`
       <div class="fox-cite"><span class="n">[${i+1}]</span><span>
       ${s.source_title?`<a class="t" href="${s.source_id&&/^\d/.test(s.source_id)?'https://arxiv.org/abs/'+s.source_id:'#'}" target="_blank">${esc(s.source_title)}</a>`:'(knowledge graph)'}
+      ${s.page?`<span title="PDF page ${s.page}" style="background:var(--surface2);border-radius:4px;padding:0 5px;font-size:9px;color:var(--text3);margin-left:3px">p.${s.page}</span>`:''}
       ${s.text?`<span style="opacity:.75"> — ${esc(s.text.slice(0,140))}${s.text.length>140?'…':''}</span>`:''}
       </span></div>`).join('')}</div>`;
   }

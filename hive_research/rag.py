@@ -22,11 +22,15 @@ class Chunk:
         source_id: str,
         source_title: str = "",
         chunk_idx: int = 0,
+        page_start: int = 0,
+        page_end: int = 0,
     ) -> None:
         self.text = text
         self.source_id = source_id
         self.source_title = source_title
         self.chunk_idx = chunk_idx
+        self.page_start = int(page_start or 0)
+        self.page_end = int(page_end or 0)
 
 
 class RAGEngine:
@@ -58,6 +62,8 @@ class RAGEngine:
                 "source_id": c.source_id,
                 "source_title": c.source_title,
                 "chunk_idx": c.chunk_idx,
+                "page_start": c.page_start,
+                "page_end": c.page_end,
             }
             for c in self.chunks
         ]
@@ -71,7 +77,9 @@ class RAGEngine:
             try:
                 with open(self._index_path()) as f:
                     index = json.load(f)
-                chunks = [Chunk(**item) for item in index]
+                # Tolerant load: older indexes lack page fields.
+                known = {"text", "source_id", "source_title", "chunk_idx", "page_start", "page_end"}
+                chunks = [Chunk(**{k: v for k, v in item.items() if k in known}) for item in index]
                 embeddings = None
                 if self._embeddings_path().exists():
                     embeddings = np.load(str(self._embeddings_path()))
@@ -122,7 +130,13 @@ class RAGEngine:
             start += size - overlap
         return chunks
 
-    def index_paper(self, paper_id: str, text: str) -> int:
+    def index_paper(self, paper_id: str, text: str, pages: list[dict[str, Any]] | None = None) -> int:
+        """Index a paper's text.
+
+        When ``pages`` (from parser.extract_text_pages) is given, chunks are
+        built per page and carry page_start/page_end for citations. Plain
+        ``text`` alone keeps the legacy whole-document chunking.
+        """
         node = self.kg.get_paper(paper_id)
         title = node.label if node else paper_id
         # Drop any previous chunks for this paper so re-indexing never duplicates
@@ -137,10 +151,17 @@ class RAGEngine:
                 paper_id,
                 removed_before - len(self.chunks),
             )
-        chunks = self._chunk_text(text)
-        new_chunks = []
-        for i, chunk_text in enumerate(chunks):
-            new_chunks.append(Chunk(chunk_text, paper_id, title, i))
+        new_chunks: list[Chunk] = []
+        if pages:
+            idx = 0
+            for p in pages:
+                page_num = int(p.get("page", 0))
+                for piece in self._chunk_text(p.get("text", "")):
+                    new_chunks.append(Chunk(piece, paper_id, title, idx, page_num, page_num))
+                    idx += 1
+        else:
+            for i, chunk_text in enumerate(self._chunk_text(text)):
+                new_chunks.append(Chunk(chunk_text, paper_id, title, i))
         if not new_chunks:
             return 0
         new_texts = [c.text for c in new_chunks]
@@ -169,11 +190,13 @@ class RAGEngine:
         results = []
         for idx in top_indices:
             if sims[idx] > 0:
+                c = self.chunks[idx]
                 results.append({
-                    "text": self.chunks[idx].text,
-                    "source_id": self.chunks[idx].source_id,
-                    "source_title": self.chunks[idx].source_title,
+                    "text": c.text,
+                    "source_id": c.source_id,
+                    "source_title": c.source_title,
                     "score": float(round(sims[idx], 4)),
+                    "page": int(c.page_start) if c.page_start else None,
                 })
         return results
 

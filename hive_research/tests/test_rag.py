@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
+from hive_research.parser import extract_text_pages
 from hive_research.rag import RAGEngine
 from hive_research.tests.base import FakeLLM, TempDirTestCase, make_config
 
@@ -75,5 +77,66 @@ class TestIndexAndSearch(TempDirTestCase):
         self.assertEqual(out["sources"], [])
 
 
+class TestPageAwareIndexing(TempDirTestCase):
+    def _engine(self) -> RAGEngine:
+        cfg = make_config(self.tmp)
+        llm = FakeLLM()
+        kg = mock.Mock()
+        node = mock.Mock()
+        node.label = "Paged Paper"
+        kg.get_paper.return_value = node
+        return RAGEngine(cfg, llm, kg)  # type: ignore[arg-type]
+
+    def test_chunks_carry_page_numbers(self) -> None:
+        engine = self._engine()
+        pages = [
+            {"page": 1, "text": "introduction about alignment methods " * 30},
+            {"page": 2, "text": "experiments on multi agent debate " * 30},
+        ]
+        n = engine.index_paper("2402.1", "\n".join(p["text"] for p in pages), pages=pages)
+        self.assertGreater(n, 0)
+        self.assertTrue(all(c.page_start == c.page_end and c.page_start > 0 for c in engine.chunks))
+        hit = engine.search("multi agent debate experiments")[0]
+        self.assertEqual(hit["page"], 2)
+
+    def test_legacy_plain_text_index_still_works(self) -> None:
+        engine = self._engine()
+        n = engine.index_paper("2402.2", "plain text without pages " * 50)
+        self.assertGreater(n, 0)
+        self.assertTrue(all(c.page_start == 0 for c in engine.chunks))
+
+    def test_old_index_without_page_fields_loads(self) -> None:
+        engine = self._engine()
+        engine.index_paper("2402.3", "legacy chunk content " * 40)
+        # rewrite index.json in the OLD schema (no page fields)
+        old = [{"text": c.text, "source_id": c.source_id,
+                "source_title": c.source_title, "chunk_idx": c.chunk_idx}
+               for c in engine.chunks]
+        engine._index_path().write_text(json.dumps(old))
+
+        reloaded = self._engine()
+        reloaded._load()
+        self.assertEqual(len(reloaded.chunks), len(engine.chunks))
+        self.assertTrue(all(c.page_start == 0 for c in reloaded.chunks))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestExtractTextPages(TempDirTestCase):
+    def test_returns_numbered_nonempty_pages(self) -> None:
+        import fitz
+
+        doc = fitz.open()
+        for body in ("page one text", "", "page three text"):
+            page = doc.new_page()
+            if body:
+                page.insert_text((72, 72), body)
+        path = self.tmp / "t.pdf"
+        doc.save(str(path))
+        doc.close()
+
+        pages = extract_text_pages(path)
+        self.assertEqual([p["page"] for p in pages], [1, 3])  # empty page skipped
+        self.assertIn("page one", pages[0]["text"])

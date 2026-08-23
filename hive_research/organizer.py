@@ -57,15 +57,19 @@ class Organizer:
                 progress=lambda stage, status, detail="": registry.stage(job, stage, status, detail),
             )
             if result["status"] == "added":
-                pdf_text = ""
+                pdf_pages = []
                 pdf_path = self._find_pdf(arxiv_id)
                 if pdf_path:
-                    from .parser import extract_text
+                    from .parser import extract_text_pages
 
-                    pdf_text = extract_text(pdf_path)
-                if pdf_text:
+                    pdf_pages = extract_text_pages(pdf_path)
+                if pdf_pages:
                     with registry.ctx(job, "rag"):
-                        n = self.rag.index_paper(arxiv_id, pdf_text)
+                        n = self.rag.index_paper(
+                            arxiv_id,
+                            "\n".join(p["text"] for p in pdf_pages),
+                            pages=pdf_pages,
+                        )
                     result["rag_chunks"] = n
             return result
         finally:

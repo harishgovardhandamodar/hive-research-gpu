@@ -309,15 +309,19 @@ class Fox:
             parts.append(f"[{n}] (knowledge graph) {f}")
         for c in chunks:
             n += 1
+            page = c.get("page")
             sources.append({
                 "n": n,
                 "kind": "excerpt",
                 "source_id": c["source_id"],
                 "source_title": c["source_title"],
                 "score": c["score"],
+                "page": int(page) if page else None,
                 "text": c["text"][:400],
             })
-            parts.append(f"[{n}] (paper: {c['source_title']}, score {c['score']}) {c['text']}")
+            page = c.get("page")
+            page_note = f", p.{page}" if page else ""
+            parts.append(f"[{n}] (paper: {c['source_title']}{page_note}, score {c['score']}) {c['text']}")
         return "\n\n".join(parts), sources
 
     @staticmethod
