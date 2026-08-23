@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import unittest
 
 from hive_research.config import Config
 from hive_research.tests.base import TempDirTestCase, make_config
