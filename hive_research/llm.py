@@ -36,12 +36,14 @@ class LLMInterface:
     ) -> dict[str, Any]:
         base_url = self._get_base_url(gpu_id)
         url = f"{base_url}/api/{endpoint}"
+        last_error: Exception | None = None
         for attempt in range(retries):
             try:
                 resp = requests.post(url, json=payload, timeout=180)
                 resp.raise_for_status()
                 return resp.json()
             except requests.RequestException as e:
+                last_error = e
                 logger.warning(
                     "Ollama request failed to %s (attempt %d/%d, GPU %s): %s",
                     url, attempt + 1, retries,
@@ -51,7 +53,7 @@ class LLMInterface:
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
         raise RuntimeError(
-            f"Ollama request to {endpoint} on GPU {gpu_id} failed after {retries} retries"
+            f"Ollama request to {endpoint} on GPU {gpu_id} failed after {retries} retries: {last_error}"
         )
 
     def generate(
@@ -268,8 +270,20 @@ class LLMInterface:
         }
         if gpu_id is None and self.gpu_mgr:
             gpu_id = self.gpu_mgr.get_next_embed_gpu()
-        data = self._request("embed", payload, gpu_id=gpu_id)
-        return data.get("embeddings", [data.get("embedding", [])])[0] if isinstance(data.get("embeddings"), list) else data.get("embedding", [])
+        try:
+            data = self._request("embed", payload, gpu_id=gpu_id, retries=1)
+        except RuntimeError as e:
+            # Older Ollama builds / proxies only implement the legacy
+            # /api/embeddings endpoint — fall back transparently.
+            if "501" in str(e) or "404" in str(e):
+                legacy = dict(payload)
+                legacy["prompt"] = legacy.pop("input")
+                data = self._request("embeddings", legacy, gpu_id=gpu_id)
+            else:
+                raise
+        if isinstance(data.get("embeddings"), list) and data["embeddings"]:
+            return data["embeddings"][0]
+        return data.get("embedding", [])
 
     def embed_parallel(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         results: list[list[float]] = [[] for _ in texts]
