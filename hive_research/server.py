@@ -458,7 +458,6 @@ info.textContent += ' | OK';
             data = {}
 
         from .feedback import FeedbackStore
-
         if path == "/api/add":
             arxiv_id = data.get("id", params.get("id", ""))
             if not arxiv_id:
@@ -607,6 +606,27 @@ info.textContent += ' | OK';
             if "error" in result:
                 _json_response(self, result, 400)
                 return
+            _json_response(self, result)
+        elif path == "/api/feedback":
+            from .feedback import parse_rating
+
+            rating = parse_rating(data.get("rating"))
+            if rating == 0:
+                _json_response(self, {"error": "rating must be 1-5"}, 400)
+                return
+            entry = FeedbackStore(self.org.config).record(
+                kind=data.get("kind", "fox"),
+                rating=rating,
+                comment=data.get("comment", ""),
+                mode=data.get("mode", ""),
+                conversation_id=data.get("conversation_id", ""),
+                paper_id=data.get("paper_id", ""),
+            )
+            _json_response(self, {"status": "ok", "entry": entry})
+        elif path == "/api/improve/run":
+            model_param = data.get("model", None)
+            model = self.org.config.resolve_model(model_param)
+            result = self.org.auto_improve_pass(model=model)
             _json_response(self, result)
         else:
             _json_response(self, {"error": "not found"}, 404)

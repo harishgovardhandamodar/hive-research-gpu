@@ -131,6 +131,22 @@ class Fox:
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, FoxJob] = {}
         self._jobs_lock = threading.Lock()
+        from .feedback import FeedbackStore
+
+        self.feedback = FeedbackStore(config)
+
+    def _reinforcement_hints(self, mode: str | None = None) -> str:
+        """Past criticism distilled into instructions — the loop's memory."""
+        if not self.config.feedback_auto_improve:
+            return ""
+        hints = self.feedback.prompt_hints(mode=mode)
+        if not hints:
+            return ""
+        return (
+            "\n\nFeedback-driven improvement instructions:\n"
+            + "\n".join(hints)
+            + "\nApply these corrections proactively."
+        )
 
     # ------------------------------------------------------------------ jobs
 
@@ -331,7 +347,11 @@ class Fox:
         hist = self._history_text(history)
         if hist:
             prompt = f"Conversation so far:\n{hist}\n\nUser: {message}"
-        answer = self.llm.generate(prompt, system=SYSTEM_BASE, temperature=self.config.fox_temperature)
+        answer = self.llm.generate(
+            prompt,
+            system=SYSTEM_BASE + self._reinforcement_hints("fast"),
+            temperature=self.config.fox_temperature,
+        )
         return {"answer": answer.strip(), "sources": [], "grounded": False}
 
     def _grounded_answer(
@@ -380,7 +400,10 @@ class Fox:
         )
         answer = self.llm.generate(
             user_prompt,
-            system="\n".join(p for p in prompt_parts if p),
+            system=(
+                "\n".join(p for p in prompt_parts if p)
+                + self._reinforcement_hints()
+            ),
             temperature=self.config.fox_temperature,
         )
         cited = self._extract_citations(answer, sources)

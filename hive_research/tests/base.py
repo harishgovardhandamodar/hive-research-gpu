@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,8 @@ class FakeLLM:
         self.embed_calls += 1
         vec = [0.0] * 128
         for token in text.lower().split():
-            vec[hash(token) % 128] += 1.0
+            # stable across processes (str hash() is randomized)
+            vec[zlib.crc32(token.encode()) % 128] += 1.0
         norm = sum(v * v for v in vec) ** 0.5 or 1.0
         return [v / norm for v in vec]
 

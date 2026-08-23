@@ -154,7 +154,7 @@ class Organizer:
             return Path(matches[0])
         return None
 
-    def _refresh_single(self, node: Any, model: str | None = None) -> bool:
+    def _refresh_single(self, node: Any, model: str | None = None, hints: list[str] | None = None) -> bool:
         import json as _json
         from .parser import extract_text, extract_images_from_pdf
         from .pipeline import _sanitize_id
@@ -178,13 +178,20 @@ class Organizer:
             figures = extract_images_from_pdf(pdf_path, figures_dir)
 
             gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id)
+            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id, hints=hints)
             notes = analysis.get("notes", "")
             experiment = analysis.get("experiment", {})
             results = analysis.get("results", {})
             experiments_list = analysis.get("experiments", [])
             lineage_notes = analysis.get("lineage_notes", "")
-            extra = _json.dumps({"notes": notes, "experiment": experiment, "results": results})
+            extra = _json.dumps({
+                "notes": notes,
+                "experiment": experiment,
+                "results": results,
+                "limitations": analysis.get("limitations", ""),
+                "tldr": analysis.get("tldr", ""),
+                "reproduction": analysis.get("reproduction", {}),
+            })
             node.definition = extra[:2000]
             base_id = node.arxiv_id.split("v")[0] if "v" in (node.arxiv_id or "") else node.arxiv_id
             paper_info = fetch_by_id(base_id)
@@ -208,6 +215,10 @@ class Organizer:
                 notes=notes, experiment=experiment, results=results,
                 experiments_list=experiments_list, lineage_notes=lineage_notes,
                 figures=figures, safe_title=safe_title,
+                limitations=analysis.get("limitations", ""),
+                tldr=analysis.get("tldr", ""),
+                reproduction=analysis.get("reproduction", {}),
+                experiment_ideas=analysis.get("experiment_ideas", []),
             )
             self.kg.save()
             return True
@@ -323,3 +334,54 @@ class Organizer:
         if generated:
             self.kg.save()
         return {"status": "ok", "generated": generated}
+
+    # ------------------------------------------------------ reinforcement loop
+
+    def auto_improve_pass(self, model: str | None = None) -> dict[str, Any]:
+        """Close the reinforcement loop: re-analyze papers whose notes were
+        rated poorly, injecting the researcher's criticism as prompt hints.
+
+        Fox answers are improved continuously via feedback.prompt_hints();
+        this pass handles the offline artifact side (vault notes).
+        """
+        from .feedback import FeedbackStore
+        from .jobs import get_registry
+
+        store = FeedbackStore(self.config)
+        low = [
+            e for e in store.low_rated(limit=self.config.feedback_reanalyze_max * 2)
+            if e.get("kind") == "notes" and e.get("paper_id")
+        ]
+        if not low:
+            return {
+                "status": "nothing-to-improve",
+                "message": "No low-rated paper notes found. Rate notes in Browse to train the loop.",
+            }
+
+        # Dedupe papers keeping their most recent criticism as hints.
+        per_paper: dict[str, list[str]] = {}
+        for e in low:
+            pid = e["paper_id"]
+            hints = per_paper.setdefault(pid, [])
+            comment = (e.get("comment") or "").strip()
+            hint = comment or "A previous analysis of this paper was rated unhelpful; be more specific and quantitative."
+            if hint not in hints:
+                hints.append(hint)
+
+        registry = get_registry()
+        results = []
+        for pid, hints in list(per_paper.items())[: self.config.feedback_reanalyze_max]:
+            node = self.kg.get_paper(pid)
+            if not node:
+                results.append({"paper_id": pid, "status": "not-in-graph"})
+                continue
+            job = registry.start("reanalyze", f"re-analyze {pid}", arxiv_id=pid)
+            try:
+                with registry.ctx(job, "analyze"):
+                    ok = self._refresh_single(node, model=model, hints=hints)
+                registry.finish(job)
+                results.append({"paper_id": pid, "status": "improved" if ok else "failed", "hints": len(hints)})
+            except Exception:
+                registry.finish(job, error="reanalysis failed")
+                results.append({"paper_id": pid, "status": "failed"})
+        return {"status": "ok", "improved_pass": results}

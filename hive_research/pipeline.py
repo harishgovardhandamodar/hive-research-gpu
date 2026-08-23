@@ -281,6 +281,7 @@ class PaperPipeline:
         figures: list[dict[str, Any]] | None = None,
         model: str | None = None,
         gpu_id: int | None = None,
+        hints: list[str] | None = None,
     ) -> dict[str, Any]:
         max_chars = 12000
         truncated = text[:max_chars]
@@ -337,6 +338,11 @@ class PaperPipeline:
             '  "relations": [{"source": "...", "target": "...", "relation": "..."}]\n'
             "}"
         )
+        if hints:
+            main_prompt += (
+                "\n\nQuality requirements from the researcher's past feedback "
+                "(address all of them):\n- " + "\n- ".join(hints)
+            )
         analysis = self.llm.extract_structured(main_prompt, model=model, gpu_id=gpu_id)
         analysis["tags"] = tags
         return analysis
