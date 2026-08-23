@@ -139,6 +139,43 @@ def cmd_improve(_args: argparse.Namespace) -> None:
         print(f"  {r['paper_id']}: {r['status']}")
 
 
+def cmd_export(args: argparse.Namespace) -> None:
+    """Zip the irreplaceable research output: vault, graph, feedback, Fox chats."""
+    import shutil
+    from datetime import datetime
+    from pathlib import Path
+
+    config = Config()
+    root = config.root_dir
+    parts = {
+        "vault": config.vault_dir,
+        "graph": config.graph_dir,
+        "feedback": Path(config.feedback_dir) if hasattr(config, "feedback_dir") else root / "feedback",
+        "fox": root / "fox",
+        "rag": root / "rag",
+    }
+    out = Path(args.output) if args.output else (
+        root / "exports" / f"hive_backup_{datetime.now():%Y%m%d_%H%M%S}"
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = out.parent / f".staging_{out.stem}"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    included = []
+    for name, src in parts.items():
+        src = Path(src)
+        if not src.exists():
+            continue
+        dest = staging / name
+        shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__", "*.part"))
+        included.append(name)
+    archive = shutil.make_archive(str(out), "zip", staging)
+    shutil.rmtree(staging)
+    size_mb = Path(archive).stat().st_size / 1e6
+    print(f"Exported {len(included)} areas ({', '.join(included)}) -> {archive} ({size_mb:.1f} MB)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Hive Research GPU — dual RTX 5080 research knowledge base",
@@ -197,6 +234,11 @@ def main() -> None:
 
     p_improve = sub.add_parser("improve", help="Re-analyze papers whose notes were rated poorly")
     p_improve.set_defaults(func=cmd_improve)
+
+    p_export = sub.add_parser("export", help="Back up vault/graph/feedback/fox to a zip archive")
+    p_export.add_argument("-o", "--output", type=str, default=None,
+                          help="output path without .zip (default: data/exports/hive_backup_<ts>)")
+    p_export.set_defaults(func=cmd_export)
 
     args = parser.parse_args()
     _setup_logging(verbose=args.verbose)
