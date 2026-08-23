@@ -153,6 +153,28 @@ class TestHybridRetrieval(TempDirTestCase):
         self.assertAlmostEqual(r["score"], 0.65 * r["dense_score"] + 0.35 * r["lexical_score"], places=2)
 
 
+class TestEmbedModelStamping(TempDirTestCase):
+    def test_meta_written_and_model_switch_invalidates(self) -> None:
+        cfg = make_config(self.tmp)
+        kg = mock.Mock()
+        node = mock.Mock(); node.label = "T"
+        kg.get_paper.return_value = node
+        engine = RAGEngine(cfg, FakeLLM(), kg)
+        engine.index_paper("2404.2", "content for stamping " * 30)
+
+        import json as _json
+        meta = _json.loads(engine._meta_path().read_text())
+        self.assertEqual(meta["embed_model"], cfg.ollama_embed_model)
+        self.assertEqual(meta["chunks"], len(engine.chunks))
+
+        # researcher switches embed model; same store -> vectors rejected on load
+        engine.config.data["ollama"]["embed_model"] = "other-model"
+        engine2 = RAGEngine(engine.config, FakeLLM(), kg)
+        self.assertIsNone(engine2.embeddings)
+        self.assertEqual(len(engine2.chunks), len(engine.chunks))  # texts kept for rebuild
+        self.assertEqual(engine2.search("anything"), [])           # safe: no search
+
+
 class TestExtractTextPages(TempDirTestCase):
     def test_returns_numbered_nonempty_pages(self) -> None:
         import fitz

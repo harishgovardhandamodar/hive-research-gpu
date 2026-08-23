@@ -63,6 +63,9 @@ class RAGEngine:
     def _embeddings_path(self) -> Path:
         return self.store_dir / "embeddings.npy"
 
+    def _meta_path(self) -> Path:
+        return self.store_dir / "embeddings_meta.json"
+
     def _save(self) -> None:
         index = [
             {
@@ -79,6 +82,12 @@ class RAGEngine:
             json.dump(index, f, indent=2)
         if self.embeddings is not None:
             np.save(str(self._embeddings_path()), self.embeddings)
+            meta = {
+                "embed_model": self.config.ollama_embed_model,
+                "dim": int(self.embeddings.shape[1]),
+                "chunks": len(self.chunks),
+            }
+            self._meta_path().write_text(json.dumps(meta))
 
     def _load(self) -> None:
         if self._index_path().exists():
@@ -91,7 +100,24 @@ class RAGEngine:
                 embeddings = None
                 if self._embeddings_path().exists():
                     embeddings = np.load(str(self._embeddings_path()))
-                    if len(chunks) != len(embeddings):
+                    # Model drift: vectors from a different embed model are a
+                    # different space — mixing them silently degrades answers.
+                    if self._meta_path().exists():
+                        try:
+                            meta = json.loads(self._meta_path().read_text())
+                            stamped = meta.get("embed_model")
+                        except Exception:
+                            stamped = None
+                        current = self.config.ollama_embed_model
+                        if stamped and stamped != current:
+                            logger.warning(
+                                "RAG vectors were built with '%s' but config "
+                                "now uses '%s' — discarding vectors; call "
+                                "rebuild() to re-embed with the new model",
+                                stamped, current,
+                            )
+                            embeddings = None
+                    if len(chunks) != len(embeddings if embeddings is not None else chunks):
                         # The two files are written separately; a crash between
                         # writes leaves them out of sync. Vectors pointing at
                         # wrong chunks would silently corrupt every answer,
