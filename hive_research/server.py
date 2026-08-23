@@ -137,6 +137,14 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_debug_graph()
         elif path == "/api/graph":
             _json_response(self, self.org.graph_data())
+        elif path == "/api/graph/clusters":
+            try:
+                threshold = float(params.get("threshold", 0.35))
+            except ValueError:
+                threshold = 0.35
+            algorithm = params.get("algorithm", "combined")
+            force = params.get("force") == "1"
+            _json_response(self, self.org.graph_clusters(algorithm=algorithm, threshold=threshold, force=force))
         elif path == "/api/stats":
             _json_response(self, self.org.stats())
         elif path == "/api/similarity":

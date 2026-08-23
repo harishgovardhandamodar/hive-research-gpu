@@ -123,6 +123,11 @@ class Organizer:
     def similarity(self, paper_ids: list[str] | None = None, algorithm: str = "combined") -> list[dict[str, Any]]:
         return paper_similarity_matrix(self.kg, paper_ids=paper_ids, algorithm=algorithm, llm=self.llm)
 
+    def graph_clusters(self, algorithm: str = "combined", threshold: float = 0.35, force: bool = False) -> dict[str, Any]:
+        from .clusters import get_paper_clusters
+
+        return get_paper_clusters(self.kg, algorithm=algorithm, threshold=threshold, force=force)
+
     def stats(self) -> dict[str, Any]:
         stats = {
             **self.kg.stats(),

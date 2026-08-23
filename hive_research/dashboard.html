@@ -136,6 +136,37 @@ select{cursor:pointer}
 #graphLegend .sw{width:9px;height:9px;border-radius:3px}
 #graphLegend .sw.cir{border-radius:50%}
 #tooltip{position:absolute;background:var(--glass-bg4);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;max-width:320px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:50;box-shadow:var(--shadow);line-height:1.5}
+#tooltip.interactive{pointer-events:auto}
+#tooltip .tt-title{font-weight:600;font-size:12px;color:var(--accent);margin-bottom:2px}
+#tooltip .tt-chips{display:flex;gap:5px;flex-wrap:wrap;margin:3px 0 5px}
+#tooltip .tt-chip{background:var(--surface2);color:var(--text3);border-radius:4px;padding:0 6px;font-size:9px}
+#tooltip .tt-body{color:var(--text2);font-size:10.5px;margin-bottom:6px;max-height:64px;overflow:hidden}
+#tooltip .tt-rel{border-top:1px dashed var(--border);padding-top:5px;font-size:10px;color:var(--text3)}
+#tooltip .tt-rel-row{display:flex;gap:4px;align-items:flex-start;margin:2px 0;line-height:1.4}
+#tooltip .tt-rel-name{flex-shrink:0;font-weight:600;min-width:58px;text-align:right}
+#tooltip .tt-node{cursor:pointer;border-radius:4px;padding:0 4px}
+#tooltip .tt-node:hover{background:rgba(96,165,250,.15)}
+
+/* ── KG clusters ── */
+.cluster-hull path{transition:opacity .25s;stroke-width:28px;stroke-linejoin:round}
+.cluster-hull path.dim{opacity:.04!important}
+#clusterLabel{font-size:10.5px;font-weight:600;pointer-events:none;fill:var(--text2);paint-order:stroke;stroke:#0b1222cc;stroke-width:3px}
+.light #clusterLabel{stroke:#ffffffdd}
+#clusterPanel{position:absolute;top:80px;left:12px;width:250px;max-height:calc(100% - 110px);z-index:30;background:var(--glass-bg3);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow)}
+#clusterPanelHead{display:flex;align-items:center;padding:9px 13px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2)}
+#clusterPanelClose{margin-left:auto;cursor:pointer;color:var(--text3);display:none}
+#clusterList{overflow-y:auto;padding:5px}
+.cluster-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;transition:background .15s}
+.cluster-row:hover{background:var(--surface2)}
+.cluster-row.sel{background:rgba(96,165,250,.12)}
+.cluster-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cluster-name{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cluster-count{font-size:9.5px;color:var(--text3);background:var(--surface2);border-radius:9px;padding:1px 7px}
+#clusterMembers{overflow-y:auto;padding:5px;border-top:1px solid var(--border)}
+.member-row{display:flex;align-items:center;gap:7px;padding:6px 9px;border-radius:7px;cursor:pointer;transition:background .15s}
+.member-row:hover{background:var(--surface2)}
+.member-row .t{flex:1;font-size:10.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.member-row:hover .t{color:var(--accent)}
 #nodePreview{position:absolute;top:12px;right:12px;width:360px;max-height:calc(100% - 60px);background:var(--glass-bg3);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow-y:auto;z-index:20;box-shadow:var(--shadow);font-size:12px;line-height:1.6;display:none}
 
 /* ── Results / Import ── */
@@ -515,6 +546,7 @@ select{cursor:pointer}
     <button class="btn btn-sm" onclick="generateDefs()" style="font-size:10px">&#x1F4DD; Fill Definitions</button>
     <button class="btn btn-sm" onclick="detailGraph()" style="font-size:10px">&#x1F50D; Detail Graph</button>
     <button class="btn btn-sm btn-outline" onclick="toggleGraphControls()" style="font-size:12px;margin-left:4px" id="gcToggle">&#x2699;</button>
+    <button class="btn btn-sm btn-outline" onclick="toggleGraphClusters()" style="font-size:10px;margin-left:6px" id="clusterToggle" title="Group papers into similarity clusters">&#x1F9F2; Clusters</button>
   </h2></div>
   <div class="panel-body" style="padding-top:8px">
     <div id="graphControls" style="display:none;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;gap:8px;flex-wrap:wrap">
@@ -543,6 +575,14 @@ select{cursor:pointer}
         </select>
         <div id="graphLegend"><div class="l"><div class="sw" style="background:var(--accent)"></div> Paper</div><div class="l"><div class="sw" style="background:#2dd4bf"></div> Lineage</div><div class="l"><div class="sw cir" style="background:var(--purple)"></div> Concept</div><div class="l"><div class="sw" style="background:#34d399"></div>&#8594;cites</div><div class="l"><div class="sw" style="background:#c084fc"></div>&#8594;extends</div><div class="l"><div class="sw" style="background:#60a5fa"></div>&#8594;uses</div><div class="l"><div class="sw" style="background:#fbbf24"></div>&#8594;introduces</div><div class="l"><div class="sw" style="background:#f472b6"></div>&#8594;compares</div><div class="l" style="opacity:.6">&#8943; dashed = weak</div></div>
         <div id="tooltip"></div>
+        <div id="clusterPanel" style="display:none">
+          <div id="clusterPanelHead">
+            <span id="clusterPanelTitle">Clusters</span>
+            <span id="clusterPanelClose" title="Back to cluster list" onclick="deselectCluster()">&#x2190;</span>
+          </div>
+          <div id="clusterList"></div>
+          <div id="clusterMembers" style="display:none"></div>
+        </div>
         <div id="nodePreview">
           <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
             <div style="font-weight:600;font-size:13px;color:var(--accent);flex:1;word-break:break-word" id="previewTitle"></div>
@@ -1074,6 +1114,153 @@ function applyRelFilter(mode){
   });
 }
 
+// ── KG similarity clusters ──
+const CLUSTER_COLORS=['#60a5fa','#34d399','#fbbf24','#f87171','#c084fc','#22d3ee','#fb923c','#a78bfa','#4ade80','#f472b6','#38bdf8','#e879f9'];
+let GRAPH_CLUSTERS=false, clusterInfo=null, selectedCluster=null;
+let _curNodes=null,_curLinks=null,_nodeById={},_neighbors={},_hullG=null,_clLabelG=null;
+function clusterColor(cid){return CLUSTER_COLORS[parseInt(String(cid).slice(1))%CLUSTER_COLORS.length]}
+async function toggleGraphClusters(force){
+  GRAPH_CLUSTERS=(force!==undefined)?force:!GRAPH_CLUSTERS;
+  localStorage.setItem('hive_clusters',GRAPH_CLUSTERS?'1':'0');
+  el('clusterToggle').classList.toggle('active',GRAPH_CLUSTERS);
+  el('clusterToggle').style.background=GRAPH_CLUSTERS?'var(--surface2)':'';
+  el('clusterToggle').style.color=GRAPH_CLUSTERS?'var(--accent)':'';
+  el('clusterPanel').style.display='none';
+  selectedCluster=null;
+  if(GRAPH_CLUSTERS){
+    el('clusterToggle').textContent='\u23F3 Clusters\u2026';
+    try{
+      clusterInfo=await api('/api/graph/clusters');
+      if(!clusterInfo.clusters)throw new Error(clusterInfo.error||'no data');
+      buildClusterPanel();
+      el('clusterPanel').style.display='flex';
+    }catch(e){addLog('Clustering failed: '+e,'ERROR');GRAPH_CLUSTERS=false;localStorage.removeItem('hive_clusters');el('clusterToggle').classList.remove('active')}
+    el('clusterToggle').textContent='\uD83E\uDDF2 Clusters';
+  }
+  if(gData.nodes)renderGraph(gData);
+}
+function buildClusterPanel(){
+  const list=el('clusterList');list.innerHTML='';
+  el('clusterPanelTitle').textContent=`Clusters (${clusterInfo.clusters.length})`;
+  el('clusterPanelClose').style.display='none';el('clusterMembers').style.display='none';
+  const sorted=[...clusterInfo.clusters].sort((a,b)=>b.size-a.size);
+  for(const c of sorted){
+    const row=document.createElement('div');row.className='cluster-row';row.dataset.cid=c.id;
+    row.innerHTML=`<span class="cluster-dot" style="background:${clusterColor(c.id)}"></span>
+      <span class="cluster-name" title="${esc(c.label)}">${esc(c.label)}</span><span class="cluster-count">${c.size}</span>`;
+    row.onclick=()=>selectCluster(c.id);
+    list.appendChild(row);
+  }
+  if(clusterInfo.unclustered.length){
+    const u=document.createElement('div');
+    u.style.cssText='font-size:9.5px;color:var(--text3);padding:6px 9px';
+    u.textContent=`+ ${clusterInfo.unclustered.length} unclustered`;
+    list.appendChild(u);
+  }
+}
+function selectCluster(cid){
+  selectedCluster=cid;
+  document.querySelectorAll('.cluster-row').forEach(r=>r.classList.toggle('sel',r.dataset.cid===cid));
+  el('clusterPanelClose').style.display='block';
+  const cl=clusterInfo.clusters.find(c=>c.id===cid);
+  const mem=el('clusterMembers');mem.innerHTML='';mem.style.display='block';
+  el('clusterPanelTitle').textContent=cl?`${cl.label}`:'Cluster';
+  for(const p of cl.papers){
+    const row=document.createElement('div');row.className='member-row';
+    row.innerHTML=`<span class="cluster-dot" style="background:${clusterColor(cid)};width:6px;height:6px"></span><span class="t" title="${esc(p.title)}">${esc(p.title)}</span>`;
+    row.onclick=()=>{const nd=_nodeById[p.id];if(nd)showNodePreview(nd)};
+    mem.appendChild(row);
+  }
+  // visual highlight
+  if(_curNodes&&_curLinks){
+    _curNodes.attr('opacity',n=>clusterInfo.assignment[n.id]===cid?1:.12);
+    _curLinks.attr('stroke-opacity',l=>clusterInfo.assignment[l.source.id]===cid&&clusterInfo.assignment[l.target.id]===cid?.5:.03);
+  }
+  addLog(`Cluster selected: ${cl.label} (${cl.size} papers)`,'INFO');
+}
+function deselectCluster(){
+  selectedCluster=null;
+  document.querySelectorAll('.cluster-row').forEach(r=>r.classList.remove('sel'));
+  el('clusterMembers').style.display='none';el('clusterMembers').innerHTML='';
+  el('clusterPanelClose').style.display='none';
+  el('clusterPanelTitle').textContent=`Clusters (${clusterInfo?clusterInfo.clusters.length:0})`;
+  if(_curNodes){_curNodes.attr('opacity',1);_curLinks.attr('stroke-opacity',l=>REL_LINEAGE.has(l.relation)?.75:.5);}
+}
+function hullPath(pts){
+  if(!pts.length)return '';
+  let d='';
+  if(pts.length>=3){const h=d3.polygonHull(pts);if(h)d='M'+h.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join('L')+'Z';}
+  if(!d){
+    const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+    const x0=Math.min(...xs)-22,y0=Math.min(...ys)-22,x1=Math.max(...xs)+22,y1=Math.max(...ys)+22,r=16;
+    d=`M${x0+r},${y0} h${x1-x0-2*r} a${r},${r} 0 0 1 ${r},${r} v${y1-y0-2*r} a${r},${r} 0 0 1 ${-r},${r} h${-(x1-x0-2*r)} a${r},${r} 0 0 1 ${-r},${-r} v${-(y1-y0-2*r)} a${r},${r} 0 0 1 ${r},${-r} Z`;
+  }
+  return d;
+}
+// ── rich hover overlay ──
+let _tipPinned=false;
+function buildNodeTipHTML(d){
+  const chips=[];
+  chips.push(`<span class="tt-chip">${esc(d.type||'node')}</span>`);
+  if(d.arxiv_id)chips.push(`<span class="tt-chip">arXiv:${esc(d.arxiv_id)}</span>`);
+  if(d.published)chips.push(`<span class="tt-chip">${esc(String(d.published).substring(0,10))}</span>`);
+  if(GRAPH_CLUSTERS&&clusterInfo&&clusterInfo.assignment[d.id]){
+    const cid=clusterInfo.assignment[d.id];
+    chips.push(`<span class="tt-chip" style="color:${clusterColor(cid)};border:1px solid ${clusterColor(cid)}55">&#9679; ${esc((clusterInfo.clusters.find(c=>c.id===cid)||{}).label||cid)}</span>`);
+  }
+  let rel='';
+  const conns=_neighbors[d.id];
+  if(conns&&conns.length){
+    const byRel={};
+    conns.forEach(cn=>{
+      const key=cn.outgoing?cn.rel:(cn.rel+' \u2190in');
+      (byRel[key]=byRel[key]||[]).push(cn);
+    });
+    const rows=Object.entries(byRel).slice(0,4).map(([relName,arr])=>{
+      const shown=arr.slice(0,4);
+      const more=arr.length-shown.length;
+      const items=shown.map(cn=>{
+        const other=_nodeById[cn.id];
+        const nm=other?(other.label||other.id):cn.id;
+        return `<span class="tt-node" data-nid="${esc(cn.id)}" title="${esc(nm)}">${esc(String(nm).substring(0,34))}${String(nm).length>34?'\u2026':''}</span>`;
+      }).join(', ');
+      return `<div class="tt-rel-row"><span class="tt-rel-name" style="color:${relStyle(relName.replace(' \u2190in','')).color}">${esc(relName)}</span><span>${items}${more>0?` <i>+${more}</i>`:''}</span></div>`;
+    }).join('');
+    rel=`<div class="tt-rel">Related (${conns.length}):${rows}</div>`;
+  }
+  const body=d.abstract?esc(d.abstract.substring(0,220))+'\u2026'
+    :d.definition? '<i>'+esc(d.definition.substring(0,200))+'</i>'
+    :d.type==='concept'?'<span style="color:#64748b">Extracted concept</span>'
+    :d.type==='web'?'<span style="color:#fb923c">Web resource</span>':'';
+  return `<div class="tt-title">${esc(d.label)}</div><div class="tt-chips">${chips.join('')}</div>`
+    +(body?`<div class="tt-body">${body}</div>`:'')+rel;
+}
+function focusGraphNode(id){
+  closePreview();
+  const nd=_nodeById[id];
+  if(nd)showNodePreview(nd);
+}
+let _tipHideTimer=null;
+function hideTipNow(){
+  const tip=el('tooltip');if(!tip)return;
+  tip.style.opacity=0;tip.classList.remove('interactive');
+}
+(function initTooltipPinning(){
+  document.addEventListener('DOMContentLoaded',()=>{
+    const tip=document.getElementById('tooltip');if(!tip)return;
+    tip.addEventListener('mouseenter',()=>{
+      _tipPinned=true;clearTimeout(_tipHideTimer);
+    });
+    tip.addEventListener('mouseleave',()=>{
+      _tipPinned=false;hideTipNow();
+    });
+    tip.addEventListener('click',e=>{
+      const nid=e.target.closest('.tt-node');
+      if(nid)focusGraphNode(nid.dataset.nid);
+    });
+  });
+})();
+
 // ── Knowledge Graph (D3) ──
 function renderGraph(data){
   const wrap=el('graphWrap');
@@ -1107,11 +1294,24 @@ function renderGraph(data){
   svg.on('dblclick.zoom',null);
 
   const ps=GS.paperSize,cs=GS.conceptSize;
+  const assign=(GRAPH_CLUSTERS&&clusterInfo)?clusterInfo.assignment:null;
   simulation=d3.forceSimulation(nodes)
     .force('link',d3.forceLink(links).id(d=>d.id).distance(d=>d.type==='paper'?140:100).strength(.3))
     .force('charge',d3.forceManyBody().strength(d=>d.type==='paper'?-300:-150))
     .force('center',d3.forceCenter(W/2,H/2))
     .force('collision',d3.forceCollide(d=>d.type==='paper'?ps+20:cs+12));
+  if(assign){
+    const groups={};
+    nodes.forEach(n=>{const c=assign[n.id];if(c)(groups[c]=groups[c]||[]).push(n)});
+    simulation.force('cluster',()=>{
+      const alpha=Math.min(simulation.alpha(),.5)*.45;
+      for(const cid in groups){
+        const g=groups[cid];
+        const gx=d3.mean(g,n=>n.x),gy=d3.mean(g,n=>n.y);
+        for(const n of g){n.vx+=(gx-n.x)*alpha;n.vy+=(gy-n.y)*alpha}
+      }
+    });
+  }
   const defs=svg.append('defs');
   const relationsPresent=[...new Set(links.map(l=>l.relation||'related_to'))];
   for(const r of relationsPresent){
@@ -1134,16 +1334,22 @@ function renderGraph(data){
   linkLabel.append('text').text(d=>d.relation||'')
     .attr('font-size','8px').attr('fill',d=>relStyle(d.relation).color)
     .attr('text-anchor','middle').attr('dy','0.35em');
+  // cluster hulls render behind edges; labels above nodes
+  _hullG=assign?container.insert('g','graph-edges').attr('class','cluster-hull'):null;
+  _clLabelG=assign?container.append('g').attr('class','cluster-labels'):null;
   const node=container.append('g').selectAll('g').data(nodes).join('g').call(drag(simulation));
   node.append('title').text(d=>d.label+(d.abstract?'\n'+d.abstract.substring(0,300):'')+(d.definition?'\n'+d.definition:''));
   const citedIds=new Set(links.filter(l=>l.relation==='cites').map(l=>l.target));
-  const lineageIds=new Set(links.filter(l=>l.relation==='cites').map(l=>l.source));
+  function paperFill(d){
+    if(assign&&assign[d.id])return clusterColor(assign[d.id]);
+    return citedIds.has(d.id)?GS.lineageColor:GS.paperColor;
+  }
   node.filter(d=>(d.type==='paper'||d.group===0)&&!citedIds.has(d.id)).append('rect')
     .attr('width',ps).attr('height',ps).attr('x',-ps/2).attr('y',-ps/2).attr('rx',4)
-    .attr('fill',GS.paperColor).attr('stroke',GS.paperColor).attr('stroke-width',2).attr('stroke-opacity',.5);
+    .attr('fill',d=>paperFill(d)).attr('stroke',d=>paperFill(d)).attr('stroke-width',2).attr('stroke-opacity',.5);
   node.filter(d=>citedIds.has(d.id)).append('rect')
     .attr('width',ps).attr('height',ps).attr('x',-ps/2).attr('y',-ps/2).attr('rx',4)
-    .attr('fill',GS.lineageColor).attr('stroke',GS.lineageColor).attr('stroke-width',2).attr('stroke-opacity',.5);
+    .attr('fill',d=>paperFill(d)).attr('stroke',d=>paperFill(d)).attr('stroke-width',2).attr('stroke-opacity',.5);
   node.filter(d=>d.type==='web').append('rect')
     .attr('width',ps+4).attr('height',ps+4).attr('x',-(ps+4)/2).attr('y',-(ps+4)/2).attr('rx',2)
     .attr('transform','rotate(45)')
@@ -1153,13 +1359,18 @@ function renderGraph(data){
     .attr('r',cs).attr('fill',GS.conceptColor).attr('stroke',GS.conceptColor).attr('stroke-width',2).attr('stroke-opacity',.5);
   node.append('text').text(d=>d.label?.substring(0,25)).attr('font-size','10px').attr('dx',14).attr('dy',4).attr('fill','#94a3b8');
   node.on('click',function(e,d){showNodePreview(d);});
+  // neighbor index for the hover overlay
+  _nodeById={};nodes.forEach(n=>{_nodeById[n.id]=n});
+  _neighbors={};
+  links.forEach(l=>{
+    const s=l.source.id||l.source,t=l.target.id||l.target;
+    (_neighbors[s]=_neighbors[s]||[]).push({rel:l.relation||'related_to',id:t,outgoing:true});
+    (_neighbors[t]=_neighbors[t]||[]).push({rel:l.relation||'related_to',id:s,outgoing:false});
+  });
   node.on('mouseenter',function(e,d){
-    let tip = '<b>'+esc(d.label)+'</b>'+(d.type?' <span style="color:#94a3b8">('+d.type+')</span>':'');
-    if(d.abstract) tip += '<br>'+esc(d.abstract.substring(0,250));
-    else if(d.definition) tip += '<br><i>'+esc(d.definition)+'</i>';
-    else if(d.type==='concept') tip += '<br><span style="color:#64748b">Extracted concept</span>';
-    else if(d.type==='web') tip += '<br><span style="color:#fb923c">Web resource</span>';
-    tooltip.style('opacity',1).html(tip);
+    const html=buildNodeTipHTML(d);
+    tooltip.html(html).style('opacity',1);
+    tooltip.node().classList.toggle('interactive',!!(_neighbors[d.id]&&_neighbors[d.id].length));
     d3.select(this).select('rect,circle').attr('stroke-width',3);
     link.attr('stroke-opacity',l=>l.source.id===d.id||l.target.id===d.id?0.5:0.05);
     node.attr('opacity',n=>n.id===d.id||links.some(l=>(l.source.id===d.id&&l.target.id===n.id)||(l.target.id===d.id&&l.source.id===n.id))?1:.2);
@@ -1167,10 +1378,12 @@ function renderGraph(data){
     const r=el('graphWrap').getBoundingClientRect();
     tooltip.style('left',(e.clientX-r.left+12)+'px').style('top',(e.clientY-r.top-10)+'px');
   }).on('mouseleave',function(){
-    tooltip.style('opacity',0);
+    clearTimeout(_tipHideTimer);
+    _tipHideTimer=setTimeout(()=>{if(!_tipPinned)hideTipNow()},150);
     d3.select(this).select('rect,circle').attr('stroke-width',2);
-    link.attr('stroke-opacity',.5);
-    node.attr('opacity',1);
+    link.attr('stroke-opacity',l=>REL_LINEAGE.has(l.relation)?.75:.5);
+    applyRelFilter();
+    node.attr('opacity',selectedCluster&&clusterInfo?(n=>clusterInfo.assignment[n.id]===selectedCluster?1:.12):1);
   });
   simulation.on('tick',()=>{
     link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
@@ -1190,7 +1403,45 @@ function renderGraph(data){
       return -w/2;
     }).attr('y',-8);
     node.attr('transform',d=>'translate('+d.x+','+d.y+')');
+    // cluster hulls + labels follow their members
+    if(_hullG&&assign){
+      const pts={};
+      nodes.forEach(n=>{const c=assign[n.id];if(c)(pts[c]=pts[c]||[]).push([n.x,n.y])});
+      const hullSel=_hullG.selectAll('path').data(Object.keys(pts),d=>d);
+      hullSel.exit().remove();
+      hullSel.enter().append('path').merge(hullSel)
+        .attr('d',cid=>hullPath(pts[cid]))
+        .attr('fill',cid=>clusterColor(cid)).attr('stroke',cid=>clusterColor(cid))
+        .attr('stroke-opacity',.5).attr('stroke-linejoin','round')
+        .attr('opacity',cid=>{
+          const base=.10, dimmed=selectedCluster&&selectedCluster!==cid;
+          return dimmed?.03:base;
+        })
+        .style('cursor','pointer')
+        .on('click',(e,cid)=>selectCluster(cid));
+    }
+    if(_clLabelG&&assign){
+      const cent={};
+      nodes.forEach(n=>{const c=assign[n.id];if(!c)return;
+        const g=cent[c]=cent[c]||{x:0,y:0,n:0};g.x+=n.x;g.y+=n.y;g.n++});
+      const labSel=_clLabelG.selectAll('text').data(Object.keys(cent),d=>d);
+      labSel.exit().remove();
+      labSel.enter().append('text').attr('id','clusterLabel').attr('text-anchor','middle')
+        .attr('class','cl-label')
+        .on('click',(e,cid)=>selectCluster(cid))
+        .style('cursor','pointer').merge(labSel)
+        .attr('x',cid=>cent[cid].x/cent[cid].n).attr('y',cid=>cent[cid].y/cent[cid].n - 26)
+        .attr('opacity',cid=>selectedCluster&&selectedCluster!==cid?.15:.9)
+        .text(cid=>{
+          const cl=(clusterInfo.clusters.find(c=>c.id===cid)||{});
+          return `\u25C8 ${cl.label||cid} (${cent[cid].n})`;
+        });
+    }
   });
+  _curNodes=node;_curLinks=link;
+  if(selectedCluster&&assign){
+    node.attr('opacity',n=>assign[n.id]===selectedCluster?1:.12);
+  }
   const _isLight=document.body.classList.contains('light');
   if(_isLight)setTimeout(()=>recolorGraphEdges(true),0);
 }
@@ -2334,6 +2585,8 @@ fetchLogs();
 // Force re-render after layout settles
 setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},500);
 setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},1500);
+// Restore cluster mode if it was on last session
+setTimeout(()=>{if(localStorage.getItem('hive_clusters')==='1')toggleGraphClusters(true)},1600);
 
 /* ══════════════════════════ FOX — Research Companion ══════════════════════════ */
 const FOX = {
