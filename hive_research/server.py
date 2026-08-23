@@ -308,6 +308,9 @@ class RouteHandler(BaseHTTPRequestHandler):
             kind = params.get("kind", "fox")
             limit = int(params.get("limit", 100))
             _json_response(self, store.summary(kind=kind, limit=limit))
+        elif path == "/api/digest":
+            hours = params.get("hours")
+            _json_response(self, self.org.daily_digest(hours=int(hours) if hours else None))
         elif path == "/api/jobs" or path.startswith("/api/jobs/"):
             from .jobs import get_registry
 

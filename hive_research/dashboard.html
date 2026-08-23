@@ -640,7 +640,8 @@ select{cursor:pointer}
 
 <!-- ── Pool Panel ── -->
 <div class="panel" id="panel-pool">
-  <div class="panel-header"><h2>Research Pool <span class="badge" id="poolBadge">observatory</span></h2></div>
+  <div class="panel-header"><h2>Research Pool <span class="badge" id="poolBadge">observatory</span>
+    <button class="btn btn-sm btn-outline" onclick="showDigest()" title="Summarize papers observed in the last 24h into a vault digest">&#x1F4F0; Daily Digest</button></h2></div>
   <div class="panel-body" style="padding-top:8px">
     <div class="pool-toolbar">
       <div class="stat">Observed: <strong id="poolTotal">0</strong></div>
@@ -2666,6 +2667,38 @@ async function runImprovePass(){
     if(typeof loadBrowse==='function')loadBrowse();
   } else addFoxMsg('assistant','Improvement pass: '+(r.message||JSON.stringify(r)),{kind:'status'});
 }
+
+// ── daily digest ──
+async function showDigest(){
+  try{
+    const d=await api('/api/digest');
+    let msg;
+    if(!d.total_new){msg='\u2705 No new papers in the observation window. The pool keeps monitoring your topics.'}
+    else{
+      msg=`\u{1F4F0} Digest ready — ${d.total_new} papers observed.\n${Object.entries(d.topics).map(([t,n])=>`- ${t}: ${n}`).join('\n')}\nFull digest saved to: \`${d.path}\``;
+    }
+    foxInit().then(()=>{
+      FOX.convId=FOX.convId; // keep context
+      el('foxFloatWin').style.display='none';el('foxHalfPanel').style.display='none';
+      document.querySelector('#panel-fox .panel-body').appendChild(el('foxPanelHost'));
+      ['vb-full','vb-half','vb-float'].forEach(id=>el(id)&&el(id).classList.remove('active'));
+      el('vb-full').classList.add('active');
+      FOX.view='full';
+      switchPanel('fox');
+      addFoxMsg('user','Show me today\u2019s research digest',{});
+      addFoxMsg('assistant',msg,{kind:'status'});
+    });
+  }catch(e){alert('Digest failed: '+e)}
+}
+
+// Ctrl/Cmd+K → open Fox half panel and focus input
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+    e.preventDefault();
+    foxSetView('half');switchPanel('fox');foxInit();
+    setTimeout(()=>{const i=el('foxInput');if(i)i.focus()},120);
+  }
+});
 
 </script>
 </body>

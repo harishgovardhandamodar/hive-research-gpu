@@ -80,6 +80,15 @@ def looks_like_status_query(message: str) -> bool:
     return any(w in lowered for w in _STATUS_WORDS) and len(lowered) < 120
 
 
+_DIGEST_WORDS = ("new papers", "what's new", "whats new", "digest", "recent papers",
+                 "latest papers", "since yesterday", "this week")
+
+
+def looks_like_digest_query(message: str) -> bool:
+    lowered = message.lower()
+    return any(w in lowered for w in _DIGEST_WORDS) and not looks_like_status_query(message)
+
+
 SYSTEM_BASE = (
     "You are Fox, a precise research companion for an AI-agents/alignment/security "
     "researcher. Be concise, technical, and concrete. Prefer specifics (numbers, "
@@ -147,6 +156,25 @@ class Fox:
             + "\n".join(hints)
             + "\nApply these corrections proactively."
         )
+
+    def _organizer_digest(self) -> dict[str, Any]:
+        """Ask the organizer for a digest; degrade gracefully when absent."""
+        org = getattr(self, "organizer", None)
+        try:
+            if org is not None:
+                d = org.daily_digest()
+                topics = ", ".join(f"{t} ({n})" for t, n in list(d["topics"].items())[:6]) or "no active topics"
+                return {
+                    "answer": (
+                        f"{d['total_new']} new papers observed recently.\n"
+                        f"Topics: {topics}\nFull digest written to: {d['path']}"
+                    )
+                }
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug("digest via organizer failed: %s", e)
+        from .jobs import get_registry
+
+        return {"answer": get_registry().human_summary()}
 
     # ------------------------------------------------------------------ jobs
 
@@ -309,6 +337,14 @@ class Fox:
                 "sources": [],
                 "grounded": True,
                 "kind": "status_report",
+            }
+        elif looks_like_digest_query(message):
+            digest = self._organizer_digest()
+            payload = {
+                "answer": digest["answer"],
+                "sources": [],
+                "grounded": True,
+                "kind": "digest_report",
             }
         else:
             handler = {

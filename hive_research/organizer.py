@@ -30,6 +30,7 @@ class Organizer:
         self.web = WebIngester(self.llm, self.kg)
         from .fox import Fox
         self.fox = Fox(config, self.llm, self.kg, self.rag)
+        self.fox.organizer = self  # digest + cross-subsystem access
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
@@ -385,3 +386,58 @@ class Organizer:
                 registry.finish(job, error="reanalysis failed")
                 results.append({"paper_id": pid, "status": "failed"})
         return {"status": "ok", "improved_pass": results}
+
+    # ------------------------------------------------------------- daily digest
+
+    def daily_digest(self, hours: int | None = None) -> dict[str, Any]:
+        """New pool papers since the digest window, grouped by topic,
+        persisted to the vault so a researcher can skim what happened."""
+        from datetime import datetime, timedelta
+
+        hours = hours or self.config.digest_hours
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        by_topic: dict[str, list[dict[str, Any]]] = {}
+        total_new = 0
+        for p in self.pool.get_observed_papers():
+            first_seen = p.get("first_seen")
+            try:
+                seen_at = datetime.fromisoformat(first_seen)
+            except (TypeError, ValueError):
+                continue
+            if seen_at < cutoff:
+                continue
+            total_new += 1
+            for topic in p.get("topics", ["unsorted"]):
+                by_topic.setdefault(topic, []).append(p)
+
+        lines = [
+            f"# Research Digest — {datetime.utcnow():%Y-%m-%d %H:%M} UTC",
+            "",
+            f"{total_new} papers observed in the last {hours}h across {len(by_topic)} topics.",
+            "",
+        ]
+        for topic, papers in sorted(by_topic.items()):
+            lines.extend([f"## {topic} ({len(papers)})", ""])
+            for p in papers:
+                imported = " *(imported)*" if p.get("imported") else ""
+                authors = (p.get("authors_str") or "")[:80]
+                lines.append(f"### [{p['title']}]({'' if not p['arxiv_id'][0].isdigit() else 'https://arxiv.org/abs/'}{p['arxiv_id']}){imported}")
+                lines.append("")
+                if authors:
+                    lines.append(f"*{authors}*")
+                abstract = (p.get("abstract") or "")[:280]
+                if abstract:
+                    lines.append("")
+                    lines.append(abstract + ("…" if len(p.get("abstract") or "") > 280 else ""))
+                lines.append("")
+
+        digest_dir = Path(self.config.vault_dir) / "digests"
+        digest_dir.mkdir(parents=True, exist_ok=True)
+        digest_path = digest_dir / f"digest_{datetime.utcnow():%Y%m%d_%H%M}.md"
+        digest_path.write_text("\n".join(lines))
+        return {
+            "total_new": total_new,
+            "topics": {t: len(ps) for t, ps in by_topic.items()},
+            "path": str(digest_path),
+            "preview": "\n".join(lines[:30]),
+        }
