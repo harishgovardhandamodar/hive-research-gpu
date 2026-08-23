@@ -6,7 +6,7 @@ import os
 import platform
 import re
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,49 @@ class RouteHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         logger.debug(fmt, *args)
 
+    # -- security helpers ----------------------------------------------------
+
+    def _check_auth(self) -> bool:
+        """When HIVE_TOKEN is set, every request must present it."""
+        token = os.environ.get("HIVE_TOKEN", "")
+        if not token:
+            return True
+        presented = self.headers.get("X-Hive-Token", "")
+        if not presented and self.path.startswith("/api/"):
+            import urllib.parse as _up
+
+            qs = _up.parse_qs(_up.urlparse(self.path).query)
+            presented = (qs.get("token") or [""])[0]
+        if presented == token:
+            return True
+        _json_response(self, {"error": "unauthorized"}, 401)
+        return False
+
+    def _resolve_confined(self, rel_path: str) -> str | None:
+        """Resolve a user-supplied path strictly inside papers/vault dirs.
+
+        Returns the absolute path or None. Blocks absolute paths, symlink
+        escapes, and any ../ traversal leaving the allowed roots.
+        """
+        basedirs = [
+            os.path.normpath(str(self.org.config.papers_dir)),
+            os.path.normpath(str(self.org.config.vault_dir)),
+        ]
+        candidates = [rel_path]
+        stripped = rel_path[len("Notes/"):] if rel_path.startswith("Notes/") else None
+        if stripped is not None:
+            candidates.append(stripped)
+        for cand in candidates:
+            if os.path.isabs(cand):
+                continue
+            for base in basedirs:
+                abspath = os.path.normpath(os.path.join(base, cand))
+                if not abspath.startswith(base + os.sep) and abspath != base:
+                    continue  # escaped the root
+                if os.path.isfile(abspath):
+                    return abspath
+        return None
+
     def _read_body(self) -> str:
         length = int(self.headers.get("Content-Length", 0))
         return self.rfile.read(length).decode() if length else ""
@@ -66,7 +109,25 @@ class RouteHandler(BaseHTTPRequestHandler):
                     params[k] = urllib.parse.unquote(v)
         return path, params
 
+    def _paginate(self, items: list, params: dict[str, str]) -> dict | list:
+        """Wrap a list in {items,total,offset,limit} when limit/offset given."""
+        try:
+            offset = max(int(params.get("offset", 0)), 0)
+            limit = int(params["limit"]) if "limit" in params else None
+        except ValueError:
+            return items
+        if limit is None and not offset:
+            return items
+        return {
+            "items": items[offset:offset + limit] if limit is not None else items[offset:],
+            "total": len(items),
+            "offset": offset,
+            "limit": limit,
+        }
+
     def do_GET(self) -> None:
+        if not self._check_auth():
+            return
         path, params = self._parse_path()
         if path == "/" or path == "" or path == "/index.html":
             self._serve_dashboard()
@@ -111,7 +172,7 @@ class RouteHandler(BaseHTTPRequestHandler):
                     "has_lineage": n.id in has_lineage,
                     "has_extra": bool(n.definition and n.definition.startswith("{")),
                 })
-            _json_response(self, papers)
+            _json_response(self, self._paginate(papers, params))
         elif path == "/api/papers/search":
             def _auth_str(n):
                 a = n.authors
@@ -217,23 +278,8 @@ class RouteHandler(BaseHTTPRequestHandler):
             if not file_path:
                 _json_response(self, {"error": "missing path"}, 400)
                 return
-            basedirs = [str(self.org.config.papers_dir), str(self.org.config.vault_dir), "."]
-            abspath = os.path.normpath(file_path)
-            found = os.path.isfile(abspath)
-            if not found:
-                for basedir in basedirs:
-                    abspath = os.path.normpath(os.path.join(basedir, file_path))
-                    if os.path.isfile(abspath):
-                        found = True
-                        break
-            if not found and file_path.startswith("Notes/"):
-                stripped = file_path[len("Notes/"):]
-                for basedir in [str(self.org.config.vault_dir), str(self.org.config.papers_dir)]:
-                    abspath = os.path.normpath(os.path.join(basedir, stripped))
-                    if os.path.isfile(abspath):
-                        found = True
-                        break
-            if not found:
+            abspath = self._resolve_confined(file_path)
+            if not abspath:
                 _json_response(self, {"error": "not found"}, 404)
                 return
             ext = os.path.splitext(abspath)[1].lstrip(".").lower()
@@ -278,7 +324,7 @@ class RouteHandler(BaseHTTPRequestHandler):
             _json_response(self, data)
         elif path == "/api/pool/papers":
             papers = self.org.pool.get_observed_papers()
-            _json_response(self, papers)
+            _json_response(self, self._paginate(papers, params))
         elif path == "/api/pool/graph":
             graph = self.org.pool.get_pool_graph()
             _json_response(self, graph)
@@ -453,6 +499,8 @@ info.textContent += ' | OK';
         _html_response(self, html)
 
     def do_POST(self) -> None:
+        if not self._check_auth():
+            return
         path, params = self._parse_path()
         body = self._read_body()
         try:
@@ -656,8 +704,15 @@ def run_server(
     get_capture()
     RouteHandler.org = org
     RouteHandler.gpu_mgr = gpu_mgr
-    server = HTTPServer((host, port), RouteHandler)
+    server = ThreadingHTTPServer((host, port), RouteHandler)
+    server.daemon_threads = True
     logger.info("Server listening on http://%s:%d", host, port)
+    if host in ("0.0.0.0", "::") and not os.environ.get("HIVE_TOKEN"):
+        logger.warning(
+            "Binding to all interfaces WITHOUT auth (HIVE_TOKEN unset). "
+            "Anyone on this network can read files and drive the LLMs. "
+            "Set HIVE_TOKEN or bind 127.0.0.1."
+        )
     if gpu_mgr:
         gpu_status = gpu_mgr.get_status()
         logger.info("GPU: %d device(s) detected", gpu_status.get("count", 0))

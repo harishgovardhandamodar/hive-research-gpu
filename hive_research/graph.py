@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -19,10 +20,14 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeGraph:
     def __init__(self, config: Config, graph_id: str = "main") -> None:
+        import threading
+
         self.config = config
         self.graph_id = graph_id
         self.graph_dir = Path(config.graph_dir)
         self.graph_dir.mkdir(parents=True, exist_ok=True)
+        # The HTTP server is threaded; mutations + saves must not interleave.
+        self._lock = threading.RLock()
         self._hive = self._load()
 
     def _path(self) -> Path:
@@ -44,7 +49,10 @@ class KnowledgeGraph:
         return HiveGraph(id=self.graph_id)
 
     def save(self) -> None:
-        self._hive.to_json_file(str(self._path()))
+        with self._lock:
+            tmp_path = self._path().with_suffix(".json.tmp")
+            self._hive.to_json_file(str(tmp_path))
+            os.replace(tmp_path, self._path())
 
     @property
     def hive(self) -> HiveGraph:
@@ -60,26 +68,27 @@ class KnowledgeGraph:
         categories: list[str] | None = None,
         affiliations: str = "",
     ) -> Node:
-        existing = self._hive.get_node(paper_id)
-        if existing:
-            if affiliations and not existing.affiliations:
-                existing.affiliations = affiliations
-                self.save()
-            return existing
-        node = Node(
-            id=paper_id,
-            type=NodeType.PAPER,
-            label=title,
-            graph_id=self.graph_id,
-            arxiv_id=paper_id,
-            authors=authors,
-            published=published,
-            abstract=abstract,
-            categories=categories or [],
-            affiliations=affiliations,
-        )
-        self._hive.nodes.append(node)
-        return node
+        with self._lock:
+            existing = self._hive.get_node(paper_id)
+            if existing:
+                if affiliations and not existing.affiliations:
+                    existing.affiliations = affiliations
+                    self.save()
+                return existing
+            node = Node(
+                id=paper_id,
+                type=NodeType.PAPER,
+                label=title,
+                graph_id=self.graph_id,
+                arxiv_id=paper_id,
+                authors=authors,
+                published=published,
+                abstract=abstract,
+                categories=categories or [],
+                affiliations=affiliations,
+            )
+            self._hive.nodes.append(node)
+            return node
 
     def add_concept(
         self,
@@ -88,19 +97,20 @@ class KnowledgeGraph:
         definition: str = "",
         concept_type: str = "concept",
     ) -> Node:
-        existing = self._hive.get_node(concept_id)
-        if existing:
-            return existing
-        node = Node(
-            id=concept_id,
-            type=NodeType.CONCEPT,
-            label=label,
-            graph_id=self.graph_id,
-            definition=definition,
-            concept_type=concept_type,
-        )
-        self._hive.nodes.append(node)
-        return node
+        with self._lock:
+            existing = self._hive.get_node(concept_id)
+            if existing:
+                return existing
+            node = Node(
+                id=concept_id,
+                type=NodeType.CONCEPT,
+                label=label,
+                graph_id=self.graph_id,
+                definition=definition,
+                concept_type=concept_type,
+            )
+            self._hive.nodes.append(node)
+            return node
 
     def add_edge(
         self,
@@ -111,12 +121,13 @@ class KnowledgeGraph:
         from hive_datatype import validate_relation
 
         relation = validate_relation(relation)
-        for e in self._hive.edges:
-            if e.source == source and e.target == target and e.relation == relation:
-                return e
-        edge = Edge(source=source, target=target, relation=relation)
-        self._hive.edges.append(edge)
-        return edge
+        with self._lock:
+            for e in self._hive.edges:
+                if e.source == source and e.target == target and e.relation == relation:
+                    return e
+            edge = Edge(source=source, target=target, relation=relation)
+            self._hive.edges.append(edge)
+            return edge
 
     def find_similar_concept(
         self,
