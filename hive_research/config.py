@@ -129,7 +129,6 @@ class Config:
     def gpu_parallel_papers(self) -> int:
         return int(self._get("gpu", "parallel_papers", default=2))
 
-    @property
     def gpu_ollama_instance(self, gpu_id: int) -> dict[str, Any]:
         key = f"gpu_{gpu_id}"
         return dict(
@@ -143,3 +142,61 @@ class Config:
     @property
     def gpu_llm_device(self) -> int:
         return int(self._get("gpu", "llm_device", default=1))
+
+    # ---- Fox research companion -------------------------------------------
+
+    @property
+    def fox_model(self) -> str:
+        env = os.environ.get("FOX_MODEL")
+        if env:
+            return env
+        return str(
+            self._get("fox", "model", default=self.ollama_model)
+        )
+
+    @property
+    def fox_max_context_chunks(self) -> int:
+        return int(self._get("fox", "max_context_chunks", default=8))
+
+    @property
+    def fox_history_limit(self) -> int:
+        return int(self._get("fox", "history_limit", default=12))
+
+    @property
+    def fox_temperature(self) -> float:
+        return float(self._get("fox", "temperature", default=0.2))
+
+    @property
+    def fox_grounding_min_score(self) -> float:
+        return float(self._get("fox", "grounding_min_score", default=0.15))
+
+    # ---- Reinforcement feedback loop ---------------------------------------
+
+    @property
+    def feedback_dir(self) -> Path:
+        return Path(self._get("directories", "feedback", default=str(Path(self.root_dir) / "feedback")))
+
+    @property
+    def feedback_auto_improve(self) -> bool:
+        return bool(self._get("feedback", "auto_improve", default=True))
+
+    @property
+    def feedback_low_rating_threshold(self) -> int:
+        return int(self._get("feedback", "low_rating_threshold", default=2))
+
+    @property
+    def feedback_reanalyze_max(self) -> int:
+        return int(self._get("feedback", "reanalyze_max", default=5))
+
+    # ---- Research workflow --------------------------------------------------
+
+    @property
+    def digest_hours(self) -> int:
+        return int(self._get("workflow", "digest_hours", default=24))
+
+    @property
+    def domain_presets_enabled(self) -> list[str]:
+        raw = self._get("workflow", "domain_presets", default=None)
+        if isinstance(raw, list) and raw:
+            return [str(x) for x in raw]
+        return []

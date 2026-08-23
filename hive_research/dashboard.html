@@ -160,6 +160,66 @@ select{cursor:pointer}
 .chat-input input{flex:1}
 .chat-msg.typing{opacity:.6}
 
+/* ── Fox companion ── */
+.fox-root{display:flex;flex-direction:column;height:100%;min-height:0}
+.fox-toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:var(--glass-bg)}
+.fox-brand{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.fox-brand .face{font-size:16px;-webkit-text-fill-color:initial}
+.fox-modes{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.fox-mode-chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:10.5px;cursor:pointer;transition:all .18s;user-select:none;white-space:nowrap}
+.fox-mode-chip:hover{border-color:var(--accent);color:var(--accent)}
+.fox-mode-chip.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#080c18;border-color:transparent;font-weight:600;box-shadow:0 2px 8px rgba(96,165,250,.25)}
+.fox-viewbtns{display:flex;gap:4px;align-items:center}
+.fox-viewbtns .vb{width:28px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text3);cursor:pointer;font-size:12px;transition:all .15s}
+.fox-viewbtns .vb:hover{color:var(--accent);border-color:var(--accent)}
+.fox-viewbtns .vb.active{color:#080c18;background:var(--accent);border-color:transparent}
+.fox-desc{font-size:10.5px;color:var(--text3);padding:4px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.fox-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.fox-msg{max-width:88%;padding:10px 14px;border-radius:14px;font-size:12.5px;line-height:1.65;animation:msgIn .25s cubic-bezier(.4,0,.2,1)}
+.fox-msg.user{background:linear-gradient(135deg,var(--accent),#3b82f6);color:#080c18;align-self:flex-end;border-bottom-right-radius:4px;white-space:pre-wrap}
+.fox-msg.assistant{background:var(--surface2);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px;color:var(--text)}
+.fox-msg .md{white-space:pre-wrap;word-break:break-word}
+.fox-msg .md code{background:rgba(96,165,250,.12);padding:1px 5px;border-radius:4px;font-size:11.5px}
+.fox-cites{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:5px}
+.fox-cite{display:flex;gap:7px;align-items:flex-start;font-size:10.5px;color:var(--text3);line-height:1.45}
+.fox-cite .n{flex-shrink:0;background:rgba(96,165,250,.15);color:var(--accent);border-radius:4px;padding:0 5px;font-weight:700;font-size:9.5px;margin-top:1px}
+.fox-cite .t{color:var(--accent);text-decoration:none}
+.fox-cite .t:hover{text-decoration:underline}
+.cite-ref{display:inline-block;background:rgba(96,165,250,.15);color:var(--accent);border-radius:4px;padding:0 4px;font-size:10px;font-weight:700;cursor:help;margin:0 1px}
+.fox-thinking{margin-top:8px;border:1px solid var(--border);border-radius:9px;background:var(--bg);overflow:hidden}
+.fox-thinking summary{padding:6px 11px;font-size:10.5px;color:var(--purple);cursor:pointer;user-select:none;font-weight:600}
+.fox-thinking .body{padding:2px 12px 9px;font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.55}
+.fox-rate{display:flex;gap:4px;align-items:center;margin-top:7px}
+.fox-rate .rb{border:none;background:none;cursor:pointer;font-size:13px;opacity:.35;transition:all .15s;padding:2px 4px;border-radius:5px}
+.fox-rate .rb:hover{opacity:.9;transform:scale(1.15)}
+.fox-rate .rb.on{opacity:1;background:rgba(52,211,153,.15)}
+.fox-meta{font-size:9.5px;color:var(--text3);margin-left:auto}
+.fox-inputbar{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+.fox-inputbar textarea{flex:1;min-height:44px;max-height:140px;resize:none;border-radius:12px}
+.fox-send{height:44px;padding:0 20px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#080c18;font-weight:700;font-size:12.5px;cursor:pointer;transition:all .2s}
+.fox-send:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.fox-send:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.fox-status{font-size:10px;color:var(--text3);padding:0 14px 7px;display:flex;gap:12px;flex-shrink:0}
+.fox-status .conv{cursor:pointer;color:var(--accent)}
+.fox-status .conv:hover{text-decoration:underline}
+/* Floating window */
+#foxFloatWin{position:fixed;z-index:900;width:520px;height:640px;min-width:360px;min-height:320px;max-width:96vw;max-height:94vh;left:calc(100vw - 560px);top:70px;background:var(--glass-bg3);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.65);display:none;flex-direction:column;overflow:hidden}
+#foxFloatWin .fox-drag{height:34px;display:flex;align-items:center;justify-content:center;cursor:move;flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);user-select:none;touch-action:none}
+#foxResizeHandle{position:absolute;right:2px;bottom:2px;width:17px;height:17px;cursor:nwse-resize;z-index:5;color:var(--text3)}
+/* Half panel */
+#foxHalfPanel{position:fixed;top:var(--header-h);right:0;bottom:0;width:min(50vw,720px);min-width:340px;z-index:800;background:var(--glass-bg3);backdrop-filter:blur(16px);border-left:1px solid var(--border);box-shadow:-16px 0 48px rgba(0,0,0,.4);display:none}
+#foxHalfDivider{position:absolute;left:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:5;touch-action:none}
+#foxHalfDivider::after{content:'';position:absolute;left:2px;top:50%;transform:translateY(-50%);width:2px;height:56px;background:var(--border);border-radius:2px}
+#foxHalfDivider:hover::after{background:var(--accent)}
+.fox-overlay-root{position:absolute;inset:0;display:flex;flex-direction:column}
+.fox-empty{margin:auto;text-align:center;color:var(--text3);max-width:420px;line-height:1.7;font-size:12.5px}
+.fox-empty .big{font-size:40px;margin-bottom:10px}
+.fox-empty .suggest{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+.fox-empty .suggest span{border:1px solid var(--border);border-radius:16px;padding:4px 12px;font-size:10.5px;cursor:pointer;color:var(--text2);transition:all .15s}
+.fox-empty .suggest span:hover{border-color:var(--accent);color:var(--accent)}
+.fox-progress{margin-top:6px;height:5px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.fox-progress .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
+
 /* ── Stats / About ── */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .stat-card{text-align:center;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);transition:border-color .2s,transform .2s}
@@ -426,6 +486,7 @@ select{cursor:pointer}
     <option value="fast">Fast (llama3.2:3b)</option>
   </select>
   <div id="gpuStatus" onclick="loadGpuStatus()" title="NVIDIA GPU">&#x1F5A5; GPU</div>
+  <div id="jobsPill" onclick="toggleJobsDrawer()" title="Ingestion activity" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3);padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);cursor:pointer;flex-shrink:0;transition:border-color .15s">&#x2699; <span id="jobsPillText">idle</span></div>
   <div id="themeToggle" onclick="toggleTheme()" style="cursor:pointer;font-size:15px;color:var(--text3);padding:3px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);line-height:1;transition:all .15s">&#x263E;</div>
 </div>
 <div class="body">
@@ -436,6 +497,7 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="browse" onclick="switchPanel('browse')">&#x2630;<span class="tip">Browse</span></div>
   <div class="nav-item" data-panel="similarity" onclick="switchPanel('similarity')">&#x2248;<span class="tip">Similarity</span></div>
   <div class="nav-item" data-panel="query" onclick="switchPanel('query')">&#x1F4AC;<span class="tip">Chat</span></div>
+  <div class="nav-item" data-panel="fox" onclick="switchPanel('fox')">&#x1F98A;<span class="tip">Fox — Research Companion</span></div>
   <div class="nav-item" onclick="window.open('/landscape','_blank')" style="cursor:pointer">&#x1F30D;<span class="tip">Landscape</span></div>
   <div class="spacer"></div>
   <div class="nav-item" data-panel="about" onclick="switchPanel('about')">&#x2139;<span class="tip">About</span></div>
@@ -469,7 +531,14 @@ select{cursor:pointer}
         <svg></svg>
         <div id="graphEmpty"><div class="icon">&#x1F4DA;</div>No papers yet &mdash; add one to get started</div>
         <input id="graphFilter" class="tab" placeholder="Filter nodes..." oninput="applyFilter(this.value)">
-        <div id="graphLegend"><div class="l"><div class="sw" style="background:var(--accent)"></div> Paper</div><div class="l"><div class="sw" style="background:#2dd4bf"></div> Lineage</div><div class="l"><div class="sw" style="background:#fb923c"></div> Web</div><div class="l"><div class="sw cir" style="background:var(--purple)"></div> Concept</div><div class="l" style="color:var(--green)">&#x2192; cites</div></div>
+        <select id="relFilter" onchange="applyRelFilter(this.value)" style="position:absolute;top:42px;right:10px;width:200px;z-index:10;border-radius:8px;font-size:11px;background:var(--glass-bg);backdrop-filter:blur(8px);padding:5px 10px" title="Filter edges by relation type">
+          <option value="all">All relations</option>
+          <option value="lineage">Citations &amp; lineage only</option>
+          <option value="semantic">Semantic (uses/introduces&#8230;)</option>
+          <option value="comparison">Comparison (compares/contrasts)</option>
+          <option value="none">Hide edges</option>
+        </select>
+        <div id="graphLegend"><div class="l"><div class="sw" style="background:var(--accent)"></div> Paper</div><div class="l"><div class="sw" style="background:#2dd4bf"></div> Lineage</div><div class="l"><div class="sw cir" style="background:var(--purple)"></div> Concept</div><div class="l"><div class="sw" style="background:#34d399"></div>&#8594;cites</div><div class="l"><div class="sw" style="background:#c084fc"></div>&#8594;extends</div><div class="l"><div class="sw" style="background:#60a5fa"></div>&#8594;uses</div><div class="l"><div class="sw" style="background:#fbbf24"></div>&#8594;introduces</div><div class="l"><div class="sw" style="background:#f472b6"></div>&#8594;compares</div><div class="l" style="opacity:.6">&#8943; dashed = weak</div></div>
         <div id="tooltip"></div>
         <div id="nodePreview">
           <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
@@ -571,7 +640,8 @@ select{cursor:pointer}
 
 <!-- ── Pool Panel ── -->
 <div class="panel" id="panel-pool">
-  <div class="panel-header"><h2>Research Pool <span class="badge" id="poolBadge">observatory</span></h2></div>
+  <div class="panel-header"><h2>Research Pool <span class="badge" id="poolBadge">observatory</span>
+    <button class="btn btn-sm btn-outline" onclick="showDigest()" title="Summarize papers observed in the last 24h into a vault digest">&#x1F4F0; Daily Digest</button></h2></div>
   <div class="panel-body" style="padding-top:8px">
     <div class="pool-toolbar">
       <div class="stat">Observed: <strong id="poolTotal">0</strong></div>
@@ -676,7 +746,39 @@ select{cursor:pointer}
   </div>
 </div>
 
+<!-- ── Fox Research Companion ── -->
+<div class="panel" id="panel-fox">
+  <div class="panel-body" style="padding:0;overflow:hidden">
+    <div id="foxPanelHost" style="display:flex;flex-direction:column;height:100%;min-height:0"></div>
+  </div>
+</div>
+
 </div><!-- /main-top -->
+
+<!-- ── Fox overlays (floating window / half panel share #foxRoot) ── -->
+<div id="foxFloatWin">
+  <div class="fox-drag" id="foxDragBar">&#x1F98A; Fox — drag to move &nbsp;·&nbsp; double-click bar to dock back
+    <span onclick="foxSetView('full')" style="position:absolute;left:10px;top:7px;cursor:pointer;color:var(--text3)" title="Dock into dashboard">&#x2715;</span>
+  </div>
+  <div id="foxFloatHost" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+  <svg id="foxResizeHandle" viewBox="0 0 16 16"><path d="M14 4 L4 14 M14 9 L9 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+</div>
+<div id="foxHalfPanel">
+  <div id="foxHalfDivider" title="Drag to resize"></div>
+  <div id="foxHalfHost" style="position:absolute;inset:0;display:flex;flex-direction:column"></div>
+</div>
+
+<!-- ── Jobs activity drawer ── -->
+<div id="jobsDrawer" style="position:fixed;top:calc(var(--header-h) + 6px);right:12px;width:420px;max-width:92vw;max-height:70vh;background:var(--glass-bg3);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);z-index:850;display:none;flex-direction:column;overflow:hidden">
+  <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text2)">
+    Ingestion Activity
+    <span style="margin-left:auto;display:flex;gap:6px;cursor:pointer;color:var(--text3)">
+      <span onclick="loadJobs(true)" title="Refresh">&#x21BB;</span>
+      <span onclick="el('jobsDrawer').style.display='none'" title="Close">&#x2715;</span>
+    </span>
+  </div>
+  <div id="jobsDrawerBody" style="overflow-y:auto;padding:8px 12px;font-size:11px"></div>
+</div>
 
 <!-- ── Persistent Bottom Log Bar ── -->
 <div class="log-bar" id="logBar">
@@ -843,6 +945,7 @@ function switchPanel(name){
   if(name==='pool')loadPoolPanel();
   if(name==='import'){document.getElementById('webUrlInput').focus();loadWebList();}
   if(name==='about')loadAbout();
+  if(name==='fox'){foxDock();foxInit()}
 }
 
 // ── GPU Status ──
@@ -906,6 +1009,25 @@ async function refreshPapers(){
 
 // ── Graph Style Controls ──
 let GS={paperColor:'#60a5fa',lineageColor:'#2dd4bf',webColor:'#fb923c',conceptColor:'#c084fc',edgeColor:'#1e3a5f',citeColor:'#34d399',paperSize:14,conceptSize:7};
+
+// ── Relation semantics: color / width / dash per edge type ──
+const REL_COLORS={
+  cites:{color:'#34d399',width:1.8,dash:null,label:'cites'},
+  extends:{color:'#c084fc',width:1.6,dash:null,label:'extends'},
+  improves:{color:'#22d3ee',width:1.6,dash:null,label:'improves'},
+  uses:{color:'#60a5fa',width:1.3,dash:null,label:'uses'},
+  introduces:{color:'#fbbf24',width:1.4,dash:null,label:'introduces'},
+  proposes:{color:'#fbbf24',width:1.2,dash:null,label:'proposes'},
+  compares:{color:'#f472b6',width:1.1,dash:'3,3',label:'compares'},
+  contrasts:{color:'#f87171',width:1.2,dash:'3,3',label:'contrasts'},
+  references:{color:'#64748b',width:1,dash:'2,3',label:'references'},
+  nests:{color:'#a78bfa',width:1.1,dash:null,label:'nests'},
+  related_to:{color:'#334155',width:.8,dash:'2,4',label:'related'},
+};
+const REL_LINEAGE=new Set(['cites','extends','improves','proposes']);
+function relColor(r){return (REL_COLORS[r]||REL_COLORS.related_to).color}
+function relStyle(r){return REL_COLORS[r]||REL_COLORS.related_to}
+function relMarkerId(r){return 'arrow-'+((r||'related_to').replace(/[^a-z_]/g,''))}
 (function(){
   try{const s=JSON.parse(localStorage.getItem('hive_graph_style'));if(s)Object.assign(GS,s)}catch(_){}
   const set=function(id,val){const e=document.getElementById(id);if(e)e.value=val};
@@ -944,6 +1066,25 @@ function resetGraphStyle(){
   document.getElementById('gcPaperSizeV').textContent=GS.paperSize;
   document.getElementById('gcConceptSizeV').textContent=GS.conceptSize;
   if(gData.nodes)renderGraph(gData);
+}
+
+// ── Relation edge filter (citations / semantic / comparison) ──
+let _relFilterMode='all';
+function applyRelFilter(mode){
+  if(mode!==undefined)_relFilterMode=mode;
+  const sel=document.getElementById('relFilter');if(sel&&sel.value!==_relFilterMode)sel.value=_relFilterMode;
+  const edges=document.querySelectorAll('.rel-edge');
+  edges.forEach(l=>{
+    const rel=l.getAttribute('data-rel')||'related_to';
+    let show=true;
+    if(_relFilterMode==='lineage')show=REL_LINEAGE.has(rel);
+    else if(_relFilterMode==='semantic')show=!REL_LINEAGE.has(rel)&&!['compares','contrasts','related_to','references'].includes(rel);
+    else if(_relFilterMode==='comparison')show=['compares','contrasts'].includes(rel);
+    else if(_relFilterMode==='none')show=false;
+    l.style.display=show?'':'none';
+    // hide the arrowhead of hidden edges too
+    l.setAttribute('marker-end',show?`url(#${relMarkerId(rel)})`:'');
+  });
 }
 
 // ── Knowledge Graph (D3) ──
@@ -985,19 +1126,26 @@ function renderGraph(data){
     .force('center',d3.forceCenter(W/2,H/2))
     .force('collision',d3.forceCollide(d=>d.type==='paper'?ps+20:cs+12));
   const defs=svg.append('defs');
-  defs.append('marker').attr('id','arrow').attr('viewBox','0 -5 10 10').attr('refX',20).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
-    .append('path').attr('d','M0,-5L10,0L0,5').attr('fill',GS.edgeColor);
+  const relationsPresent=[...new Set(links.map(l=>l.relation||'related_to'))];
+  for(const r of relationsPresent){
+    defs.append('marker').attr('id',relMarkerId(r)).attr('viewBox','0 -5 10 10').attr('refX',20).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
+      .append('path').attr('d','M0,-5L10,0L0,5').attr('fill',relColor(r));
+  }
   const link=container.append('g').attr('class','graph-edges').selectAll('line').data(links).join('line')
-    .attr('stroke',d=>d.relation==='cites'?GS.citeColor:GS.edgeColor)
-    .attr('stroke-width',d=>d.relation==='cites'?1.5:1)
-    .attr('stroke-opacity',d=>d.relation==='cites'?.7:.5)
-    .attr('marker-end','url(#arrow)');
+    .attr('class','rel-edge')
+    .attr('data-rel',d=>d.relation||'related_to')
+    .attr('stroke',d=>relStyle(d.relation).color)
+    .attr('stroke-width',d=>relStyle(d.relation).width*(d.detail?1.4:1))
+    .attr('stroke-dasharray',d=>relStyle(d.relation).dash)
+    .attr('stroke-opacity',d=>REL_LINEAGE.has(d.relation)?.75:.5)
+    .attr('marker-end',d=>`url(#${relMarkerId(d.relation)})`);
+  applyRelFilter();
   const linkLabel=container.append('g').attr('class','graph-labels').selectAll('g').data(links).join('g');
   linkLabel.append('rect')
     .attr('fill','#1e293b').attr('rx',4).attr('ry',4)
     .attr('stroke','#1e3a5f').attr('stroke-width',0.5);
   linkLabel.append('text').text(d=>d.relation||'')
-    .attr('font-size','8px').attr('fill',d=>d.relation==='cites'?GS.citeColor:'#94a3b8')
+    .attr('font-size','8px').attr('fill',d=>relStyle(d.relation).color)
     .attr('text-anchor','middle').attr('dy','0.35em');
   const node=container.append('g').selectAll('g').data(nodes).join('g').call(drag(simulation));
   node.append('title').text(d=>d.label+(d.abstract?'\n'+d.abstract.substring(0,300):'')+(d.definition?'\n'+d.definition:''));
@@ -1133,6 +1281,8 @@ function showNodePreview(d){
         const match=pp.find(p=>p.id===d.id);
         if(match&&match.note_path){
           actions+='<button class="btn btn-sm btn-outline" onclick="openInBrowse(\''+d.id+'\',\'note\')">MD</button>';
+          actions+='<button class="btn btn-sm btn-outline" title="Rate these notes — low ratings train the improvement loop" onclick="rateNotes(\''+d.id+'\',5,this)">&#x1F44D;</button>';
+          actions+='<button class="btn btn-sm btn-outline" title="Rate these notes — low ratings trigger re-analysis" onclick="rateNotes(\''+d.id+'\',2,this)">&#x1F44E;</button>';
         }
         if(d.arxiv_id){
           actions+='<button class="btn btn-sm btn-outline" onclick="openInBrowse(\''+d.id+'\',\'pdf\')">PDF</button>';
@@ -2216,6 +2366,340 @@ fetchLogs();
 // Force re-render after layout settles
 setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},500);
 setTimeout(()=>{if(el('panel-graph').classList.contains('active')&&gData.nodes)renderGraph(gData)},1500);
+
+/* ══════════════════════════ FOX — Research Companion ══════════════════════════ */
+const FOX = {
+  mode: localStorage.getItem('fox_mode') || 'rag',
+  convId: null,
+  view: 'full',           // full | half | float
+  modes: {},
+  busy: false,
+  jobsSeen: new Set(),
+};
+const FOX_SUGGESTIONS = [
+  'Summarize the state of multi-agent debate methods',
+  'What alignment techniques does my library cover?',
+  'Compare swarm vs single-agent approaches in my papers',
+  'Any papers on prompt injection defenses?',
+];
+
+function foxRootHTML(){return `
+  <div class="fox-root">
+    <div class="fox-toolbar">
+      <span class="fox-brand"><span class="face">&#x1F98A;</span>Fox</span>
+      <div class="fox-modes" id="foxModes"></div>
+      <div class="fox-viewbtns">
+        <span class="vb" id="vb-full" title="Full panel" onclick="foxSetView('full')">&#x26F6;</span>
+        <span class="vb" id="vb-half" title="Half panel (resizable)" onclick="foxSetView('half')">&#x25AC;</span>
+        <span class="vb" id="vb-float" title="Floating window (resizable)" onclick="foxSetView('float')">&#x29C9;</span>
+        <span class="vb" title="New conversation" onclick="foxNewConv()">&#x2795;</span>
+        <span class="vb" title="Conversations" onclick="foxShowConvs()">&#x2630;</span>
+      </div>
+    </div>
+    <div class="fox-desc" id="foxDesc"></div>
+    <div class="fox-msgs" id="foxMsgs"></div>
+    <div class="fox-inputbar">
+      <textarea id="foxInput" rows="2" placeholder="Ask Fox anything about your research library&#8230; (Enter to send, Shift+Enter newline)"></textarea>
+      <button class="fox-send" id="foxSendBtn" onclick="foxSend()">Send</button>
+    </div>
+    <div class="fox-status"><span>Mode: <b id="foxStatusMode">rag</b></span><span id="foxStatusGrounded"></span><span style="margin-left:auto;display:flex;gap:12px"><span style="cursor:pointer;color:var(--accent)" onclick="loadJobs(true)">Ingestion activity &#x2197;</span><span style="cursor:pointer;color:var(--green)" onclick="runImprovePass()" title="Re-analyze low-rated paper notes with your criticism as hints">&#x26A1; Improve</span></span></div>
+  </div>`}
+
+async function foxInit(){
+  if(!FOX._built){
+    FOX._built=true;
+    const host=el('foxPanelHost');host.innerHTML=foxRootHTML();
+    try{
+      const data=await api('/api/fox/modes');
+      FOX.modes=data.modes||{};FOX.mode=data.default&&localStorage.getItem('fox_mode')?FOX.mode:(data.default||'rag');
+    }catch(e){FOX.modes={}}
+    foxRenderModes();foxBindInput();foxWelcome();
+    setInterval(foxPollJobs,4000);foxPollJobs();
+  }
+}
+function foxRenderModes(){
+  const wrap=el('foxModes');if(!wrap)return;
+  wrap.innerHTML='';
+  for(const[id,m]of Object.entries(FOX.modes)){
+    const chip=document.createElement('span');
+    chip.className='fox-mode-chip'+(id===FOX.mode?' active':'');
+    chip.textContent=(m.icon?({bolt:'\u26A1',book:'\u{1F4D6}',brain:'\u{1F9E0}',layers:'\u{1F4CB}',telescope:'\u{1F52D}',scroll:'\u{1F4DC}'}[m.icon]||'')+' ':'')+m.label;
+    chip.onclick=()=>{FOX.mode=id;localStorage.setItem('fox_mode',id);foxRenderModes()};
+    chip.title=m.description;
+    wrap.appendChild(chip);
+  }
+  const d=el('foxDesc');if(d)d.textContent=FOX.modes[FOX.mode]?FOX.modes[FOX.mode].description:'';
+  const s=el('foxStatusMode');if(s)s.textContent=FOX.mode;
+}
+function foxBindInput(){
+  const inp=el('foxInput');if(!inp)return;
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();foxSend()}
+  });
+}
+function foxWelcome(){
+  el('foxMsgs').innerHTML=`<div class="fox-empty">
+    <div class="big">&#x1F98A;</div>
+    <b>Fox</b> — your local research companion.<br>
+    I answer strictly from your ingested papers &amp; knowledge graph, with citations.<br>
+    Pick a mode above: Fast · RAG · Thinking · Deep-Thinking · Deep Research · Survey Report.
+    <div class="suggest">${FOX_SUGGESTIONS.map(s=>`<span onclick="foxQuick(this.textContent)">${s}</span>`).join('')}</div>
+  </div>`;
+}
+function foxQuick(text){el('foxInput').value=text;foxSend()}
+
+// ── view modes ──
+function foxSetView(v){
+  const root=el('foxPanelHost'),floatW=el('foxFloatWin'),halfP=el('foxHalfPanel');
+  ['vb-full','vb-half','vb-float'].forEach(id=>el(id)&&el(id).classList.remove('active'));
+  floatW.style.display='none';halfP.style.display='none';
+  if(v==='half'){
+    halfP.style.display='block';el('foxHalfHost').appendChild(root);el('vb-half').classList.add('active');
+  }else if(v==='float'){
+    floatW.style.display='flex';el('foxFloatHost').appendChild(root);el('vb-float').classList.add('active');
+  }else{
+    document.querySelector('#panel-fox .panel-body').appendChild(root);
+    el('vb-full').classList.add('active');
+  }
+  FOX.view=v;localStorage.setItem('fox_view',v);
+}
+function foxDock(){if(FOX.view!=='full')foxSetView('full')}
+
+// floating drag + resize
+(function(){
+  let sx,sy,ox,oy,dragging=false;
+  const win=document.getElementById('foxFloatWin'),bar=document.getElementById('foxDragBar');
+  bar.addEventListener('pointerdown',e=>{
+    if(e.target.closest('span'))return;
+    dragging=true;bar.setPointerCapture(e.pointerId);
+    const r=win.getBoundingClientRect();sx=e.clientX;sy=e.clientY;ox=r.left;oy=r.top;
+  });
+  bar.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    win.style.left=Math.max(0,ox+e.clientX-sx)+'px';
+    win.style.top=Math.max(0,oy+e.clientY-sy)+'px';
+  });
+  bar.addEventListener('pointerup',()=>dragging=false);
+  bar.addEventListener('dblclick',()=>foxSetView('full'));
+  // resize
+  const h=document.getElementById('foxResizeHandle');let rs=false,rw,rh;
+  h.addEventListener('pointerdown',e=>{rs=true;h.setPointerCapture(e.pointerId);const r=win.getBoundingClientRect();rw=r.width-(e.clientX-r.left)-(r.width-e.clientX);rw=r.width;rh=r.height;sx=e.clientX;sy=e.clientY});
+  h.addEventListener('pointermove',e=>{
+    if(!rs)return;
+    win.style.width=Math.max(360,rw+e.clientX-sx)+'px';
+    win.style.height=Math.max(320,rh+e.clientY-sy)+'px';
+  });
+  h.addEventListener('pointerup',()=>rs=false);
+})();
+// half divider resize
+(function(){
+  const div=document.getElementById('foxHalfDivider'),panel=document.getElementById('foxHalfPanel');
+  let dragging=false,sx,w;
+  div.addEventListener('pointerdown',e=>{dragging=true;div.setPointerCapture(e.pointerId);sx=e.clientX;w=panel.getBoundingClientRect().width});
+  div.addEventListener('pointermove',e=>{if(dragging)panel.style.width=Math.min(window.innerWidth-80,Math.max(340,w+(sx-e.clientX)))+'px'});
+  div.addEventListener('pointerup',()=>dragging=false);
+})();
+
+// ── conversations ──
+function foxNewConv(){FOX.convId=null;foxWelcome()}
+async function foxShowConvs(){
+  const list=await api('/api/fox/conversations');
+  if(!Array.isArray(list)||!list.length){alert('No saved conversations yet.');return}
+  const html=list.slice(0,12).map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border)">
+    <a href="#" onclick="foxOpenConv('${c.id}');return false" style="flex:1;color:var(--text);text-decoration:none;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.title}</a>
+    <span style="font-size:9.5px;color:var(--text3)">${c.messages} msgs</span>
+    <span onclick="foxDeleteConv('${c.id}')" style="cursor:pointer;color:var(--red);font-size:10px">&#x2715;</span>
+  </div>`).join('');
+  const msgs=el('foxMsgs');
+  msgs.innerHTML=`<div class="card" style="width:100%;padding:6px 0"><div class="card-header" style="padding:4px 12px">Saved conversations</div>${html}</div>`;
+}
+async function foxOpenConv(id){
+  const conv=await api('/api/fox/conversations/'+id);
+  if(conv.error){alert('Conversation not found');return}
+  FOX.convId=id;msgsEl().innerHTML='';
+  for(const m of conv.messages||[]){
+    if(m.role==='user')addFoxMsg('user',m.content,{});
+    else addFoxMsg('assistant',m.content,{sources:m.sources||[],mode:m.mode});
+  }
+}
+async function foxDeleteConv(id){await api('/api/fox/conversations/'+id+'?delete=1','POST',{});foxShowConvs()}
+
+function msgsEl(){return el('foxMsgs')}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function mdLite(s){
+  let out=esc(s);
+  out=out.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  out=out.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+  out=out.replace(/^### (.+)$/gm,'<b style="color:var(--accent)">$1</b>');
+  out=out.replace(/^## (.+)$/gm,'<b style="color:var(--accent)">$1</b>');
+  return out;
+}
+
+function addFoxMsg(role,text,data={}){
+  const msgs=msgsEl();
+  const empty=msgs.querySelector('.fox-empty');if(empty)empty.remove();
+  const d=document.createElement('div');
+  d.className='fox-msg '+role;
+  let inner=`<div class="md">${mdLite(text)}</div>`;
+  if(data.thinking)inner+=`<details class="fox-thinking"><summary>&#x1F9E0; Reasoning trace</summary><div class="body">${esc(data.thinking)}</div></details>`;
+  if(data.sub_questions&&data.sub_questions.length)inner+=`<div class="fox-cites" style="border-style:dotted"><div class="fox-cite"><span class="n">Q</span><span>Decomposed: ${esc(data.sub_questions.join(' · '))}</span></div></div>`;
+  if(data.sources&&data.sources.length){
+    inner+=`<div class="fox-cites">${data.sources.map((s,i)=>`
+      <div class="fox-cite"><span class="n">[${i+1}]</span><span>
+      ${s.source_title?`<a class="t" href="${s.source_id&&/^\d/.test(s.source_id)?'https://arxiv.org/abs/'+s.source_id:'#'}" target="_blank">${esc(s.source_title)}</a>`:'(knowledge graph)'}
+      ${s.text?`<span style="opacity:.75"> — ${esc(s.text.slice(0,140))}${s.text.length>140?'…':''}</span>`:''}
+      </span></div>`).join('')}</div>`;
+  }
+  if(role==='assistant'&&data.kind!=='status'){
+    inner+=`<div class="fox-rate">
+      <button class="rb" data-r="5" title="Good answer">&#x1F44D;</button>
+      <button class="rb" data-r="2" title="Bad answer">&#x1F44E;</button>
+      <span class="fox-meta">${data.mode?('· '+data.mode):''}${data.elapsed_s!==undefined?(' · '+data.elapsed_s+'s'):''}</span>
+    </div>`;
+    d.dataset.grounded=data.grounded===undefined?'':String(data.grounded);
+  }
+  d.innerHTML=inner;
+  msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;
+  d.querySelectorAll('.rb').forEach(b=>b.onclick=()=>{
+    d.querySelectorAll('.rb').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    api('/api/fox/feedback','POST',{rating:+b.dataset.r,mode:data.mode,conversation_id:FOX.convId,comment:''}).catch(()=>{});
+  });
+  return d;
+}
+
+async function foxSend(){
+  const inp=el('foxInput');const text=inp.value.trim();
+  if(!text||FOX.busy)return;
+  inp.value='';FOX.busy=true;el('foxSendBtn').disabled=true;
+  addFoxMsg('user',text,{});
+  const typing=document.createElement('div');
+  typing.className='fox-msg assistant typing';typing.id='foxTyping';
+  typing.innerHTML='Fox is thinking&#8230;';
+  msgsEl().appendChild(typing);msgsEl().scrollTop=msgsEl().scrollHeight;
+
+  if(FOX.mode==='survey'){
+    const r=await api('/api/fox/survey','POST',{topic:text,conversation_id:FOX.convId});
+    if(r.job_id){FOX.convId=r.conversation_id||FOX.convId;foxPollSurvey(r.job_id)}
+    else addFoxMsg('assistant','Error: '+(r.error||'could not start survey job'),{kind:'status'});
+    FOX.busy=false;el('foxSendBtn').disabled=false;return;
+  }
+
+  try{
+    const r=await api('/api/fox/chat','POST',{message:text,mode:FOX.mode,conversation_id:FOX.convId});
+    el('foxTyping')&&el('foxTyping').remove();
+    if(r.error){addFoxMsg('assistant','Error: '+r.error,{});}
+    else{
+      FOX.convId=r.conversation_id;
+      addFoxMsg('assistant',r.answer,{thinking:r.thinking,sub_questions:r.sub_questions,sources:r.sources,mode:r.mode,elapsed_s:r.elapsed_s,grounded:r.grounded});
+      el('foxStatusGrounded').textContent=r.grounded?'grounded in '+((r.sources||[]).length)+' sources':'ungrounded (fast mode)';
+    }
+  }catch(e){
+    el('foxTyping')&&el('foxTyping').remove();
+    addFoxMsg('assistant','Connection error: '+e,{});
+  }
+  FOX.busy=false;if(el('foxSendBtn'))el('foxSendBtn').disabled=false;
+}
+
+async function foxPollSurvey(jobId){
+  const typing=el('foxTyping')||(()=>{const d=document.createElement('div');d.className='fox-msg assistant typing';d.id='foxTyping';msgsEl().appendChild(d);return d})();
+  const st=await api('/api/fox/job/'+jobId);
+  if(st.error){typing.remove();addFoxMsg('assistant','Survey job lost.',{});return}
+  const pct=Math.round((st.progress||0)*100);
+  typing.innerHTML=`&#x1F4DC; Writing survey report — ${esc(st.stage||st.status)} (${pct}%)
+    <div class="fox-progress"><div class="fill" style="width:${pct}%"></div></div>`;
+  if(st.status==='done'){
+    typing.remove();
+    addFoxMsg('assistant',`Survey report ready \u2014 saved to vault:\n\`${st.result.report_path}\``,{kind:'status'});
+    if(typeof loadBrowse==='function')loadBrowse();
+  }else if(st.status==='error'){typing.remove();addFoxMsg('assistant','Survey failed: '+st.error,{})}
+  else setTimeout(()=>foxPollSurvey(jobId),1500);
+}
+
+// ── ingestion jobs monitor ──
+let _jobsTimer=null;
+function toggleJobsDrawer(){
+  const d=el('jobsDrawer');
+  const open=d.style.display!=='flex';
+  d.style.display=open?'flex':'none';
+  if(open)loadJobs(true);
+}
+async function loadJobs(showAll){
+  try{
+    const r=await api('/api/jobs'+(showAll?'':'?active=1'));
+    renderJobs(r.summary,r.jobs);
+  }catch(e){}
+}
+function stageChip(s){
+  const color={done:'var(--green)',running:'var(--yellow)',error:'var(--red)',skipped:'var(--text3)',pending:'var(--text3)'}[s.status]||'var(--text3)';
+  const label=s.status==='running'?s.name:s.name[0].toUpperCase();
+  return `<span title="${s.name}: ${s.status}${s.detail?' — '+esc(s.detail):''}" style="display:inline-flex;align-items:center;gap:3px;border:1px solid ${color};color:${color};border-radius:5px;padding:0 5px;font-size:9px;margin:1px 2px 1px 0;${s.status==='pending'?'opacity:.45':''}">${label}${s.status==='running'?'&#8987;':''}</span>`;
+}
+function renderJobs(summary,jobs){
+  const pill=el('jobsPillText');if(pill)pill.textContent=summary.running?`${summary.running} running`:`${summary.done} done${summary.failed?' / '+summary.failed+' err':''}`;
+  const body=el('jobsDrawerBody');if(!body)return;
+  if(!jobs.length){body.innerHTML='<div style="color:var(--text3);padding:8px">No ingestion activity. Import a paper to see live pipeline stages here.</div>';return}
+  body.innerHTML=jobs.map(j=>`<div style="padding:7px 2px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;gap:8px;align-items:center">
+      <b style="font-size:11px;color:${j.status==='error'?'var(--red)':j.status==='done'?'var(--green)':'var(--yellow)'}">${j.label}</b>
+      <span style="font-size:9px;color:var(--text3);margin-left:auto">${j.kind}</span>
+    </div>
+    <div>${j.stages.map(stageChip).join('')}</div>
+  </div>`).join('');
+}
+function foxPollJobs(){loadJobs(false)}
+
+// ── reinforcement loop trigger ──
+async function rateNotes(paperId,rating,btn){
+  let comment='';
+  if(rating<=2)comment=prompt('What was wrong with these notes? (feeds the improvement loop, e.g. "missed the ablation results")')||'';
+  await api('/api/feedback','POST',{kind:'notes',rating,paper_id:paperId,comment});
+  if(btn){btn.style.background='rgba(52,211,153,.2)';setTimeout(()=>btn.style.background='',900)}
+  addLog('Note rating saved ('+paperId+': '+rating+'/5) — runs through the improvement loop','DONE');
+}
+async function runImprovePass(){
+  if(!confirm('Re-analyze papers whose notes you rated poorly, using your criticism as improvement hints?'))return;
+  addFoxMsg('assistant','\u26A1 Running improvement pass — re-analyzing low-rated notes\u2026',{kind:'status'});
+  const r=await api('/api/improve/run','POST',{});
+  if(r.status==='nothing-to-improve'){addFoxMsg('assistant','\u2705 '+r.message,{kind:'status'});return}
+  if(r.improved_pass){
+    const ok=r.improved_pass.filter(x=>x.status==='improved').length;
+    addFoxMsg('assistant',`Improvement pass finished: ${ok}/${r.improved_pass.length} papers re-analyzed.\n${r.improved_pass.map(x=>`- ${x.paper_id}: ${x.status}`).join('\n')}`,{kind:'status'});
+    if(typeof loadBrowse==='function')loadBrowse();
+  } else addFoxMsg('assistant','Improvement pass: '+(r.message||JSON.stringify(r)),{kind:'status'});
+}
+
+// ── daily digest ──
+async function showDigest(){
+  try{
+    const d=await api('/api/digest');
+    let msg;
+    if(!d.total_new){msg='\u2705 No new papers in the observation window. The pool keeps monitoring your topics.'}
+    else{
+      msg=`\u{1F4F0} Digest ready — ${d.total_new} papers observed.\n${Object.entries(d.topics).map(([t,n])=>`- ${t}: ${n}`).join('\n')}\nFull digest saved to: \`${d.path}\``;
+    }
+    foxInit().then(()=>{
+      FOX.convId=FOX.convId; // keep context
+      el('foxFloatWin').style.display='none';el('foxHalfPanel').style.display='none';
+      document.querySelector('#panel-fox .panel-body').appendChild(el('foxPanelHost'));
+      ['vb-full','vb-half','vb-float'].forEach(id=>el(id)&&el(id).classList.remove('active'));
+      el('vb-full').classList.add('active');
+      FOX.view='full';
+      switchPanel('fox');
+      addFoxMsg('user','Show me today\u2019s research digest',{});
+      addFoxMsg('assistant',msg,{kind:'status'});
+    });
+  }catch(e){alert('Digest failed: '+e)}
+}
+
+// Ctrl/Cmd+K → open Fox half panel and focus input
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+    e.preventDefault();
+    foxSetView('half');switchPanel('fox');foxInit();
+    setTimeout(()=>{const i=el('foxInput');if(i)i.focus()},120);
+  }
+});
+
 </script>
 </body>
 </html>

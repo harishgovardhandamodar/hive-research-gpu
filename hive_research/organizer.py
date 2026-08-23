@@ -28,27 +28,48 @@ class Organizer:
         self.rag = RAGEngine(config, self.llm, self.kg)
         self.pool = ResearchPool(config.root_dir / "pool")
         self.web = WebIngester(self.llm, self.kg)
+        from .fox import Fox
+        self.fox = Fox(config, self.llm, self.kg, self.rag)
+        self.fox.organizer = self  # digest + cross-subsystem access
 
         if gpu_mgr and config.gpu_enabled:
             gpu_mgr.launch_ollama_instances()
 
     def add_by_id(self, arxiv_id: str, with_lineage: bool = False, model: str | None = None) -> dict[str, Any]:
-        result = fetch_by_id_with_meta(arxiv_id)
-        if result["status"] == "error":
+        from .jobs import get_registry
+
+        registry = get_registry()
+        job = registry.start("ingest", f"arXiv {arxiv_id}", arxiv_id=arxiv_id)
+        try:
+            with registry.ctx(job, "fetch"):
+                result = fetch_by_id_with_meta(arxiv_id)
+            if result["status"] == "error":
+                return result
+            paper = result["paper"]
+            gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
+            # process_paper's return value is the authoritative response; the
+            # fetch dict may hold non-serializable objects (PaperInfo) so we
+            # never merge it into the payload.
+            result = self.pipeline.process_paper(
+                paper,
+                gpu_id=gpu_id,
+                model=model,
+                progress=lambda stage, status, detail="": registry.stage(job, stage, status, detail),
+            )
+            if result["status"] == "added":
+                pdf_text = ""
+                pdf_path = self._find_pdf(arxiv_id)
+                if pdf_path:
+                    from .parser import extract_text
+
+                    pdf_text = extract_text(pdf_path)
+                if pdf_text:
+                    with registry.ctx(job, "rag"):
+                        n = self.rag.index_paper(arxiv_id, pdf_text)
+                    result["rag_chunks"] = n
             return result
-        paper = result["paper"]
-        gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-        result = self.pipeline.process_paper(paper, gpu_id=gpu_id, model=model)
-        if result["status"] == "added":
-            pdf_text = ""
-            pdf_path = self.config.papers_dir / f"{arxiv_id}.pdf"
-            if pdf_path.exists():
-                from .parser import extract_text
-                pdf_text = extract_text(pdf_path)
-            if pdf_text:
-                n = self.rag.index_paper(arxiv_id, pdf_text)
-                result["rag_chunks"] = n
-        return result
+        finally:
+            registry.finish(job)
 
     def add_by_search(self, query: str, max_results: int | None = None, model: str | None = None) -> list[dict[str, Any]]:
         mr = max_results or self.config.arxiv_max_results
@@ -134,7 +155,7 @@ class Organizer:
             return Path(matches[0])
         return None
 
-    def _refresh_single(self, node: Any, model: str | None = None) -> bool:
+    def _refresh_single(self, node: Any, model: str | None = None, hints: list[str] | None = None) -> bool:
         import json as _json
         from .parser import extract_text, extract_images_from_pdf
         from .pipeline import _sanitize_id
@@ -158,13 +179,20 @@ class Organizer:
             figures = extract_images_from_pdf(pdf_path, figures_dir)
 
             gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id)
+            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id, hints=hints)
             notes = analysis.get("notes", "")
             experiment = analysis.get("experiment", {})
             results = analysis.get("results", {})
             experiments_list = analysis.get("experiments", [])
             lineage_notes = analysis.get("lineage_notes", "")
-            extra = _json.dumps({"notes": notes, "experiment": experiment, "results": results})
+            extra = _json.dumps({
+                "notes": notes,
+                "experiment": experiment,
+                "results": results,
+                "limitations": analysis.get("limitations", ""),
+                "tldr": analysis.get("tldr", ""),
+                "reproduction": analysis.get("reproduction", {}),
+            })
             node.definition = extra[:2000]
             base_id = node.arxiv_id.split("v")[0] if "v" in (node.arxiv_id or "") else node.arxiv_id
             paper_info = fetch_by_id(base_id)
@@ -188,6 +216,10 @@ class Organizer:
                 notes=notes, experiment=experiment, results=results,
                 experiments_list=experiments_list, lineage_notes=lineage_notes,
                 figures=figures, safe_title=safe_title,
+                limitations=analysis.get("limitations", ""),
+                tldr=analysis.get("tldr", ""),
+                reproduction=analysis.get("reproduction", {}),
+                experiment_ideas=analysis.get("experiment_ideas", []),
             )
             self.kg.save()
             return True
@@ -303,3 +335,109 @@ class Organizer:
         if generated:
             self.kg.save()
         return {"status": "ok", "generated": generated}
+
+    # ------------------------------------------------------ reinforcement loop
+
+    def auto_improve_pass(self, model: str | None = None) -> dict[str, Any]:
+        """Close the reinforcement loop: re-analyze papers whose notes were
+        rated poorly, injecting the researcher's criticism as prompt hints.
+
+        Fox answers are improved continuously via feedback.prompt_hints();
+        this pass handles the offline artifact side (vault notes).
+        """
+        from .feedback import FeedbackStore
+        from .jobs import get_registry
+
+        store = FeedbackStore(self.config)
+        low = [
+            e for e in store.low_rated(limit=self.config.feedback_reanalyze_max * 2)
+            if e.get("kind") == "notes" and e.get("paper_id")
+        ]
+        if not low:
+            return {
+                "status": "nothing-to-improve",
+                "message": "No low-rated paper notes found. Rate notes in Browse to train the loop.",
+            }
+
+        # Dedupe papers keeping their most recent criticism as hints.
+        per_paper: dict[str, list[str]] = {}
+        for e in low:
+            pid = e["paper_id"]
+            hints = per_paper.setdefault(pid, [])
+            comment = (e.get("comment") or "").strip()
+            hint = comment or "A previous analysis of this paper was rated unhelpful; be more specific and quantitative."
+            if hint not in hints:
+                hints.append(hint)
+
+        registry = get_registry()
+        results = []
+        for pid, hints in list(per_paper.items())[: self.config.feedback_reanalyze_max]:
+            node = self.kg.get_paper(pid)
+            if not node:
+                results.append({"paper_id": pid, "status": "not-in-graph"})
+                continue
+            job = registry.start("reanalyze", f"re-analyze {pid}", arxiv_id=pid)
+            try:
+                with registry.ctx(job, "analyze"):
+                    ok = self._refresh_single(node, model=model, hints=hints)
+                registry.finish(job)
+                results.append({"paper_id": pid, "status": "improved" if ok else "failed", "hints": len(hints)})
+            except Exception:
+                registry.finish(job, error="reanalysis failed")
+                results.append({"paper_id": pid, "status": "failed"})
+        return {"status": "ok", "improved_pass": results}
+
+    # ------------------------------------------------------------- daily digest
+
+    def daily_digest(self, hours: int | None = None) -> dict[str, Any]:
+        """New pool papers since the digest window, grouped by topic,
+        persisted to the vault so a researcher can skim what happened."""
+        from datetime import datetime, timedelta
+
+        hours = hours or self.config.digest_hours
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        by_topic: dict[str, list[dict[str, Any]]] = {}
+        total_new = 0
+        for p in self.pool.get_observed_papers():
+            first_seen = p.get("first_seen")
+            try:
+                seen_at = datetime.fromisoformat(first_seen)
+            except (TypeError, ValueError):
+                continue
+            if seen_at < cutoff:
+                continue
+            total_new += 1
+            for topic in p.get("topics", ["unsorted"]):
+                by_topic.setdefault(topic, []).append(p)
+
+        lines = [
+            f"# Research Digest — {datetime.utcnow():%Y-%m-%d %H:%M} UTC",
+            "",
+            f"{total_new} papers observed in the last {hours}h across {len(by_topic)} topics.",
+            "",
+        ]
+        for topic, papers in sorted(by_topic.items()):
+            lines.extend([f"## {topic} ({len(papers)})", ""])
+            for p in papers:
+                imported = " *(imported)*" if p.get("imported") else ""
+                authors = (p.get("authors_str") or "")[:80]
+                lines.append(f"### [{p['title']}]({'' if not p['arxiv_id'][0].isdigit() else 'https://arxiv.org/abs/'}{p['arxiv_id']}){imported}")
+                lines.append("")
+                if authors:
+                    lines.append(f"*{authors}*")
+                abstract = (p.get("abstract") or "")[:280]
+                if abstract:
+                    lines.append("")
+                    lines.append(abstract + ("…" if len(p.get("abstract") or "") > 280 else ""))
+                lines.append("")
+
+        digest_dir = Path(self.config.vault_dir) / "digests"
+        digest_dir.mkdir(parents=True, exist_ok=True)
+        digest_path = digest_dir / f"digest_{datetime.utcnow():%Y%m%d_%H%M}.md"
+        digest_path.write_text("\n".join(lines))
+        return {
+            "total_new": total_new,
+            "topics": {t: len(ps) for t, ps in by_topic.items()},
+            "path": str(digest_path),
+            "preview": "\n".join(lines[:30]),
+        }

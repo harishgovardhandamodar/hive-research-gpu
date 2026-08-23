@@ -71,7 +71,12 @@ CREATE TABLE IF NOT EXISTS cache (
 
 
 class ResearchPool:
-    def __init__(self, store_dir: str | Path) -> None:
+    def __init__(
+        self,
+        store_dir: str | Path,
+        auto_refresh: bool = True,
+        seed_domain_presets: list[str] | None = None,
+    ) -> None:
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,9 +88,14 @@ class ResearchPool:
 
         if not self._has_topics():
             self._seed_default_topics()
+            if seed_domain_presets:
+                for domain_id in seed_domain_presets:
+                    self.seed_domain(domain_id)
 
-        self._bg_thread = threading.Thread(target=self._bg_loop, daemon=True)
-        self._bg_thread.start()
+        self._auto_refresh = auto_refresh
+        if auto_refresh:
+            self._bg_thread = threading.Thread(target=self._bg_loop, daemon=True)
+            self._bg_thread.start()
 
     @property
     def _db(self) -> sqlite3.Connection:
@@ -137,6 +147,20 @@ class ResearchPool:
         with self._lock:
             self._db.execute("DELETE FROM topics WHERE name = ?", (name,))
             self._db.commit()
+
+    def seed_domain(self, domain_id: str) -> int:
+        """Add every topic from a research-domain preset. Returns topics added."""
+        from .domains import topics_for_domain
+
+        added = 0
+        for t in topics_for_domain(domain_id):
+            existing = self._db.execute(
+                "SELECT 1 FROM topics WHERE name = ?", (t["name"],)
+            ).fetchone()
+            if not existing:
+                self.add_topic(t["name"], t["query"])
+                added += 1
+        return added
 
     def get(self) -> dict[str, Any]:
         row = self._db.execute(

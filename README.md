@@ -1,23 +1,31 @@
 # Hive Research GPU
 
-> Lightweight research knowledge base powered by dual NVIDIA RTX 5080 GPUs, local LLMs (Ollama), and a Hive knowledge graph.
+> Lightweight research knowledge base powered by local LLMs (Ollama), a Hive knowledge graph, and **Fox** — your local research companion.
 
-Hive Research GPU ingests academic papers from arXiv, extracts structured knowledge using local LLMs, builds a knowledge graph of concepts and citations, indexes content for RAG-based semantic search, and automatically monitors research topics — all running on consumer GPU hardware.
+Hive Research GPU ingests academic papers from arXiv, extracts structured knowledge using local LLMs, builds a knowledge graph of concepts and citations, indexes content for RAG-based semantic search, monitors research topics — and serves it all through **Fox**, a grounded local chatbot with six reasoning modes. It is designed as an ideal companion for following arXiv work in AI agents, alignment & safety, multi-agent systems, agent swarms, and LLM security.
 
 ## Features
 
-- **arXiv Ingestion** — Search, fetch metadata, download PDFs, extract text and figures
-- **LLM-powered Analysis** — Extract summaries, concepts, tags, experiments, results, and relations using local Ollama models (llama3.2, qwen3.6, nomic-embed-text)
-- **Knowledge Graph** — Papers, concepts, tags, and web resources stored in a typed Hive graph with deduplication and similarity matching
-- **RAG Search** — Chunk + embed pipeline with cosine similarity search; ask questions over your paper library
-- **Research Pool** — Automatically monitor arXiv topics; observe new papers, batch-import into your knowledge base
-- **Web Dashboard** — Real-time interactive dashboard with force-directed graph, browsing, similarity matrix, chat, and live logs
-- **CLI** — Full command-line interface for search, import, stats, similarity, RAG queries, and GPU monitoring
-- **Dual GPU** — Two Ollama instances (one per GPU) for parallel LLM inference and embedding
-- **Figure Extraction** — Extract figures, tables, and diagrams from PDFs with caption detection
-- **Citation Lineage** — Automatically fetch and link cited papers, build citation graphs
-- **Web Ingestion** — Add web articles/blog posts as graph nodes with LLM extraction
-- **Docker** — Ready-to-deploy with `docker-compose` (NVIDIA GPU passthrough)
+- **Fox Research Companion** — six modes: `Fast` · `RAG` · `Thinking` · `Deep-Thinking` · `Deep Research` · `Survey Report`. Every corpus-grounded answer carries `[n]` citations back to your papers
+  - *Thinking* exposes an inspectable reasoning trace; *Deep-Thinking* decomposes questions into sub-questions; *Deep Research* runs plan → retrieve → gap-check loops; *Survey Report* writes a full markdown survey into your vault
+  - Three view modes: full panel, resizable half-panel (`Ctrl/Cmd+K`), and draggable/resizable floating window
+  - Rate answers 👍/👎 — ratings feed the reinforcement loop
+- **Reinforcement Loop** — low-rated notes are re-analyzed automatically with your criticism injected as improvement hints; Fox continuously learns from past feedback
+- **arXiv Ingestion** — Search, fetch metadata, download PDFs, extract text and figures; live per-stage job tracking (fetch → pdf → parse → analyze → graph → notes → rag → lineage)
+- **Domain Presets** — curated topic packs for LLM agents, multi-agent systems, swarms, alignment, LLM security, agentic security
+- **LLM-powered Analysis** — summaries, TL;DR, concepts, tags, limitations, experiments, results, reproduction facts
+- **Knowledge Graph** — papers, concepts, tags, citations in a typed Hive graph; relation-typed edge rendering with colors, arrows, dash weights, and filters
+- **RAG Search** — chunk + embed pipeline with cosine similarity search over your library
+- **Research Notes** — rich vault notes: TL;DR, summary, lineage, limitations & falsification prompts, reproduction checklists, follow-up experiment ideas, figure galleries with captions
+- **Experiment Logs** — per-experiment notes with status tracking and a "My Reproduction Log" scaffold (environment, commands, deviations, paper-vs-mine results table)
+- **Daily Digest** — one-click digest of what the pool observed, saved to your vault
+- **Research Pool** — monitor arXiv topics; observe new papers, batch-import into your KB
+- **Web Dashboard** — force-directed graph, landscape view, browsing, similarity matrix, live ingestion activity drawer, logs
+- **CLI** — search, add, import, query, `fox`, `digest`, `improve`, GPU monitoring
+- **Figure Extraction** — raster dedup by content hash, noise filtering, caption detection, vector-page rendering for matplotlib-style figures
+- **Citation Lineage** — automatically fetches and links cited papers
+- **Web Ingestion** — add web articles/blog posts as graph nodes
+- **Docker** — ready-to-deploy with `docker-compose` (NVIDIA GPU passthrough)
 
 ## Requirements
 
@@ -123,6 +131,15 @@ python -m hive_research query "What architectures are used for graph classificat
 # Show GPU status
 python -m hive_research gpu
 
+# Ask Fox (the research companion) from the terminal
+python -m hive_research fox "What alignment methods do my papers cover?" --mode deep-research
+
+# Write a digest of new pool papers
+python -m hive_research digest --hours 24
+
+# Re-analyze low-rated notes using your criticism as hints
+python -m hive_research improve
+
 # Start the web dashboard
 python -m hive_research serve --host 0.0.0.0 --port 7777
 ```
@@ -136,13 +153,14 @@ python -m hive_research serve
 ```
 
 The dashboard provides:
-- **Pool** — Research pool observatory: browse papers discovered by topic monitors, import them into your graph
-- **Graph** — Interactive force-directed knowledge graph with filtering, node preview, citation lineage
-- **Import** — Add papers by arXiv ID/URL, ingest web articles, search and batch-import from arXiv
-- **Browse** — Browse all papers, view vault notes, figures, experiment details, citation lineage
-- **Similarity** — Pairwise similarity matrix (combined/abstract/author/concept algorithms)
-- **Chat** — RAG question-answering over your paper library with source citations
-- **About** — System stats, Ollama status, GPU monitoring
+- **Fox** — the research companion: six modes, citation-grounded answers, reasoning traces, survey reports, floating/half/full view modes (`Ctrl/Cmd+K`)
+- **Pool** — research pool observatory, daily digests, batch import
+- **Graph** — force-directed knowledge graph with relation-colored edges, lineage filters, node preview
+- **Import** — add papers by arXiv ID/URL, ingest web articles, search and batch-import
+- **Browse** — vault notes with reproduction checklists, figures, experiment logs
+- **Similarity** — pairwise similarity matrix (combined/abstract/author/concept)
+- **Chat** — classic RAG question-answering
+- **About** — system stats, Ollama status, GPU monitoring
 
 ### Docker
 
@@ -194,35 +212,63 @@ This launches two Ollama instances (one per GPU) and the web server with NVIDIA 
 | Module | Path | Description |
 |--------|------|-------------|
 | `arxiv_fetcher` | `hive_research/arxiv_fetcher.py` | arXiv API client: search, fetch by ID, download PDF |
-| `parser` | `hive_research/parser.py` | PDF text/figure extraction via PyMuPDF |
+| `parser` | `hive_research/parser.py` | PDF text/figure extraction: noise filtering, hash dedup, caption pairing, vector-page renders |
 | `llm` | `hive_research/llm.py` | Ollama client: generate, embed, structured extraction, parallel inference |
 | `gpu` | `hive_research/gpu.py` | NVIDIA GPU monitoring (nvidia-smi), Ollama instance lifecycle |
 | `graph` | `hive_research/graph.py` | Knowledge graph wrapper around HiveGraph |
-| `pipeline` | `hive_research/pipeline.py` | Paper ingestion pipeline: analysis, graph population, note writing |
+| `pipeline` | `hive_research/pipeline.py` | Ingestion pipeline: analysis, graph population, rich notes + experiment logs |
 | `rag` | `hive_research/rag.py` | RAG engine: chunking, embedding, cosine similarity, answer generation |
+| `fox` | `hive_research/fox.py` | Fox companion: 6 reasoning modes, grounded answers, conversations, survey jobs |
+| `feedback` | `hive_research/feedback.py` | Ratings capture + reinforcement signal distillation |
+| `jobs` | `hive_research/jobs.py` | Thread-safe job/stage registry for ingestion tracking |
+| `domains` | `hive_research/domains.py` | Curated research-domain topic presets |
 | `pool` | `hive_research/pool.py` | Research pool: SQLite-backed topic monitoring, arXiv scraping |
 | `similarity` | `hive_research/similarity.py` | Paper similarity: author overlap, abstract Jaccard, concept overlap |
 | `web_ingest` | `hive_research/web_ingest.py` | Web page ingestion: HTML extraction, LLM analysis, graph addition |
-| `organizer` | `hive_research/organizer.py` | Top-level orchestrator: ties all subsystems together |
+| `organizer` | `hive_research/organizer.py` | Top-level orchestrator: subsystems, auto-improve pass, daily digest |
 | `server` | `hive_research/server.py` | HTTP server (stdlib) with REST API + dashboard |
 | `logs` | `hive_research/logs.py` | Captured log handler for in-memory log viewing |
 | `config` | `hive_research/config.py` | YAML-based configuration with env var overrides |
+
+## Tests
+
+```bash
+# stdlib only — no network, no Ollama required
+python -m unittest discover -s hive_research/tests -t .
+```
 
 ## Research Pool
 
 The Research Pool continuously monitors arXiv for topics of interest. It maintains a local SQLite database of observed papers and provides a UI for reviewing and selectively importing them into your knowledge graph.
 
-Default topics:
-- Knowledge graphs
-- Federated learning
-- AI security
-- LLM security
-- AI alignment
-- Adversarial ML
-- Graph neural networks
-- Vision-language models
+### Domain Presets
 
-Topics refresh every 12 hours. New papers since the last observation are marked as "new".
+Curated topic packs tuned for AI-safety-adjacent fields (see `hive_research/domains.py`):
+
+| Preset | Focus |
+|--------|-------|
+| `agents` | LLM agents: tool use, planning, memory |
+| `multiagent` | Multi-agent LLM frameworks, debate, MARL |
+| `swarms` | Swarm intelligence, emergent communication |
+| `alignment` | RLHF, scalable oversight, interpretability |
+| `llm-security` | Jailbreaks, prompt injection, backdoors, red-teaming |
+| `agentic-security` | Autonomous-agent security, sandboxing, indirect injection |
+
+Enable them in `config.yaml`:
+
+```yaml
+workflow:
+  domain_presets: [agents, multiagent, swarms, alignment, llm-security, agentic-security]
+```
+
+Topics refresh every 12 hours. New papers since the last observation are marked as "new", and the **Daily Digest** button writes everything the pool observed into `data/vault/digests/`.
+
+## The Reinforcement Loop
+
+1. **Capture** — rate Fox answers (👍/👎) and paper notes in Browse; optionally add a comment ("missed the ablation results")
+2. **Learn** — Fox distills past criticism into system-prompt hints for future answers
+3. **Improve** — run an improvement pass (`⚡ Improve` in Fox, or `python -m hive_research improve`): low-rated notes are re-analyzed with your comments injected as quality requirements
+4. **Observe** — every re-analysis is tracked per-stage in the ingestion activity drawer
 
 ## Similarity Algorithms
 

@@ -97,6 +97,18 @@ class RAGEngine:
     def index_paper(self, paper_id: str, text: str) -> int:
         node = self.kg.get_paper(paper_id)
         title = node.label if node else paper_id
+        # Drop any previous chunks for this paper so re-indexing never duplicates
+        if any(c.source_id == paper_id for c in self.chunks):
+            keep_indices = [i for i, c in enumerate(self.chunks) if c.source_id != paper_id]
+            removed_before = len(self.chunks)
+            self.chunks = [self.chunks[i] for i in keep_indices]
+            if self.embeddings is not None:
+                self.embeddings = self.embeddings[keep_indices]
+            logger.info(
+                "Re-indexing %s: replaced %d old chunks",
+                paper_id,
+                removed_before - len(self.chunks),
+            )
         chunks = self._chunk_text(text)
         new_chunks = []
         for i, chunk_text in enumerate(chunks):

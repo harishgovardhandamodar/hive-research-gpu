@@ -34,7 +34,14 @@ class PaperPipeline:
         self.kg = kg
         self.gpu_mgr = gpu_mgr
 
-    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None, model: str | None = None) -> dict[str, Any]:
+    def process_paper(self, paper: PaperInfo, gpu_id: int | None = None, model: str | None = None, progress: Any = None) -> dict[str, Any]:
+        def _prog(stage: str, status: str, detail: str = "") -> None:
+            if progress:
+                try:
+                    progress(stage, status, detail)
+                except Exception:
+                    pass
+
         paper_id = paper.arxiv_id
         existing = self.kg.get_paper(paper_id)
         if existing:
@@ -53,16 +60,25 @@ class PaperPipeline:
         pdf_text = ""
         pdf_path = None
         figures = []
+        _prog("parse", "running", "downloading PDF")
         if self.config.arxiv_download_pdf:
             pdf_path = download_pdf(paper_id, self.config.papers_dir)
             if pdf_path and pdf_path.exists():
                 pdf_text = extract_text(pdf_path)
                 safe_title = _sanitize_id(paper.title) or paper_id
                 figures_dir = Path(self.config.vault_dir) / safe_title / "figures"
+                _prog("parse", "running", f"{len(pdf_text)} chars extracted")
                 figures = extract_images_from_pdf(pdf_path, figures_dir)
-        text_for_analysis = pdf_text or paper.abstract
+                _prog("parse", "done", f"{len(figures)} figures")
+            else:
+                _prog("parse", "skipped", "PDF unavailable, using abstract")
+        else:
+            _prog("parse", "skipped", "pdf download disabled")
 
+        text_for_analysis = pdf_text or paper.abstract
+        _prog("analyze", "running", f"LLM analysis ({model or 'default model'})")
         analysis = self._analyze_text(text_for_analysis, paper.title, figures=figures, model=model, gpu_id=gpu_id)
+        _prog("analyze", "done")
 
         concepts = analysis.get("concepts", [])
         relations = analysis.get("relations", [])
@@ -75,7 +91,14 @@ class PaperPipeline:
         lineage_notes = analysis.get("lineage_notes", "")
 
         import json as _json
-        extra = _json.dumps({"notes": notes, "experiment": experiment, "results": results})
+        extra = _json.dumps({
+            "notes": notes,
+            "experiment": experiment,
+            "results": results,
+            "limitations": analysis.get("limitations", ""),
+            "tldr": analysis.get("tldr", ""),
+            "reproduction": analysis.get("reproduction", {}),
+        })
         node.definition = extra[:2000]
 
         for tag in tags:
@@ -118,20 +141,29 @@ class PaperPipeline:
                 tgt = self._resolve_id(raw_tgt, paper_id)
                 if src and tgt:
                     self.kg.add_edge(src, tgt, rel)
+        _prog("graph", "done", f"{len(concepts)} concepts, {len(relations)} relations")
 
         lineage_refs = []
         if pdf_text:
+            _prog("lineage", "running")
             lineage_refs = self.fetch_lineage(paper_id, pdf_text, gpu_id=gpu_id)
+            _prog("lineage", "done" if lineage_refs else "skipped", f"{len(lineage_refs)} refs linked")
             if lineage_refs:
                 logger.info("Lineage: %d prior papers linked for %s", len(lineage_refs), paper_id)
 
+        _prog("notes", "running")
         note_path = self._write_notes_multi(
             paper_id, paper, summary, tags, concepts,
             notes=notes, experiment=experiment, results=results,
             experiments_list=experiments_list, lineage_notes=lineage_notes,
             figures=figures,
+            limitations=analysis.get("limitations", ""),
+            tldr=analysis.get("tldr", ""),
+            reproduction=analysis.get("reproduction", {}),
+            experiment_ideas=analysis.get("experiment_ideas", []),
         )
         self.kg.save()
+        _prog("notes", "done", str(note_path) if note_path else "no note written")
 
         result = {
             "status": "added",
@@ -249,6 +281,7 @@ class PaperPipeline:
         figures: list[dict[str, Any]] | None = None,
         model: str | None = None,
         gpu_id: int | None = None,
+        hints: list[str] | None = None,
     ) -> dict[str, Any]:
         max_chars = 12000
         truncated = text[:max_chars]
@@ -290,11 +323,26 @@ class PaperPipeline:
             '  ],\n'
             '  "experiment": {"methodology": "...", "dataset": "...", "setup": "..."},\n'
             '  "results": {"main_findings": "...", "metrics": {"metric_name": "value"}},\n'
+            '  "limitations": "Weaknesses, failure cases, assumptions that may not hold, and open questions",\n'
+            '  "tldr": "One-sentence takeaway a researcher can quote",\n'
+            '  "reproduction": {\n'
+            '    "datasets": ["dataset names used"],\n'
+            '    "hyperparameters": "key hyperparameters needed to reproduce",\n'
+            '    "metrics": ["evaluation metrics"],\n'
+            '    "compute": "hardware/training time if stated",\n'
+            '    "code_url": "official code repository URL if mentioned"\n'
+            '  },\n'
+            '  "experiment_ideas": ["1-3 concrete follow-up experiment ideas building on this paper"],\n'
             '  "lineage_notes": "Prior work this builds on and how it differs",\n'
             '  "concepts": [{"name": "...", "definition": "...", "relation": "type"}],\n'
             '  "relations": [{"source": "...", "target": "...", "relation": "..."}]\n'
             "}"
         )
+        if hints:
+            main_prompt += (
+                "\n\nQuality requirements from the researcher's past feedback "
+                "(address all of them):\n- " + "\n- ".join(hints)
+            )
         analysis = self.llm.extract_structured(main_prompt, model=model, gpu_id=gpu_id)
         analysis["tags"] = tags
         return analysis
@@ -338,6 +386,10 @@ class PaperPipeline:
         lineage_notes: str = "",
         figures: list[dict[str, Any]] | None = None,
         safe_title: str | None = None,
+        limitations: str = "",
+        tldr: str = "",
+        reproduction: dict[str, Any] | None = None,
+        experiment_ideas: list[str] | None = None,
     ) -> Path | None:
         vault = Path(self.config.vault_dir)
         vault.mkdir(parents=True, exist_ok=True)
@@ -349,17 +401,23 @@ class PaperPipeline:
         figures_dir = paper_dir / "figures"
         if figures:
             figures_dir.mkdir(parents=True, exist_ok=True)
+        reproduction = reproduction or {}
 
         note_lines: list[str] = [
             "---",
             f"arxiv_id: {paper_id}",
-            f"title: \"{paper.title}\"",
-            f"authors: \"{paper.authors_str}\"",
+            f'title: "{paper.title}"',
+            f'authors: "{paper.authors_str}"',
             f"published: {paper.published}",
             f"tags: [{', '.join(tags)}]",
+            f"figures_count: {len(figures)}",
+            f"concepts_count: {len(concepts)}",
             "---",
             "",
         ]
+
+        if tldr:
+            note_lines.extend([f"> **TL;DR** — {tldr}", ""])
 
         if summary:
             note_lines.extend(["## Summary", "", summary, ""])
@@ -396,6 +454,16 @@ class PaperPipeline:
                     note_lines.append(part)
                 note_lines.append("")
 
+        if limitations:
+            note_lines.extend([
+                "## Limitations & Open Questions", "",
+                limitations, "",
+                "**Questions to hold while reading follow-up work:**",
+                "- Which assumptions here break outside the evaluated setting?",
+                "- What would falsify the central claim?",
+                "",
+            ])
+
         if concepts:
             note_lines.extend(["## Concepts", ""])
             for c in concepts:
@@ -404,7 +472,18 @@ class PaperPipeline:
                 note_lines.append(f"- **{name}** ({rel})")
             note_lines.append("")
 
+        repro_block = self._render_reproduction_checklist(reproduction, experiments_list or [])
+        note_lines.extend(repro_block)
+
+        if experiment_ideas:
+            note_lines.extend(["## Experiment Ideas (follow-ups)", ""])
+            for idea in experiment_ideas:
+                note_lines.append(f"- {idea}")
+            note_lines.append("")
+
         note_lines.extend(["## Links", "", f"- [arXiv](https://arxiv.org/abs/{paper_id})"])
+        if reproduction.get("code_url"):
+            note_lines.append(f"- [Official code]({reproduction['code_url']})")
         if any(c.get("definition") for c in concepts):
             note_lines.extend(["", "## Definitions", ""])
             for c in concepts:
@@ -430,43 +509,125 @@ class PaperPipeline:
 
         if experiments_list:
             for exp in experiments_list:
-                if not isinstance(exp, dict):
-                    continue
-                exp_name = exp.get("name", "").strip()
-                if not exp_name:
-                    continue
-                safe_exp = _sanitize_id(exp_name) or "experiment"
-                exp_lines: list[str] = [
-                    "---",
-                    f"arxiv_id: {paper_id}",
-                    f"experiment: \"{exp_name}\"",
-                    "---",
-                    "",
-                    f"# {exp_name}",
-                    "",
-                ]
-                for key in ("goal", "methodology", "dataset", "setup", "baselines"):
-                    val = exp.get(key, "")
-                    if val:
-                        exp_lines.extend([f"## {key.capitalize()}", "", str(val), ""])
-                metrics = exp.get("metrics", {})
-                if metrics and isinstance(metrics, dict):
-                    exp_lines.extend(["## Metrics", ""])
-                    for mk, mv in metrics.items():
-                        if mv is None or mv == "":
-                            continue
-                        exp_lines.append(f"- **{mk}**: {mv}")
-                    exp_lines.append("")
-                results_text = exp.get("results", "")
-                if results_text:
-                    exp_lines.extend(["## Results", "", str(results_text), ""])
-                findings = exp.get("findings", "")
-                if findings:
-                    exp_lines.extend(["## Key Findings", "", str(findings), ""])
-
-                safe_exp_lines = [str(item) if not isinstance(item, str) else item for item in exp_lines]
-                exp_path = paper_dir / f"{safe_exp}-00-experiment.md"
-                with open(exp_path, "w") as f:
-                    f.write("\n".join(safe_exp_lines))
-
+                exp_path = self._write_experiment_note(
+                    paper_dir, paper_id, exp, reproduction
+                )
         return notes_path
+
+    # Reproduction guidelines applied to every paper's experiment notes.
+    REPRO_GUIDELINES = [
+        "Re-run the official baseline code before your own modifications to validate the environment.",
+        "Match dataset splits and preprocessing exactly; record any unavoidable deviation.",
+        "Fix all seeds and report variance over at least 3 runs where feasible.",
+        "Compare against the strongest reported baseline, not just the easiest one.",
+        "Log hyperparameters verbatim from the paper before tuning anything.",
+        "Evaluate with the paper's metrics protocol (same splits, same averaging).",
+        "Run one ablation isolating the claimed contribution.",
+    ]
+
+    def _render_reproduction_checklist(
+        self,
+        reproduction: dict[str, Any],
+        experiments_list: list[dict[str, Any]],
+    ) -> list[str]:
+        lines: list[str] = ["## Reproduction Checklist", ""]
+        datasets = reproduction.get("datasets") or []
+        metrics = reproduction.get("metrics") or []
+        hyper = reproduction.get("hyperparameters", "")
+        compute = reproduction.get("compute", "")
+
+        lines.append("**From the paper:**")
+        if datasets:
+            items = datasets if isinstance(datasets, list) else [datasets]
+            lines.append("- Datasets: " + ", ".join(str(d) for d in items))
+        else:
+            lines.append("- Datasets: _(not extracted)_")
+        lines.append(f"- Key hyperparameters: {hyper or '_(not extracted)_'}")
+        if metrics:
+            items = metrics if isinstance(metrics, list) else [metrics]
+            lines.append("- Metrics to match: " + ", ".join(str(m) for m in items))
+        lines.append(f"- Compute footprint: {compute or '_(not stated)_'}")
+        lines.append("")
+        lines.append("**Guidelines to follow when experimenting on this paper:**")
+        for g in self.REPRO_GUIDELINES:
+            lines.append(f"- [ ] {g}")
+        lines.append("")
+        lines.append(
+            f"_Per-experiment logs live next to this note as `*-00-experiment.md` "
+            f"({len(experiments_list)} generated)._"
+        )
+        lines.append("")
+        return lines
+
+    def _write_experiment_note(
+        self,
+        paper_dir: Path,
+        paper_id: str,
+        exp: dict[str, Any],
+        reproduction: dict[str, Any],
+    ) -> Path | None:
+        if not isinstance(exp, dict):
+            return None
+        exp_name = str(exp.get("name", "")).strip()
+        if not exp_name:
+            return None
+        safe_exp = _sanitize_id(exp_name) or "experiment"
+        exp_lines: list[str] = [
+            "---",
+            f"arxiv_id: {paper_id}",
+            f'experiment: "{exp_name}"',
+            "status: not-started   # not-started | in-progress | reproduced | failed-to-reproduce | extended",
+            "---",
+            "",
+            f"# {exp_name}",
+            "",
+        ]
+        for key in ("goal", "methodology", "dataset", "setup", "baselines"):
+            val = exp.get(key, "")
+            if val:
+                exp_lines.extend([f"## {key.capitalize()}", "", str(val), ""])
+        metrics = exp.get("metrics", {})
+        if metrics and isinstance(metrics, dict):
+            exp_lines.extend(["## Metrics", ""])
+            for mk, mv in metrics.items():
+                if mv is None or mv == "":
+                    continue
+                exp_lines.append(f"- **{mk}**: {mv}")
+            exp_lines.append("")
+        results_text = exp.get("results", "")
+        if results_text:
+            exp_lines.extend(["## Reported Results", "", str(results_text), ""])
+        findings = exp.get("findings", "")
+        if findings:
+            exp_lines.extend(["## Key Findings", "", str(findings), ""])
+
+        exp_lines.extend([
+            "## My Reproduction Log", "",
+            "_Fill this scaffold while reproducing. Follow the guidelines in 00_notes.md._", "",
+            "- **Started**: ",
+            "- **Environment**: _(python version, GPU, key library versions)_",
+            "- **Commands / scripts used**:",
+            "  ```bash",
+            "  # git clone ... && python train.py --config ...",
+            "  ```",
+            "- **Deviations from the paper setup**: ",
+            "- **My measured results**:",
+            "",
+            "| metric | paper | mine | run 2 | run 3 |",
+            "|--------|-------|------|-------|-------|",
+            "|        |       |      |       |       |",
+            "",
+            "- **Outcome**: _(reproduced / partially / failed — why)_",
+            "- **Lessons learned**: ",
+            "",
+            "### Checklist for this experiment",
+            "",
+        ])
+        for g in self.REPRO_GUIDELINES[:4]:
+            exp_lines.append(f"- [ ] {g}")
+
+        safe_exp_lines = [str(item) if not isinstance(item, str) else item for item in exp_lines]
+        exp_path = paper_dir / f"{safe_exp}-00-experiment.md"
+        with open(exp_path, "w") as f:
+            f.write("\n".join(safe_exp_lines))
+        return exp_path

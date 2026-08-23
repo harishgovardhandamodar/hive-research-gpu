@@ -23,6 +23,12 @@ cuda = [
     "cupy-cuda12x>=13.0.0",
     "nvidia-cuda-runtime-cu12",
 ]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["hive_research/tests"]
 
 [tool.setuptools.packages.find]
 include = ["hive_research*"]
