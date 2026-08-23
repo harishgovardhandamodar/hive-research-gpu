@@ -52,9 +52,9 @@ class FakeLLM:
 
     def embed(self, text: str, model: str | None = None, gpu_id: int | None = None) -> list[float]:
         self.embed_calls += 1
-        vec = [0.0] * 32
+        vec = [0.0] * 128
         for token in text.lower().split():
-            vec[hash(token) % 32] += 1.0
+            vec[hash(token) % 128] += 1.0
         norm = sum(v * v for v in vec) ** 0.5 or 1.0
         return [v / norm for v in vec]
 
