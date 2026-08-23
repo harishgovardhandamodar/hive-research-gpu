@@ -80,18 +80,40 @@ def fetch_by_id_with_meta(arxiv_id: str) -> dict[str, Any]:
 
 
 def download_pdf(arxiv_id: str, target_dir: str | Path) -> Path | None:
+    """Download a paper PDF atomically.
+
+    Content is validated (PDF magic bytes) and written to a .part file that
+    is renamed into place — an interrupted download must never leave a
+    truncated file that later poisons parsing/analysis/RAG.
+    """
+    import os
+
+    import requests as req
+
     target_dir = Path(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    import requests as req
     pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
     target_path = target_dir / f"{arxiv_id}.pdf"
+    part_path = target_dir / f"{arxiv_id}.pdf.part"
     try:
         resp = req.get(pdf_url, timeout=60, headers={
             "User-Agent": "hive-research-gpu/0.2.0 (mailto:research@example.com)"
         })
         resp.raise_for_status()
-        target_path.write_bytes(resp.content)
+        data = resp.content
+        if not data.startswith(b"%PDF"):
+            logger.error("Downloaded %s is not a valid PDF (%d bytes, bad magic)", arxiv_id, len(data))
+            return None
+        if len(data) < 10240:
+            logger.error("Downloaded %s suspiciously small (%d bytes) — rejecting", arxiv_id, len(data))
+            return None
+        part_path.write_bytes(data)
+        os.replace(part_path, target_path)
         return target_path
     except Exception as e:
         logger.error("Failed to download PDF for %s: %s", arxiv_id, e)
+        try:
+            part_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         return None

@@ -31,12 +31,18 @@ class StubFox:
         return {"answer": "ok", "mode": mode, "sources": [], "grounded": False}
 
 
+class StubRag:
+    def rebuild(self):
+        return {"status": "ok", "chunks": 5, "dimension": 128}
+
+
 class StubOrganizer:
     """Minimal organizer surface used by the routes under test."""
 
     def __init__(self, tmp) -> None:
         self.config = Config(tmp / "nope.yaml")
         self.fox = StubFox()
+        self.rag = StubRag()
         self.pool = type("P", (), {
             "get_observed_papers": lambda self_: [
                 {"arxiv_id": f"2401.{i}", "title": f"p{i}"} for i in range(7)
@@ -158,6 +164,13 @@ class TestHTTPServer(unittest.TestCase):
         self.assertEqual(data["items"][0]["arxiv_id"], "2401.2")
 
     # -- concurrency smoke ------------------------------------------------------
+
+    def test_rag_rebuild_endpoint(self) -> None:
+        status, body = self.request("/api/rag/rebuild", method="POST", headers={"Content-Type": "application/json"})
+        data = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["chunks"], 5)
 
     def test_parallel_requests_do_not_serialize_each_other(self) -> None:
         """With ThreadingHTTPServer, a slow handler must not block others."""

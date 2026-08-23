@@ -679,6 +679,8 @@ info.textContent += ' | OK';
             model = self.org.config.resolve_model(model_param)
             result = self.org.auto_improve_pass(model=model)
             _json_response(self, result)
+        elif path == "/api/rag/rebuild":
+            _json_response(self, self.org.rag.rebuild())
         else:
             _json_response(self, {"error": "not found"}, 404)
 

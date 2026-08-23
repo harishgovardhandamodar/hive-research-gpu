@@ -71,14 +71,42 @@ class RAGEngine:
             try:
                 with open(self._index_path()) as f:
                     index = json.load(f)
-                self.chunks = [Chunk(**item) for item in index]
+                chunks = [Chunk(**item) for item in index]
+                embeddings = None
                 if self._embeddings_path().exists():
-                    self.embeddings = np.load(str(self._embeddings_path()))
-                logger.info(
-                    "Loaded RAG index with %d chunks", len(self.chunks)
-                )
+                    embeddings = np.load(str(self._embeddings_path()))
+                    if len(chunks) != len(embeddings):
+                        # The two files are written separately; a crash between
+                        # writes leaves them out of sync. Vectors pointing at
+                        # wrong chunks would silently corrupt every answer,
+                        # so discard them and allow a rebuild from chunk texts.
+                        logger.warning(
+                            "RAG index/embeddings mismatch (%d chunks vs %d "
+                            "vectors) — discarding vectors; call rebuild() "
+                            "to re-embed",
+                            len(chunks),
+                            len(embeddings),
+                        )
+                        embeddings = None
+                self.chunks = chunks
+                self.embeddings = embeddings
+                logger.info("Loaded RAG index with %d chunks", len(self.chunks))
             except Exception as e:
                 logger.warning("Failed to load RAG index: %s", e)
+
+    def rebuild(self) -> dict[str, Any]:
+        """Re-embed all stored chunks (used after vector loss/corruption)."""
+        if not self.chunks:
+            return {"status": "empty", "chunks": 0}
+        texts = [c.text for c in self.chunks]
+        batch = 64
+        matrices = []
+        for i in range(0, len(texts), batch):
+            matrices.append(np.array(self.llm.embed_parallel(texts[i:i + batch]), dtype=np.float32))
+        self.embeddings = np.vstack(matrices)
+        self._save()
+        logger.info("RAG rebuilt: %d chunks re-embedded", len(self.chunks))
+        return {"status": "ok", "chunks": len(self.chunks), "dimension": int(self.embeddings.shape[1])}
 
     def _chunk_text(self, text: str) -> list[str]:
         size = self.config.rag_chunk_size
@@ -128,6 +156,9 @@ class RAGEngine:
 
     def search(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
         if not self.chunks or self.embeddings is None:
+            return []
+        if len(self.chunks) != len(self.embeddings):  # defensive: never cite wrong chunks
+            logger.warning("RAG search skipped: index/vectors out of sync")
             return []
         top_k = top_k or self.config.rag_top_k
         q_emb = np.array(self.llm.embed(query), dtype=np.float32)

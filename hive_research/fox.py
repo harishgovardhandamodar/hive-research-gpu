@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -140,6 +141,9 @@ class Fox:
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, FoxJob] = {}
         self._jobs_lock = threading.Lock()
+        # Conversation files are read-modify-write JSON; the threaded server
+        # can hit them concurrently — serialize all conversation IO.
+        self._conv_io_lock = threading.RLock()
         from .feedback import FeedbackStore
 
         self.feedback = FeedbackStore(config)
@@ -244,23 +248,29 @@ class Fox:
         return False
 
     def _save_conversation(self, conv: dict[str, Any]) -> None:
-        conv["updated"] = datetime.utcnow().isoformat()
-        self._conv_path(conv["id"]).write_text(json.dumps(conv, indent=2))
+        with self._conv_io_lock:
+            conv["updated"] = datetime.utcnow().isoformat()
+            path = self._conv_path(conv["id"])
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(conv, indent=2))
+            os.replace(tmp, path)
 
     def _append_message(self, conversation_id: str, role: str, content: str, **extra: Any) -> None:
-        conv = self.get_conversation(conversation_id) or {
-            "id": conversation_id,
-            "title": "",
-            "created": datetime.utcnow().isoformat(),
-            "messages": [],
-        }
-        if not conv["title"]:
-            conv["title"] = content[:60]
-        msg = {"role": role, "content": content, "ts": datetime.utcnow().isoformat()}
-        msg.update(extra)
-        limit = self.config.fox_history_limit * 2
-        conv["messages"] = (conv["messages"] + [msg])[-limit:]
-        self._save_conversation(conv)
+        # Read-modify-write must be atomic or concurrent turns are lost.
+        with self._conv_io_lock:
+            conv = self.get_conversation(conversation_id) or {
+                "id": conversation_id,
+                "title": "",
+                "created": datetime.utcnow().isoformat(),
+                "messages": [],
+            }
+            if not conv["title"]:
+                conv["title"] = content[:60]
+            msg = {"role": role, "content": content, "ts": datetime.utcnow().isoformat()}
+            msg.update(extra)
+            limit = self.config.fox_history_limit * 2
+            conv["messages"] = (conv["messages"] + [msg])[-limit:]
+            self._save_conversation(conv)
 
     # -------------------------------------------------------------- retrieval
 
