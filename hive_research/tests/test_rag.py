@@ -31,15 +31,19 @@ class TestChunking(TempDirTestCase):
             self.assertIn(f"w{i}", joined)
 
 
+def make_rag_engine(tmp) -> RAGEngine:
+    cfg = make_config(tmp)
+    llm = FakeLLM()
+    kg = mock.Mock()
+    node = mock.Mock()
+    node.label = "Swarm Paper"
+    kg.get_paper.return_value = node
+    return RAGEngine(cfg, llm, kg)  # type: ignore[arg-type]
+
+
 class TestIndexAndSearch(TempDirTestCase):
     def _engine(self) -> RAGEngine:
-        cfg = make_config(self.tmp)
-        llm = FakeLLM()
-        kg = mock.Mock()
-        node = mock.Mock()
-        node.label = "Swarm Paper"
-        kg.get_paper.return_value = node
-        return RAGEngine(cfg, llm, kg)  # type: ignore[arg-type]
+        return make_rag_engine(self.tmp)
 
     def test_index_and_search_roundtrip(self) -> None:
         engine = self._engine()
@@ -122,6 +126,31 @@ class TestPageAwareIndexing(TempDirTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHybridRetrieval(TempDirTestCase):
+    def _engine(self):
+        return make_rag_engine(self.tmp)
+
+    def test_exact_acronym_ranks_via_lexical(self) -> None:
+        engine = self._engine()
+        # chunk A: dense-similar vocabulary but no acronym
+        engine.index_paper("2403.1", "reinforcement learning from feedback reward models " * 20)
+        # chunk B: contains the exact identifier once among filler
+        engine.index_paper("2403.2", "GRPO policy optimization trick " + "filler words here " * 18)
+        results = engine.search("GRPO")
+        self.assertTrue(results)
+        self.assertEqual(results[0]["source_id"], "2403.2",
+                         "exact acronym hit must outrank vocabulary-only match")
+        self.assertGreater(results[0]["lexical_score"], 0)
+
+    def test_scores_exposed(self) -> None:
+        engine = self._engine()
+        engine.index_paper("2403.3", "swarm coordination pheromones " * 25)
+        r = engine.search("swarm coordination")[0]
+        self.assertIn("dense_score", r)
+        self.assertIn("lexical_score", r)
+        self.assertAlmostEqual(r["score"], 0.65 * r["dense_score"] + 0.35 * r["lexical_score"], places=2)
 
 
 class TestExtractTextPages(TempDirTestCase):

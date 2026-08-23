@@ -14,6 +14,14 @@ from .llm import LLMInterface
 
 logger = logging.getLogger(__name__)
 
+# Hybrid retrieval weights: dense cosine vs lexical token overlap.
+# Lexical matters for exact identifiers ("DPO", "RLHF") that embed poorly.
+LEXICAL_WEIGHT = 0.35
+
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in text.lower().split() if len(t) > 1}
+
 
 class Chunk:
     def __init__(
@@ -186,16 +194,28 @@ class RAGEngine:
         sims = self.embeddings @ q_emb
         norms = np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(q_emb)
         sims = np.divide(sims, norms, out=np.zeros_like(sims), where=norms != 0)
-        top_indices = np.argsort(sims)[-top_k:][::-1]
+
+        # Lexical blend: exact token overlap rescues acronyms/method names
+        # that dense embeddings rank poorly.
+        q_tokens = _tokens(query)
+        chunk_tokens = [_tokens(c.text) for c in self.chunks]
+        lex = np.array([
+            len(q_tokens & ct) / max(len(q_tokens), 1) for ct in chunk_tokens
+        ], dtype=np.float32)
+        combined = (1.0 - LEXICAL_WEIGHT) * sims + LEXICAL_WEIGHT * lex
+
+        top_indices = np.argsort(combined)[-top_k:][::-1]
         results = []
         for idx in top_indices:
-            if sims[idx] > 0:
+            if combined[idx] > 0:
                 c = self.chunks[idx]
                 results.append({
                     "text": c.text,
                     "source_id": c.source_id,
                     "source_title": c.source_title,
-                    "score": float(round(sims[idx], 4)),
+                    "score": float(round(float(combined[idx]), 4)),
+                    "dense_score": float(round(float(sims[idx]), 4)),
+                    "lexical_score": float(round(float(lex[idx]), 4)),
                     "page": int(c.page_start) if c.page_start else None,
                 })
         return results
