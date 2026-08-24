@@ -15,13 +15,14 @@ import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { DiscoverPanel } from "./components/DiscoverPanel";
 import { LibraryPanel } from "./components/LibraryPanel";
 import { SchedulesPanel } from "./components/SchedulesPanel";
+import { IdeasPanel } from "./components/IdeasPanel";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showKG, setShowKG] = useState(false);
-  const [centerTab, setCenterTab] = useState<"chat" | "discover" | "library">("chat");
+  const [centerTab, setCenterTab] = useState<"chat" | "discover" | "ideas" | "library">("chat");
   const plansRef = useRef<Map<string, Plan>>(new Map());
 
   const refreshPlans = useCallback(async () => {
@@ -145,10 +146,12 @@ export default function App() {
           <div className="center-tabs">
             <button className={centerTab === "chat" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("chat")}>Fox Chat</button>
             <button className={centerTab === "discover" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("discover")}>Discover · arxiv pool</button>
+            <button className={centerTab === "ideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("ideas")}>💡 IDEAgent</button>
             <button className={centerTab === "library" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("library")}>Library search</button>
           </div>
           {centerTab === "chat" && <ChatPanel />}
           {centerTab === "discover" && <DiscoverPanel />}
+          {centerTab === "ideas" && <IdeasPanel />}
           {centerTab === "library" && <LibraryPanel />}
         </section>
         <section className="col col-side">

@@ -44,6 +44,7 @@ services:
       - HIVE_TOKEN=${HIVE_TOKEN:-}
       - OLLAMA_BASE_URL=http://localhost:8210
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
+      - OLLAMA_IDEATION_URL=http://localhost:11434
     restart: unless-stopped
 
 volumes:

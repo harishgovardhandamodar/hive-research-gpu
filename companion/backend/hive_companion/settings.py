@@ -22,6 +22,7 @@ class Settings:
     port: int = field(default_factory=lambda: int(_get("COMPANION_PORT", "8001")))
 
     llm_base_url: str = field(default_factory=lambda: _get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
+    ideation_base_url: str = field(default_factory=lambda: _get("OLLAMA_IDEATION_URL", ""))
     llm_model: str = field(default_factory=lambda: _get("OLLAMA_MODEL", "qwen3.6:latest"))
     llm_fast_model: str = field(default_factory=lambda: _get("OLLAMA_FAST_MODEL", "llama3.2:3b"))
 

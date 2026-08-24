@@ -27,6 +27,7 @@ from .llm import ChatClient
 from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
+from .ideagent import IdeagentEngine, persist_runs
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
@@ -53,6 +54,14 @@ class CompanionApp:
         self.suggestions = SuggestionStore(self.settings.data_dir)
         self.registry = ToolRegistry(self.client)
         self.kg = KGCache(self.client)
+        ideation_url = self.settings.ideation_base_url or self.settings.llm_base_url
+        self.ideagent = IdeagentEngine(
+            llm_fast=ChatClient(ideation_url, self.settings.llm_fast_model),
+            llm_main=ChatClient(ideation_url, self.settings.llm_model),
+            kg=self.kg,
+            bus=self.bus,
+        )
+        self._ideagent_llms: list[Any] = [self.ideagent.llm_fast, self.ideagent.llm_main]
         self.schedules = ScheduleStore(self.settings.data_dir)
         self.scheduler = GoalScheduler(
             self.schedules,
@@ -89,6 +98,9 @@ class CompanionApp:
     async def shutdown(self) -> None:
         await self.proactive.stop()
         await self.scheduler.stop()
+        for llm in self._ideagent_llms:
+            if llm is not None:
+                await llm.aclose()
         await self.client.aclose()
         if self.llm is not None:
             await self.llm.aclose()
@@ -489,6 +501,40 @@ async def rate_artifact(req: RateRequest) -> dict[str, Any]:
         status="ok",
     )
     return result
+
+
+# -- ideagent (novel ideas) ----------------------------------------------------
+
+
+class IdeaRunRequest(BaseModel):
+    topic: str = Field(min_length=4, max_length=400)
+    iterations: int = Field(default=8, ge=2, le=20)
+    model: str = "fast"  # fast | main
+
+
+@app.post("/api/ideas/run")
+async def ideas_run(req: IdeaRunRequest) -> dict[str, Any]:
+    try:
+        run = await state.ideagent.run(req.topic.strip(), req.iterations, req.model)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    persist_runs(state.settings.data_dir, state.ideagent.history)
+    return run.to_dict()
+
+
+@app.get("/api/ideas/latest")
+async def ideas_latest() -> dict[str, Any]:
+    if not state.ideagent.history:
+        return {"status": "idle"}
+    return state.ideagent.history[-1].to_dict()
+
+
+@app.get("/api/ideas/{run_id}")
+async def ideas_get(run_id: str) -> dict[str, Any]:
+    for r in reversed(state.ideagent.history):
+        if r.id == run_id:
+            return r.to_dict()
+    raise HTTPException(404, "run not found")
 
 
 # -- schedules -----------------------------------------------------------------
