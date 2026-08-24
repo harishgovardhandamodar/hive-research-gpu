@@ -7,6 +7,7 @@ and pagination — the layer where both security regressions lived.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import tempfile
@@ -171,6 +172,38 @@ class TestHTTPServer(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["chunks"], 5)
+
+    # -- companion link ----------------------------------------------------------
+
+    def _request_no_redirect(self, path):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        conn.request("GET", path)
+        resp = conn.getresponse()
+        body = resp.read().decode()
+        headers = {k.lower(): v for k, v in resp.getheaders()}
+        status = resp.status
+        conn.close()
+        return status, headers, body
+
+    def test_companion_redirects_to_gui(self) -> None:
+        status, headers, body = self._request_no_redirect("/companion")
+        self.assertEqual(status, 302)
+        self.assertEqual(headers["location"], "http://127.0.0.1:8001/")
+        data = json.loads(body)
+        self.assertEqual(data["redirect"], "http://127.0.0.1:8001/")
+
+    def test_companion_url_env_override(self) -> None:
+        old = os.environ.get("COMPANION_URL")
+        os.environ["COMPANION_URL"] = "http://example.com:9000/gui/"
+        try:
+            status, headers, _ = self._request_no_redirect("/companion")
+            self.assertEqual(status, 302)
+            self.assertEqual(headers["location"], "http://example.com:9000/gui/")
+        finally:
+            if old is None:
+                del os.environ["COMPANION_URL"]
+            else:
+                os.environ["COMPANION_URL"] = old
 
     def test_parallel_requests_do_not_serialize_each_other(self) -> None:
         """With ThreadingHTTPServer, a slow handler must not block others."""

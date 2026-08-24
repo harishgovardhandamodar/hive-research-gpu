@@ -67,6 +67,14 @@ autonomy mode.
 
 ## Run
 
+### Reaching the GUI
+
+- Direct: `http://localhost:8001`
+- From the main dashboard: the sidebar **Companion** button (robot icon), or
+  open `http://localhost:7777/companion` — it 302-redirects to the GUI.
+  Set `COMPANION_URL` on the main server to override the target
+  (e.g. when the companion runs on another host/port).
+
 ### Dev
 
 ```bash

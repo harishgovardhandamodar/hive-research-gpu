@@ -133,6 +133,8 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_dashboard()
         elif path == "/landscape":
             self._serve_landscape()
+        elif path == "/companion":
+            self._serve_companion_redirect()
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -703,6 +705,26 @@ info.textContent += ' | OK';
             _html_response(self, LANDSCAPE_HTML.read_text())
         else:
             _html_response(self, "<html><body><p>Landscape view not found</p></body></html>")
+
+    def _companion_url(self) -> str:
+        """Companion GUI location: explicit env override, else same host on :8001."""
+        configured = os.environ.get("COMPANION_URL", "").strip()
+        if configured:
+            return configured
+        host = (self.headers.get("Host") or "127.0.0.1:7777").rsplit(":", 1)[0]
+        if host.startswith("[") and not host.endswith("]"):
+            host += "]"
+        return f"http://{host}:8001/"
+
+    def _serve_companion_redirect(self) -> None:
+        target = self._companion_url()
+        body = json.dumps({"redirect": target}).encode()
+        self.send_response(302)
+        self.send_header("Location", target)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
 
 def run_server(

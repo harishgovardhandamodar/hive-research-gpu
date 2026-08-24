@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -369,16 +369,36 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 
 _dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
+_NOT_BUILT_PAGE = """<!doctype html><html><head><title>Companion — frontend not built</title></head>
+<body style="font-family:system-ui;background:#0e1116;color:#d7dee9;padding:40px;line-height:1.6">
+<h2>Companion frontend not built yet</h2>
+<p>The API is running fine — only the React UI is missing.</p>
+<pre style="background:#1c2330;padding:14px;border-radius:8px">npm --prefix companion/frontend install
+npm --prefix companion/frontend run build</pre>
+<p>Then restart this process and reload. Meanwhile, the API is under
+<code>/api/state</code>, <code>/api/goals</code>, <code>/api/suggestions</code>,
+<code>/api/episodes</code> (docs: docs/companion.md).</p>
+</body></html>"""
 
-if _dist_dir.is_dir():
-    app.mount("/assets", StaticFiles(directory=_dist_dir / "assets"), name="assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa(full_path: str) -> FileResponse:
-        candidate = _dist_dir / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(_dist_dir / "index.html")
+app.mount(
+    "/assets",
+    StaticFiles(directory=_dist_dir / "assets", check_dir=False),
+    name="assets",
+)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa(full_path: str) -> Any:
+    if full_path.startswith("api/") or full_path == "api":
+        raise HTTPException(404, "not found")
+    candidate = _dist_dir / full_path
+    if full_path and candidate.is_file():
+        return FileResponse(candidate)
+    index = _dist_dir / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    return HTMLResponse(_NOT_BUILT_PAGE)
 
 
 def main() -> None:
