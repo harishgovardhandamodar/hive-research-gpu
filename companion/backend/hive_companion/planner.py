@@ -177,5 +177,5 @@ class Planner:
             add("pool.import_topic", {"topic": topic}, "import matching pool papers")
         else:
             add("rag.query", {"question": goal}, "grounded answer over indexed notes")
-            add("fox.chat", {"message": goal, "mode": "deep-thinking"}, "conversational synthesis when retrieval is thin")
+            add("fox.chat", {"message": goal, "mode": "fast"}, "conversational synthesis when retrieval is thin")
         return steps

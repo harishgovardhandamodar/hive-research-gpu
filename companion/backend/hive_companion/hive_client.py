@@ -6,6 +6,7 @@ mutation goes through the running server so there is exactly one writer.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -22,6 +23,9 @@ class HiveApiError(RuntimeError):
 
 
 class HiveClient:
+    # Read-only POST endpoints — safe to retry on transport errors.
+    _SAFE_POSTS = {"/api/query", "/api/search", "/api/similarity"}
+
     def __init__(self, base_url: str, token: str = "", timeout: float = 600.0) -> None:
         self._base = base_url.rstrip("/")
         self._token = token
@@ -29,6 +33,9 @@ class HiveClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    def _retryable(self, method: str, path: str) -> bool:
+        return method == "GET" or path in self._SAFE_POSTS
 
     async def _request(
         self,
@@ -38,12 +45,21 @@ class HiveClient:
         params: dict[str, str] | None = None,
     ) -> Any:
         headers = {"X-Hive-Token": self._token} if self._token else {}
-        try:
-            resp = await self._client.request(
-                method, f"{self._base}{path}", json=json_body or {}, params=params or {}, headers=headers
-            )
-        except httpx.HTTPError as exc:
-            raise HiveApiError(path, 0, f"connection failed: {exc}") from exc
+        attempts = 2 if self._retryable(method, path) else 1
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                resp = await self._client.request(
+                    method, f"{self._base}{path}", json=json_body or {}, params=params or {}, headers=headers
+                )
+                break
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                logger.warning("hive %s %s failed (attempt %d/%d): %s", method, path, attempt + 1, attempts, exc)
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(2.0)
+        else:
+            raise HiveApiError(path, 0, f"connection failed: {last_exc}")
         if resp.status_code >= 400:
             raise HiveApiError(path, resp.status_code, resp.text)
         if not resp.content:
