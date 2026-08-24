@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { loadArtifact, type LoadedArtifact } from "../lib/artifactView";
 import type { ArtifactNode } from "../types";
@@ -79,31 +79,47 @@ export function ArtifactViewer({
   );
 }
 
+/** Prune the tree to nodes whose name matches; dirs keep matching descendants. */
+export function filterTree(node: ArtifactNode, q: string): ArtifactNode | null {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return node;
+  const selfMatch = node.name.toLowerCase().includes(needle);
+  if (node.type === "file") return selfMatch ? node : null;
+  const kids = (node.children ?? [])
+    .map((c) => filterTree(c, q))
+    .filter((c): c is ArtifactNode => c !== null);
+  if (kids.length === 0 && !selfMatch) return null;
+  return { ...node, children: kids };
+}
+
 function TreeRow({
   node,
   depth,
   onOpen,
+  forceExpand,
 }: {
   node: ArtifactNode;
   depth: number;
   onOpen: (node: ArtifactNode) => void;
+  forceExpand?: boolean;
 }) {
   const [expanded, setExpanded] = useState(depth === 0);
+  const isOpen = forceExpand || expanded;
 
   if (node.type === "dir") {
     return (
       <li>
         <button
-          className={`tree-row dir ${expanded ? "open" : ""}`}
+          className={`tree-row dir ${isOpen ? "open" : ""}`}
           style={{ paddingLeft: `${depth * 13 + 8}px` }}
           onClick={() => setExpanded(!expanded)}
         >
-          <span className="caret">{expanded ? "▾" : "▸"}</span> {node.name}
+          <span className="caret">{isOpen ? "▾" : "▸"}</span> {node.name}
         </button>
-        {expanded && (
+        {isOpen && (
           <ul className="tree-children">
             {(node.children ?? []).map((c) => (
-              <TreeRow key={c.path ?? c.name} node={c} depth={depth + 1} onOpen={onOpen} />
+              <TreeRow key={c.path ?? c.name} node={c} depth={depth + 1} onOpen={onOpen} forceExpand={forceExpand} />
             ))}
           </ul>
         )}
@@ -128,6 +144,7 @@ function TreeRow({
 
 export function Explorer() {
   const [root, setRoot] = useState<ArtifactNode | null>(null);
+  const [query, setQuery] = useState("");
   const { loaded, setLoaded, busy, open } = useArtifactOpener();
 
   const refresh = useCallback(async () => {
@@ -144,14 +161,31 @@ export function Explorer() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  const searching = query.trim().length > 0;
+  const children = useMemo(() => {
+    if (!root?.children) return [];
+    if (!searching) return root.children;
+    return root.children
+      .map((c) => filterTree(c, query))
+      .filter((c): c is ArtifactNode => c !== null);
+  }, [root, query, searching]);
+
   return (
     <div className="panel">
       <h2>Vault explorer</h2>
+      <input
+        className="search"
+        placeholder="filter files & folders…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       <ul className="tree">
-        {root && root.children ? (
-          root.children.map((c) => <TreeRow key={c.path ?? c.name} node={c} depth={0} onOpen={open} />)
+        {children.length > 0 ? (
+          children.map((c) => (
+            <TreeRow key={c.path ?? c.name} node={c} depth={0} onOpen={open} forceExpand={searching} />
+          ))
         ) : (
-          <li className="empty">loading vault…</li>
+          <li className="empty">{root ? `no matches for "${query}"` : "loading vault…"}</li>
         )}
       </ul>
       <ArtifactViewer loaded={loaded} busy={busy} onClose={() => setLoaded(null)} />
