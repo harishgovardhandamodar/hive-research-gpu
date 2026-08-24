@@ -8,6 +8,7 @@ import { ChatPanel } from "./components/ChatPanel";
 import { ApprovalInbox } from "./components/ApprovalInbox";
 import { SuggestionsFeed } from "./components/SuggestionsFeed";
 import { TimelineView } from "./components/TimelineView";
+import { ArtifactsPanel } from "./components/ArtifactsPanel";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -127,6 +128,7 @@ export default function App() {
         <section className="col col-side">
           <ApprovalInbox onChanged={refreshPlans} />
           <SuggestionsFeed />
+          <ArtifactsPanel />
           <TimelineView />
         </section>
       </main>

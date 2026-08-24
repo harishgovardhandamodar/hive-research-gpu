@@ -1,4 +1,13 @@
-import type { Approval, AppState, AutonomyMode, Episode, Plan, Suggestion, TimelineResponse } from "./types";
+import type {
+  Approval,
+  AppState,
+  ArtifactGroup,
+  AutonomyMode,
+  Episode,
+  Plan,
+  Suggestion,
+  TimelineResponse,
+} from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
@@ -38,6 +47,9 @@ export const api = {
   episodes: (query = "", limit = 60) =>
     req<{ items: Episode[] }>(`/api/episodes?query=${encodeURIComponent(query)}&limit=${limit}`),
   timeline: () => req<TimelineResponse>("/api/timeline?limit=40"),
+  artifacts: () => req<{ groups: ArtifactGroup[] }>("/api/artifacts"),
+  artifactContent: (path: string) =>
+    req<{ path: string; content: string }>(`/api/artifacts/content?path=${encodeURIComponent(path)}`),
   chat: (message: string, mode: string, conversationId?: string | null) =>
     req<{
       answer: string;

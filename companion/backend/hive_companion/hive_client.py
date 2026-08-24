@@ -190,3 +190,9 @@ class HiveClient:
     ) -> Any:
         body: dict[str, Any] = {"kind": kind, "rating": rating, "comment": comment, **context}
         return await self.post("/api/feedback", body)
+
+    async def browse(self) -> dict[str, Any]:
+        return await self.get("/api/browse")
+
+    async def read_file(self, path: str) -> dict[str, Any]:
+        return await self._request("GET", "/api/read", params={"path": path})

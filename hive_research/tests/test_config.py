@@ -111,3 +111,22 @@ class TestEmbedBaseURL(TempDirTestCase):
         llm._request = fake_request  # type: ignore[method-assign]
         self.assertEqual(llm.embed("hello"), [1.0])
         self.assertEqual(captured["override"], "")
+
+    def test_ollama_timeout_default_and_env(self) -> None:
+        cfg = Config(self.tmp / "nope.yaml")
+        self.assertEqual(cfg.ollama_timeout, 600)
+        old = os.environ.get("OLLAMA_TIMEOUT")
+        os.environ["OLLAMA_TIMEOUT"] = "900"
+        try:
+            self.assertEqual(Config(self.tmp / "nope.yaml").ollama_timeout, 900)
+        finally:
+            if old is None:
+                del os.environ["OLLAMA_TIMEOUT"]
+            else:
+                os.environ["OLLAMA_TIMEOUT"] = old
+        os.environ["OLLAMA_TIMEOUT"] = "bogus"
+        self.assertEqual(Config(self.tmp / "nope.yaml").ollama_timeout, 600)
+        if old is None:
+            del os.environ["OLLAMA_TIMEOUT"]
+        else:
+            os.environ["OLLAMA_TIMEOUT"] = old

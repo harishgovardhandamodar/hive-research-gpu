@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .autonomy import MODES, AutonomyMode, resolve_mode
+from .artifacts import shape_artifacts
 from .episodic import EpisodeStore
 from .events import EventBus
 from .executor import ApprovalStore, PlanExecutor
@@ -319,6 +320,26 @@ async def episode_stats() -> dict[str, Any]:
 @app.get("/api/timeline")
 async def agent_timeline(limit: int = 40) -> dict[str, Any]:
     return build_timeline(state.episodes, limit=min(limit, 100))
+
+
+@app.get("/api/artifacts")
+async def list_artifacts() -> dict[str, Any]:
+    try:
+        tree = await state.client.browse()
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    return shape_artifacts(tree.get("tree", []))
+
+
+@app.get("/api/artifacts/content")
+async def artifact_content(path: str = "") -> dict[str, Any]:
+    if not path or ".." in path:
+        raise HTTPException(400, "bad path")
+    try:
+        data = await state.client.read_file(path)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    return {"path": path, "content": data.get("content", "")}
 
 
 @app.get("/api/sessions/current/summary")

@@ -86,6 +86,18 @@ class Config:
             self._get("ollama", "embed_base_url", default="")
         )
 
+    @property
+    def ollama_timeout(self) -> int:
+        """Per-request LLM read timeout in seconds.
+
+        Thinking models routinely generate for minutes on long sections;
+        the historical 180s default aborts them mid-handler.
+        """
+        try:
+            return int(os.environ.get("OLLAMA_TIMEOUT") or self._get("ollama", "timeout", default=600))
+        except ValueError:
+            return 600
+
     def resolve_model(self, model: str | None) -> str | None:
         if not model or model == "large":
             return self.ollama_model

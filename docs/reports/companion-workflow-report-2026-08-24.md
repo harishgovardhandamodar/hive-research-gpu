@@ -11,6 +11,12 @@
 > - Tiered plan `536bca1376f5` (LLM-planned, 5 steps incl. a self-added `system.jobs` verification step): **5/5 done**; its `survey.start` gate was approved ("relaunch after embed fix").
 > - Survey job `ff46f44e9d62` progressed past its former death point into *writing: Abstract*.
 > - New in the GUI: **Agent timeline** panel (`/api/timeline`) rendering every goal thread as a vertical rail — steps with ✓/✗/⤼ states, ◆ decision nodes, spans and ok-counts.
+>
+> **Addendum 2 — artifacts & long-form fix.**
+> - Root cause of repeated survey aborts at *writing* stages was the main app's hardcoded 180 s LLM read timeout: qwen3.6 thinking-mode sections need several minutes. Now configurable via `OLLAMA_TIMEOUT` (set to 900 s in compose, commit range `3d36c9e..HEAD`).
+> - New **Artifacts** panel (`/api/artifacts`, `/api/artifacts/content`): browses vault-produced files — Survey reports, Digests, Paper notes, Source PDFs — click any file to read it inline. Live check: 71 digests, 339 note files, 20 PDFs listed.
+> - Fixed container packaging: uvicorn now installed with `[standard]` so WebSocket event streaming actually works inside Docker.
+> - Survey job `b9f32b8474a7` relaunched under the raised timeout; GPU fully engaged during outline planning, no timeouts logged. Its report will surface automatically under Artifacts → Survey reports when written.
 
 ---
 

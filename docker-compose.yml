@@ -13,6 +13,9 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:latest}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      # Long-form generation (surveys, deep answers) on thinking models
+      # needs several minutes; 180s aborted them mid-write.
+      - OLLAMA_TIMEOUT=900
       # Set HIVE_TOKEN to require auth on every request; the healthcheck
       # below automatically presents it.
       - HIVE_TOKEN=${HIVE_TOKEN:-}

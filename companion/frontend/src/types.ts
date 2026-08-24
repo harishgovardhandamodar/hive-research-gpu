@@ -98,3 +98,15 @@ export interface TimelineResponse {
   unfiled: { ts: string; kind: string; summary: string }[];
   total_threads: number;
 }
+
+export interface ArtifactFile {
+  name: string;
+  path: string;
+}
+
+export interface ArtifactGroup {
+  id: string;
+  label: string;
+  files: ArtifactFile[];
+  total: number;
+}

@@ -41,7 +41,7 @@ class LLMInterface:
         last_error: Exception | None = None
         for attempt in range(retries):
             try:
-                resp = requests.post(url, json=payload, timeout=180)
+                resp = requests.post(url, json=payload, timeout=self.config.ollama_timeout)
                 resp.raise_for_status()
                 return resp.json()
             except requests.RequestException as e:
