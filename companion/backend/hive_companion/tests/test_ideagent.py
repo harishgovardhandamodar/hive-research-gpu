@@ -21,7 +21,7 @@ class FakeLLM:
         self.responses = list(responses)
         self.calls: list[tuple[str, str]] = []
 
-    async def chat(self, system: str, user: str, json_mode: bool = False, num_predict: int = 1024) -> str:
+    async def chat(self, system: str, user: str, json_mode: bool = False, num_predict: int = 1024, temperature: float = 0.2) -> str:
         self.calls.append((system[:20], user[:40]))
         if not self.responses:
             raise RuntimeError("dry")

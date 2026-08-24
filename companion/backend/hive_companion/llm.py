@@ -23,7 +23,14 @@ class ChatClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def chat(self, system: str, user: str, json_mode: bool = False, num_predict: int = 1024) -> str:
+    async def chat(
+        self,
+        system: str,
+        user: str,
+        json_mode: bool = False,
+        num_predict: int = 1024,
+        temperature: float = 0.2,
+    ) -> str:
         body: dict[str, Any] = {
             "model": self._model,
             "stream": False,
@@ -31,7 +38,7 @@ class ChatClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "options": {"temperature": 0.2, "num_predict": num_predict},
+            "options": {"temperature": temperature, "num_predict": num_predict},
         }
         if json_mode:
             body["format"] = "json"

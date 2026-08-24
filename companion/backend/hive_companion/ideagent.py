@@ -213,20 +213,34 @@ class IdeagentEngine:
         prior = [
             f"- {i['title']}" for i in run.rank()[-6:]
         ]
+        empty_cells = [
+            (a, r) for a in APPROACHES for r in RISKS if (a, r) not in run.archive
+        ]
+        target = empty_cells[(len(run.candidates)) % len(empty_cells)] if empty_cells else None
+        target_line = (
+            f"Target archive cell — approach: {target[0]}; risk: {target[1]}. "
+            "Frame the idea to genuinely fit this descriptor."
+            if target
+            else "Pick whichever descriptor fits best."
+        )
         user = (
             f"Research focus: {run.topic}\n"
             f"Library concepts (your work builds here): {', '.join(concepts)}\n"
-            f"Prior ideas this session (diverge from these):\n" + ("\n".join(prior) or "- none yet") + "\n"
-            f"Iteration goal: aim for the {'radical' if len(run.candidates) % 3 == 2 else 'bridging'} risk tier."
+            f"Prior ideas this session (STRICTLY FORBIDDEN to reuse their core mechanism or title wording):\n"
+            + ("\n".join(prior) or "- none yet") + "\n"
+            f"{target_line}\n"
+            "Diversity rule: your idea must introduce a different PROBLEM FRAMING and a different CORE MECHANISM than every prior idea."
         )
-        content = await llm.chat(system=_GEN_SYSTEM, user=user, json_mode=True, num_predict=700)
+        content = await llm.chat(system=_GEN_SYSTEM, user=user, json_mode=True, num_predict=700, temperature=0.95)
         data = _parse_json(content)
+        approach = target[0] if target else _bucket(str(data.get("approach", "")), APPROACHES)
+        risk = target[1] if target else _bucket(str(data.get("risk", "")), RISKS)
         candidate = {
             "id": uuid.uuid4().hex[:10],
             "title": str(data.get("title", ""))[:200] or "Untitled idea",
             "summary": str(data.get("summary", ""))[:1200],
-            "approach": _bucket(str(data.get("approach", "")), APPROACHES),
-            "risk": _bucket(str(data.get("risk", "")), RISKS),
+            "approach": approach,
+            "risk": risk,
             "builds_on": [str(x)[:60] for x in (data.get("builds_on") or [])[:5]],
             "iteration": len(run.candidates) + 1,
         }
