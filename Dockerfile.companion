@@ -23,6 +23,7 @@ USER companion
 EXPOSE 8001
 ENV COMPANION_HOST=0.0.0.0 COMPANION_PORT=8001 \
     HIVE_API_URL=http://localhost:7777 \
-    COMPANION_DATA_DIR=/app/data/companion
+    COMPANION_DATA_DIR=/app/data/companion \
+    COMPANION_FRONTEND_DIST=/app/frontend/dist
 
 CMD ["python", "-m", "uvicorn", "hive_companion.main:app", "--host", "0.0.0.0", "--port", "8001"]

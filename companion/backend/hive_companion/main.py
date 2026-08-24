@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -367,7 +368,16 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 
 # -- static frontend (built React bundle) --------------------------------------
 
-_dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+def _resolve_dist_dir() -> Path:
+    """Repo checkout layout by default; containers override via env."""
+    configured = os.environ.get("COMPANION_FRONTEND_DIST", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+
+_dist_dir = _resolve_dist_dir()
 
 _NOT_BUILT_PAGE = """<!doctype html><html><head><title>Companion — frontend not built</title></head>
 <body style="font-family:system-ui;background:#0e1116;color:#d7dee9;padding:40px;line-height:1.6">
