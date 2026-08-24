@@ -196,3 +196,11 @@ class HiveClient:
 
     async def read_file(self, path: str) -> dict[str, Any]:
         return await self._request("GET", "/api/read", params={"path": path})
+
+    async def get_raw(self, path: str) -> tuple[bytes, str]:
+        """Binary passthrough (figures, PDFs) from hive's /api/raw."""
+        headers = {"X-Hive-Token": self._token} if self._token else {}
+        resp = await self._client.get(f"{self._base}/api/raw", params={"path": path}, headers=headers)
+        if resp.status_code >= 400:
+            raise HiveApiError("/api/raw", resp.status_code, resp.text[:200])
+        return resp.content, resp.headers.get("content-type", "application/octet-stream")

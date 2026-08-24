@@ -18,6 +18,30 @@ function renderMarkdown(md: string): string {
   }
 }
 
+/** Resolve a relative figure path against the note's folder. */
+export function joinBase(baseDir: string, rel: string): string {
+  const parts = baseDir ? baseDir.split("/") : [];
+  for (const seg of rel.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") parts.pop();
+    else parts.push(seg);
+  }
+  return parts.join("/");
+}
+
+/** Point relative <img> sources at the authenticated raw-file proxy. */
+export function inlineImages(html: string, artifactPath: string): string {
+  const baseDir = artifactPath.includes("/") ? artifactPath.slice(0, artifactPath.lastIndexOf("/")) : "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("img").forEach((img) => {
+    const src = img.getAttribute("src") ?? "";
+    if (/^(https?:|data:)/i.test(src)) return;
+    const resolved = joinBase(baseDir, src.replace(/^\.?\//, ""));
+    img.setAttribute("src", `/api/artifacts/raw?path=${encodeURIComponent(resolved)}`);
+  });
+  return doc.body.innerHTML;
+}
+
 export function ArtifactsPanel() {
   const [groups, setGroups] = useState<ArtifactGroup[]>([]);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -42,9 +66,10 @@ export function ArtifactsPanel() {
     setBusy(true);
     try {
       const data = await api.artifactContent(path);
-      setLoaded({ path, content: data.content });
+      const html = inlineImages(renderMarkdown(data.content), path);
+      setLoaded({ path, content: html });
     } catch (err) {
-      setLoaded({ path, content: `Could not load artifact: ${err instanceof Error ? err.message : String(err)}` });
+      setLoaded({ path, content: `<pre>Could not load artifact: ${err instanceof Error ? err.message : String(err)}</pre>` });
     } finally {
       setBusy(false);
     }
@@ -89,7 +114,7 @@ export function ArtifactsPanel() {
             </div>
             <div
               className="artifact-body md-body"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(loaded.content) }}
+              dangerouslySetInnerHTML={{ __html: loaded.content }}
             />
           </div>
         </div>

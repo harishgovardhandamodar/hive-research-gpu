@@ -212,3 +212,5 @@ button.ghost { background: transparent; }
 .md-body tr:hover td { background: var(--surface2, var(--bg3)); }
 .md-body img { max-width: 100%; border-radius: 6px; }
 .md-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.md-body img { display: block; margin: 10px 0; background: #fff; padding: 6px; border-radius: 4px; }
+.md-body figcaption, .md-body em.caption { color: var(--dim); font-size: 11px; }

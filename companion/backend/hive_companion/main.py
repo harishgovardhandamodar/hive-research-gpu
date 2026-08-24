@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -340,6 +340,18 @@ async def artifact_content(path: str = "") -> dict[str, Any]:
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
     return {"path": path, "content": data.get("content", "")}
+
+
+@app.get("/api/artifacts/raw")
+async def artifact_raw(path: str = "") -> Response:
+    """Binary passthrough so figures inside note markdown render in the GUI."""
+    if not path or ".." in path:
+        raise HTTPException(400, "bad path")
+    try:
+        blob, content_type = await state.client.get_raw(path)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    return Response(content=blob, media_type=content_type)
 
 
 @app.get("/api/sessions/current/summary")
