@@ -47,7 +47,7 @@ class ScheduleStore:
     def __init__(self, data_dir: Path) -> None:
         self.path = data_dir / "schedules.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # reentrant: mutators hold it across _save()
         self._items: dict[str, dict[str, Any]] = {}
         self._load()
 

@@ -14,6 +14,7 @@ import { JobsBar } from "./components/JobsBar";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { DiscoverPanel } from "./components/DiscoverPanel";
 import { LibraryPanel } from "./components/LibraryPanel";
+import { SchedulesPanel } from "./components/SchedulesPanel";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -137,6 +138,7 @@ export default function App() {
               <PlanCard key={p.id} plan={p} onModeSwitch={refreshState} />
             ))}
           </div>
+          <SchedulesPanel />
           <Explorer />
         </section>
         <section className="col col-chat">

@@ -170,6 +170,9 @@ export function ArtifactViewer({
             <img src={loaded.rawUrl} alt={loaded.path} />
           </div>
         )}
+        {!busy && loaded?.kind === "pdf" && (
+          <iframe src={loaded.rawUrl} title={loaded.path} className="pdf-frame" />
+        )}
         {!busy && loaded?.kind === "raw" && (
           <div className="artifact-body">
             <p>No inline preview for this file type.</p>

@@ -4,7 +4,7 @@ marked.setOptions({ breaks: true, gfm: true });
 
 export interface LoadedArtifact {
   path: string;
-  kind: "markdown" | "image" | "raw";
+  kind: "markdown" | "image" | "raw" | "pdf";
   html?: string;
   rawUrl?: string;
 }
@@ -54,6 +54,9 @@ export async function loadArtifact(
 ): Promise<LoadedArtifact> {
   if (view === "image") {
     return { path, kind: "image", rawUrl: `/api/artifacts/raw?path=${encodeURIComponent(path)}` };
+  }
+  if (view === "pdf") {
+    return { path, kind: "pdf", rawUrl: `/api/artifacts/raw?path=${encodeURIComponent(path)}` };
   }
   if (view === "text") {
     const data = await fetchContent(path);

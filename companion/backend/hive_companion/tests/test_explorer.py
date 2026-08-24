@@ -30,7 +30,7 @@ class TestExplorer(unittest.TestCase):
     def test_nested_hierarchy_with_paths(self) -> None:
         root = build_explorer(_tree())
         kids = {c["name"]: c for c in root["children"]}
-        self.assertEqual(set(kids), {"digests", "paper_x"})
+        self.assertEqual(set(kids), {"digests", "paper_x", "source-pdfs"})
         px = kids["paper_x"]
         self.assertEqual(px["type"], "dir")
         by_name = {c["name"]: c for c in px["children"]}
@@ -42,10 +42,16 @@ class TestExplorer(unittest.TestCase):
         self.assertEqual(fig["path"], "Notes/paper_x/figures/figure_p04_01.png")
         self.assertEqual(fig["view"], "image")
 
-    def test_dirs_sort_first(self) -> None:
+    def test_source_pdfs_listed_with_pdf_view(self) -> None:
         root = build_explorer(_tree())
-        kinds = [c["type"] for c in root["children"]]
-        self.assertEqual(kinds, ["dir", "dir"])
+        src = next(c for c in root["children"] if c["name"] == "source-pdfs")
+        pdf = src["children"][0]
+        self.assertEqual(pdf["view"], "pdf")
+        self.assertEqual(pdf["path"], "2107.01994v1.pdf")
+
+    def test_all_children_are_dirs(self) -> None:
+        root = build_explorer(_tree())
+        self.assertTrue(all(c["type"] == "dir" for c in root["children"]))
 
     def test_junk_files_excluded(self) -> None:
         root = build_explorer(_tree())

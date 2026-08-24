@@ -12,6 +12,8 @@ import type {
   KGData,
   PoolPaper,
   LibraryHit,
+  Schedule,
+  CompareEdge,
 } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -75,6 +77,24 @@ export const api = {
     req<unknown>("/api/rate", {
       method: "POST",
       body: JSON.stringify({ kind, rating, comment }),
+    }),
+  schedules: () => req<Schedule[]>("/api/schedules"),
+  addSchedule: (goal: string, mode: string, cadence: string, weekday: number) =>
+    req<Schedule>("/api/schedules", {
+      method: "POST",
+      body: JSON.stringify({ goal, mode, cadence, weekday }),
+    }),
+  deleteSchedule: (id: string) => req<{ deleted: string }>(`/api/schedules/${id}`, { method: "DELETE" }),
+  toggleSchedule: (id: string) =>
+    req<Schedule>(`/api/schedules/${id}/toggle`, { method: "POST", body: "{}" }),
+  cite: (arxivId: string, title = "", authors = "", published = "") =>
+    req<{ bibtex: string }>(
+      `/api/cite?arxiv_id=${encodeURIComponent(arxivId)}&title=${encodeURIComponent(title)}&authors=${encodeURIComponent(authors)}&published=${encodeURIComponent(published)}`,
+    ),
+  similarity: (paperIds: string[]) =>
+    req<CompareEdge[]>("/api/similarity", {
+      method: "POST",
+      body: JSON.stringify({ paper_ids: paperIds }),
     }),
   artifactRelated: (path: string) =>
     req<RelatedSubgraph>(`/api/artifacts/related?path=${encodeURIComponent(path)}`),

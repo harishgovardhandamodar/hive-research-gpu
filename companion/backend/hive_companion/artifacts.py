@@ -96,7 +96,7 @@ def _build_dir(name: str, rel_files: list[dict[str, Any]], folder_prefix: str) -
                     child["view"] = "pdf"
                 else:
                     child["view"] = "none"
-                child["path"] = f"{folder_prefix}/{rel}"
+                child["path"] = f"{folder_prefix}/{rel}".lstrip("/") if not folder_prefix else f"{folder_prefix}/{rel}"
                 if item.get("mtime"):
                     child["mtime"] = item["mtime"]
                 cursor.append(child)

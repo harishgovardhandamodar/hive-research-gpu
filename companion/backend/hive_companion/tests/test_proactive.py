@@ -41,6 +41,12 @@ class FakeHive:
         self._maybe_fail()
         return self.digest_payload
 
+    async def get(self, path, **params):
+        self._maybe_fail()
+        if path == "/api/graph/clusters":
+            return {"clusters": [{"label": "t1", "size": 5}, {"label": "t2", "size": 5}]}
+        return {}
+
 
 class TestSuggestions(TempDirTestCase):
     def test_dedupe_by_key(self) -> None:

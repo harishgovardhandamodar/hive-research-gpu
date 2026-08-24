@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
+from .cite import topic_drift
 from .events import EventBus
 from .hive_client import HiveApiError, HiveClient
 from .policy import ReinforcementPolicy
@@ -100,12 +101,14 @@ class ProactiveEngine:
         policy: ReinforcementPolicy,
         bus: EventBus,
         interval_s: float = 300.0,
+        data_dir: Path | None = None,
     ) -> None:
         self.client = client
         self.store = store
         self.policy = policy
         self.bus = bus
         self.interval_s = interval_s
+        self.baseline_path = (data_dir / "topic_baseline.json") if data_dir else None
         self._task: asyncio.Task | None = None
         self.last_cycle: dict[str, Any] = {"at": None, "signals": {}, "new": 0}
 
@@ -138,6 +141,7 @@ class ProactiveEngine:
             ("feedback_trend", self._signal_feedback),
             ("pool_backlog", self._signal_pool),
             ("vault_idle", self._signal_idle),
+            ("topic_drift", self._signal_topic_drift),
         ]
         strengths: dict[str, float] = {}
         created: list[dict[str, Any]] = []
@@ -157,7 +161,11 @@ class ProactiveEngine:
             result["score"] = round(strength * weight * 2, 3)
             result["signal"] = name
             key = f"{name}:{result.pop('dedupe_key', '')}"
+            new_shares = result.pop("_new_shares", None)
             new = self.store.upsert(key, result)
+            if new:
+                # adopt the new distribution so one drift event fires once
+                self._save_baseline(new_shares or {})
             if new:
                 created.append(new)
                 self.bus.publish("suggestion", {k: v for k, v in new.items()})
@@ -235,4 +243,51 @@ class ProactiveEngine:
             "args": {},
             "dedupe_key": "global",
             "strength": 0.3,
+        }
+
+
+    # -- drift ------------------------------------------------------------
+
+    def _load_baseline(self) -> dict[str, float] | None:
+        if not self.baseline_path or not self.baseline_path.exists():
+            return None
+        try:
+            return json.loads(self.baseline_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _save_baseline(self, shares: dict[str, float]) -> None:
+        if not self.baseline_path:
+            return
+        tmp = self.baseline_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(shares))
+        os.replace(tmp, self.baseline_path)
+
+    async def _signal_topic_drift(self) -> dict[str, Any] | None:
+        """Compare cluster size shares against the stored baseline."""
+        clusters = await self.client.get("/api/graph/clusters")
+        cl = clusters.get("clusters", clusters if isinstance(clusters, list) else [])
+        total = sum(int(c.get("size", 0)) for c in cl) or 1
+        shares = {str(c.get("label", c.get("id", i))): int(c.get("size", 0)) / total for i, c in enumerate(cl)}
+        baseline = self._load_baseline()
+        if baseline is None:
+            self._save_baseline(shares)
+            return None
+        drifted = topic_drift(shares, baseline, threshold=0.08)
+        rising = [d for d in drifted if d["direction"] == "rising"]
+        if not rising:
+            return None
+        top = rising[0]
+        return {
+            "kind": "topic_drift",
+            "title": f"Library mix shifting toward “{top['topic']}”",
+            "rationale": (
+                f"Cluster share changed by {top['delta']:+.0%} since the last baseline. "
+                "Watching this topic keeps new preprints flowing into the pool."
+            ),
+            "tool": "pool.watch_topic",
+            "args": {"topic": top["topic"]},
+            "dedupe_key": top["topic"],
+            "strength": min(abs(top["delta"]) * 4, 1.0),
+            "_new_shares": shares,
         }

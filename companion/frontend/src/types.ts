@@ -160,3 +160,23 @@ export interface LibraryHit {
   abstract: string;
   note_path: string | null;
 }
+
+export interface Schedule {
+  id: string;
+  goal: string;
+  mode: string;
+  cadence: string;
+  weekday: number;
+  enabled: boolean;
+  last_run: string | null;
+}
+
+export interface CompareEdge {
+  source: string;
+  source_title: string;
+  target: string;
+  target_title: string;
+  score: number;
+  author_overlap: number;
+  abstract_sim: number;
+}

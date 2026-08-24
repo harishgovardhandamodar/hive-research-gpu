@@ -44,5 +44,5 @@ def topic_drift(current: dict[str, float], baseline: dict[str, float], threshold
     for k in keys:
         delta = current.get(k, 0.0) - baseline.get(k, 0.0)
         deltas.append({"topic": k, "delta": round(delta, 4), "direction": "rising" if delta > 0 else "falling"})
-    deltas.sort(key=lambda d: abs(d["delta"]), reverse=True)
+    deltas.sort(key=lambda d: (0 if d["direction"] == "rising" else 1, -abs(d["delta"])))
     return [d for d in deltas if abs(d["delta"]) >= threshold]

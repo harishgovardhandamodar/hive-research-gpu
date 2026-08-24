@@ -27,6 +27,8 @@ from .llm import ChatClient
 from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
+from .cite import bibtex
+from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
 from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
@@ -51,6 +53,11 @@ class CompanionApp:
         self.suggestions = SuggestionStore(self.settings.data_dir)
         self.registry = ToolRegistry(self.client)
         self.kg = KGCache(self.client)
+        self.schedules = ScheduleStore(self.settings.data_dir)
+        self.scheduler = GoalScheduler(
+            self.schedules,
+            launcher=lambda goal, mode: state.launch_plan(goal, mode),
+        )
         self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
         self.planner = Planner(self.registry, self.llm, self.policy)
         self.executor = PlanExecutor(
@@ -77,9 +84,11 @@ class CompanionApp:
             self.llm = None
             self.planner.llm = None
         self.proactive.start()
+        self.scheduler.start()
 
     async def shutdown(self) -> None:
         await self.proactive.stop()
+        await self.scheduler.stop()
         await self.client.aclose()
         if self.llm is not None:
             await self.llm.aclose()
@@ -480,6 +489,91 @@ async def rate_artifact(req: RateRequest) -> dict[str, Any]:
         status="ok",
     )
     return result
+
+
+# -- schedules -----------------------------------------------------------------
+
+
+class ScheduleRequest(BaseModel):
+    goal: str = Field(min_length=5, max_length=500)
+    mode: str = "tiered"
+    cadence: str = "daily"  # daily | weekly
+    weekday: int = Field(default=0, ge=0, le=6)
+
+
+@app.get("/api/schedules")
+async def list_schedules() -> list[dict[str, Any]]:
+    return state.schedules.all()
+
+
+@app.post("/api/schedules")
+async def add_schedule(req: ScheduleRequest) -> dict[str, Any]:
+    if req.cadence not in ("daily", "weekly"):
+        raise HTTPException(400, "cadence must be daily or weekly")
+    return state.schedules.add(req.goal.strip(), resolve_mode(req.mode).value, req.cadence, req.weekday)
+
+
+@app.delete("/api/schedules/{sid}")
+async def delete_schedule(sid: str) -> dict[str, Any]:
+    if not state.schedules.remove(sid):
+        raise HTTPException(404, "not found")
+    return {"deleted": sid}
+
+
+@app.post("/api/schedules/{sid}/toggle")
+async def toggle_schedule(sid: str) -> dict[str, Any]:
+    item = state.schedules.toggle(sid)
+    if item is None:
+        raise HTTPException(404, "not found")
+    return item
+
+
+@app.post("/api/schedules/run-due")
+async def run_due_schedules() -> dict[str, Any]:
+    fired = await state.scheduler.run_pending_now()
+    return {"fired": fired}
+
+
+@app.get("/api/weekdays")
+async def weekdays() -> list[str]:
+    return WEEKDAYS
+
+
+# -- citations & comparison ----------------------------------------------------
+
+
+@app.get("/api/cite")
+async def cite_paper(
+    arxiv_id: str = "",
+    title: str = "",
+    authors: str = "",
+    published: str = "",
+) -> dict[str, Any]:
+    if len(arxiv_id) < 4:
+        raise HTTPException(400, "arxiv_id required")
+    # prefer library metadata when the paper is ingested
+    try:
+        papers = await state.client.papers()
+        for p in papers:
+            if str(p.get("id", "")).split("v")[0] == arxiv_id.split("v")[0]:
+                title = p.get("title") or title
+                authors = p.get("authors") or authors
+                published = p.get("published") or published
+                break
+    except HiveApiError:
+        pass
+    return {"arxiv_id": arxiv_id, "bibtex": bibtex(arxiv_id, title, authors, published)}
+
+
+@app.post("/api/similarity")
+async def similarity_route(body: dict[str, Any]) -> Any:
+    paper_ids = body.get("paper_ids") or []
+    if not isinstance(paper_ids, list) or len(paper_ids) < 2:
+        raise HTTPException(400, "provide at least two paper_ids")
+    try:
+        return await state.client.similarity([str(x) for x in paper_ids])
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
 
 
 @app.get("/api/statusbar")
