@@ -8,18 +8,24 @@ from hive_companion.artifacts import shape_artifacts
 def _tree() -> list[dict]:
     return [
         {"name": "2107.01994v1.pdf", "files": [{"name": "2107.01994v1.pdf", "ext": ".pdf"}]},
-        {"name": "2203.08975v2.pdf", "files": [{"name": "2203.08975v2.pdf", "ext": ".pdf"}]},
         {
             "name": "Notes",
             "files": [
                 {
                     "name": "surveys",
-                    "files": [{"name": "survey_20260824.md", "ext": ".md"}, {"name": "figures/x.png", "ext": ".png"}],
+                    "files": [
+                        {"name": "survey_20260824.md", "ext": ".md"},
+                        {"name": "figures/x.png", "ext": ".png"},
+                    ],
                 },
                 {"name": "digests", "files": [{"name": "digest_20260824_2017.md", "ext": ".md"}]},
                 {
                     "name": "template_based_graph_clustering",
-                    "files": [{"name": "notes.md", "ext": ".md"}, {"name": "notes.md.bak", "ext": ".bak"}],
+                    "files": [
+                        {"name": "notes.md", "ext": ".md"},
+                        {"name": "notes.md.bak", "ext": ".bak"},
+                        {"name": "figures/figure_p04_01.png", "ext": ".png"},
+                    ],
                 },
             ],
         },
@@ -27,18 +33,21 @@ def _tree() -> list[dict]:
 
 
 class TestShapeArtifacts(unittest.TestCase):
-    def test_groups_surveys_digests_notes_papers(self) -> None:
+    def test_groups_surveys_digests_notes(self) -> None:
         out = shape_artifacts(_tree())
         groups = {g["id"]: g for g in out["groups"]}
-        self.assertEqual(groups["surveys"]["total"], 2)
-        survey = groups["surveys"]["files"][0]
-        self.assertEqual(survey["path"], "Notes/surveys/survey_20260824.md")
+        self.assertEqual(groups["surveys"]["total"], 1)
+        self.assertEqual(groups["surveys"]["files"][0]["path"], "Notes/surveys/survey_20260824.md")
         self.assertEqual(groups["digests"]["total"], 1)
-        self.assertEqual(
-            groups["digests"]["files"][0]["path"], "Notes/digests/digest_20260824_2017.md"
-        )
-        self.assertEqual(groups["papers"]["total"], 2)
-        self.assertEqual(groups["papers"]["files"][0]["path"], "2107.01994v1.pdf")
+        self.assertEqual(groups["digests"]["files"][0]["path"], "Notes/digests/digest_20260824_2017.md")
+
+    def test_binaries_and_backups_excluded(self) -> None:
+        out = shape_artifacts(_tree())
+        notes = next(g for g in out["groups"] if g["id"] == "notes")
+        names = [f["name"] for f in notes["files"]]
+        self.assertIn("template_based_graph_clustering/notes.md", names)
+        self.assertFalse(any(".png" in n or ".bak" in n for n in names))
+        self.assertFalse(any(g["id"] == "papers" for g in out["groups"]))
 
     def test_note_files_carry_readable_paths(self) -> None:
         out = shape_artifacts(_tree())

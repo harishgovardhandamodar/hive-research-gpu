@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
+import { marked } from "marked";
 import { api } from "../api";
 import type { ArtifactGroup } from "../types";
 
 interface Loaded {
   path: string;
   content: string;
+}
+
+marked.setOptions({ breaks: true, gfm: true });
+
+function renderMarkdown(md: string): string {
+  try {
+    return marked.parse(md) as string;
+  } catch {
+    return `<pre>${md.replace(/</g, "&lt;")}</pre>`;
+  }
 }
 
 export function ArtifactsPanel() {
@@ -76,7 +87,10 @@ export function ArtifactsPanel() {
               <code>{loaded.path}</code>
               <button onClick={() => setLoaded(null)}>close</button>
             </div>
-            <pre className="artifact-body">{loaded.content}</pre>
+            <div
+              className="artifact-body md-body"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(loaded.content) }}
+            />
           </div>
         </div>
       )}
