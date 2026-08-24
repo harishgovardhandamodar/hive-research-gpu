@@ -22,5 +22,24 @@ services:
       retries: 5
       start_period: 10s
 
+  companion:
+    build:
+      context: .
+      dockerfile: Dockerfile.companion
+    network_mode: host
+    depends_on:
+      hive-research-gpu:
+        condition: service_healthy
+    volumes:
+      - companion_data:/app/data/companion
+    environment:
+      # The companion drives the app through its HTTP API (single writer).
+      - HIVE_API_URL=http://localhost:7777
+      - HIVE_TOKEN=${HIVE_TOKEN:-}
+      - OLLAMA_BASE_URL=http://localhost:8210
+      - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
+    restart: unless-stopped
+
 volumes:
   hive_data:
+  companion_data:

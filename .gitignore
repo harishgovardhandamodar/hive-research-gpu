@@ -10,5 +10,11 @@ build/
 .venv/
 venv/
 
+# companion GUI
+companion/frontend/node_modules/
+companion/frontend/dist/
+.venv-companion/
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+tsconfig.tsbuildinfo

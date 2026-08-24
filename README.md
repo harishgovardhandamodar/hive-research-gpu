@@ -168,7 +168,26 @@ The dashboard provides:
 docker-compose up --build
 ```
 
-This launches two Ollama instances (one per GPU) and the web server with NVIDIA GPU passthrough.
+This launches two Ollama instances (one per GPU), the web server with NVIDIA GPU passthrough, and the Companion agent GUI.
+
+### Companion — Agentic Research GUI (parallel app)
+
+A second web app at `http://localhost:8001` that turns the dashboard into an
+**agent**: describe a goal and it plans tool calls over your live library,
+executes them under your chosen autonomy level, remembers everything it did
+(episodic memory), watches your library in the background for things that need
+attention, and learns from every accept/reject to propose better next time.
+
+```bash
+python -m uvicorn hive_companion.main:app --port 8001 --app-dir companion/backend
+# or: docker compose up -d companion
+```
+
+- **Goals & plans** with per-goal autonomy (`approve` / `tiered` / `auto`, switchable mid-run)
+- **Approval inbox** — mutating steps pause until you decide
+- **Proactive suggestions** ranked by signal strength × learned acceptance weight
+- **Episodic memory browser** — searchable record of every action taken
+- See [docs/companion.md](docs/companion.md) for architecture and configuration.
 
 ## Architecture
 
