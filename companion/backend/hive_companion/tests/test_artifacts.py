@@ -12,11 +12,8 @@ def _tree() -> list[dict]:
             "name": "Notes",
             "files": [
                 {
-                    "name": "surveys",
-                    "files": [
-                        {"name": "survey_20260824.md", "ext": ".md"},
-                        {"name": "figures/x.png", "ext": ".png"},
-                    ],
+                    "name": "reports",
+                    "files": [{"name": "report_20260824.md", "ext": ".md"}],
                 },
                 {"name": "digests", "files": [{"name": "digest_20260824_2017.md", "ext": ".md"}]},
                 {
@@ -33,11 +30,12 @@ def _tree() -> list[dict]:
 
 
 class TestShapeArtifacts(unittest.TestCase):
-    def test_groups_surveys_digests_notes(self) -> None:
+    def test_groups_reports_digests_notes(self) -> None:
         out = shape_artifacts(_tree())
         groups = {g["id"]: g for g in out["groups"]}
-        self.assertEqual(groups["surveys"]["total"], 1)
-        self.assertEqual(groups["surveys"]["files"][0]["path"], "Notes/surveys/survey_20260824.md")
+        self.assertEqual(groups["reports"]["label"], "Survey reports")
+        self.assertEqual(groups["reports"]["total"], 1)
+        self.assertEqual(groups["reports"]["files"][0]["path"], "Notes/reports/report_20260824.md")
         self.assertEqual(groups["digests"]["total"], 1)
         self.assertEqual(groups["digests"]["files"][0]["path"], "Notes/digests/digest_20260824_2017.md")
 

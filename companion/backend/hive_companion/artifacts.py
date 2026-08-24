@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 GROUP_SPECS = [
-    ("surveys", "Survey reports"),
+    ("reports", "Survey reports"),
     ("digests", "Digests"),
     ("notes", "Paper notes"),
 ]
