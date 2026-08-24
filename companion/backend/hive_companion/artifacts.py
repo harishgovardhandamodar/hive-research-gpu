@@ -66,6 +66,7 @@ def shape_artifacts(tree: list[dict[str, Any]]) -> dict[str, Any]:
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
 VIEWABLE_TEXT_EXTS = {".md", ".txt"}
+PDF_EXTS = {".pdf"}
 
 
 def _build_dir(name: str, rel_files: list[dict[str, Any]], folder_prefix: str) -> dict[str, Any]:
@@ -87,7 +88,14 @@ def _build_dir(name: str, rel_files: list[dict[str, Any]], folder_prefix: str) -
             if last:
                 ext = os.path.splitext(part)[1].lower()
                 child["ext"] = ext
-                child["view"] = "text" if ext in VIEWABLE_TEXT_EXTS else ("image" if ext in IMAGE_EXTS else "none")
+                if ext in VIEWABLE_TEXT_EXTS:
+                    child["view"] = "text"
+                elif ext in IMAGE_EXTS:
+                    child["view"] = "image"
+                elif ext in PDF_EXTS:
+                    child["view"] = "pdf"
+                else:
+                    child["view"] = "none"
                 child["path"] = f"{folder_prefix}/{rel}"
                 if item.get("mtime"):
                     child["mtime"] = item["mtime"]
@@ -100,9 +108,16 @@ def _build_dir(name: str, rel_files: list[dict[str, Any]], folder_prefix: str) -
 
 
 def build_explorer(tree: list[dict[str, Any]]) -> dict[str, Any]:
-    """Full vault hierarchy for the GUI file explorer (figures included)."""
+    """Full vault hierarchy for the GUI file explorer (figures + source PDFs)."""
     notes = next((e for e in tree if e.get("name") == "Notes"), None)
     children: list[dict[str, Any]] = []
+    source_pdfs = _build_dir(
+        "source-pdfs",
+        [e for e in tree if isinstance(e, dict) and str(e.get("name", "")).lower().endswith(".pdf")],
+        "",
+    )
+    if source_pdfs.get("children"):
+        children.append(source_pdfs)
     if notes:
         for sub in notes.get("files", []):
             sub_name = sub.get("name", "")

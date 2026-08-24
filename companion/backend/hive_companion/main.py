@@ -420,7 +420,8 @@ async def discover() -> dict[str, Any]:
         reverse=True,
     )
     topic_list = topics.get("topics", []) if isinstance(topics, dict) else []
-    return {"topics": topic_list, "papers": shaped}
+    topic_names = [t.get("name", str(t)) if isinstance(t, dict) else str(t) for t in topic_list]
+    return {"topics": topic_names, "papers": shaped}
 
 
 @app.post("/api/discover/import")

@@ -58,13 +58,13 @@ export function DiscoverPanel() {
         <span className="artifact-label">watching:</span>
         {topics.map((t) => (
           <span
-            key={t}
+            key={String(t)}
             className={`chip ${activeTopic === t ? "chip-active" : ""}`}
-            onClick={() => setActiveTopic(activeTopic === t ? "" : t)}
+            onClick={() => setActiveTopic(activeTopic === String(t) ? "" : String(t))}
             title="click to filter"
           >
-            {t}
-            <button className="chip-x" onClick={(e) => { e.stopPropagation(); void toggleTopic(t, "remove"); }}>×</button>
+            {String(t)}
+            <button className="chip-x" onClick={(e) => { e.stopPropagation(); void toggleTopic(String(t), "remove"); }}>×</button>
           </span>
         ))}
         <input
