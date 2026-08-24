@@ -79,6 +79,20 @@ export function ArtifactViewer({
   );
 }
 
+export type SortKey = "recent" | "name";
+
+/** Sort every directory's children by the chosen key (recency first by default). */
+function sortTree(node: ArtifactNode, key: SortKey): ArtifactNode {
+  if (node.type !== "dir" || !node.children) return node;
+  const kids = node.children.map((c) => sortTree(c, key));
+  kids.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    if (key === "recent") return (b.mtime ?? 0) - (a.mtime ?? 0);
+    return a.name.localeCompare(b.name);
+  });
+  return { ...node, children: kids };
+}
+
 /** Prune the tree to nodes whose name matches; dirs keep matching descendants. */
 export function filterTree(node: ArtifactNode, q: string): ArtifactNode | null {
   const needle = q.trim().toLowerCase();
@@ -145,6 +159,7 @@ function TreeRow({
 export function Explorer() {
   const [root, setRoot] = useState<ArtifactNode | null>(null);
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
   const { loaded, setLoaded, busy, open } = useArtifactOpener();
 
   const refresh = useCallback(async () => {
@@ -164,21 +179,29 @@ export function Explorer() {
   const searching = query.trim().length > 0;
   const children = useMemo(() => {
     if (!root?.children) return [];
-    if (!searching) return root.children;
-    return root.children
+    const sorted = root.children.map((c) => sortTree(c, sortKey));
+    if (!searching) return sorted;
+    return sorted
       .map((c) => filterTree(c, query))
       .filter((c): c is ArtifactNode => c !== null);
-  }, [root, query, searching]);
+  }, [root, query, searching, sortKey]);
 
   return (
     <div className="panel">
       <h2>Vault explorer</h2>
-      <input
-        className="search"
-        placeholder="filter files & folders…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="composer-row" style={{ marginTop: 0 }}>
+        <input
+          className="search"
+          style={{ flex: 1 }}
+          placeholder="filter files & folders…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} title="sort order">
+          <option value="recent">recently generated</option>
+          <option value="name">name A→Z</option>
+        </select>
+      </div>
       <ul className="tree">
         {children.length > 0 ? (
           children.map((c) => (

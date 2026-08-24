@@ -217,12 +217,20 @@ class RouteHandler(BaseHTTPRequestHandler):
                                     if rel.startswith("."):
                                         continue
                                     ext = os.path.splitext(fn)[1].lower()
-                                    files.append({"name": rel, "ext": ext})
+                                    try:
+                                        mtime = int(os.path.getmtime(os.path.join(root, fn)))
+                                    except OSError:
+                                        mtime = 0
+                                    files.append({"name": rel, "ext": ext, "mtime": mtime})
                             entries.append({"name": entry, "files": files})
                         else:
                             ext = os.path.splitext(entry)[1].lower()
                             if ext in (".pdf", ".md", ".txt", ".py", ".yaml", ".json", ".html", ".csv"):
-                                entries.append({"name": entry, "files": [{"name": entry, "ext": ext}]})
+                                try:
+                                    mtime = int(os.path.getmtime(full))
+                                except OSError:
+                                    mtime = 0
+                                entries.append({"name": entry, "files": [{"name": entry, "ext": ext, "mtime": mtime}]})
                 except Exception as exc:
                     logger.warning("Browse scan error for %s: %s", dirpath, exc)
                 return entries
@@ -239,11 +247,19 @@ class RouteHandler(BaseHTTPRequestHandler):
                                 if rel.startswith("."):
                                     continue
                                 ext = os.path.splitext(fn)[1].lower()
-                                files.append({"name": rel, "ext": ext})
+                                try:
+                                    mtime = int(os.path.getmtime(os.path.join(root, fn)))
+                                except OSError:
+                                    mtime = 0
+                                files.append({"name": rel, "ext": ext, "mtime": mtime})
                         if files:
                             vault_entries.append({"name": entry, "files": files})
                     elif entry.endswith(".md"):
-                        vault_entries.append({"name": entry, "files": [{"name": entry, "ext": ".md"}]})
+                        try:
+                            mtime = int(os.path.getmtime(full))
+                        except OSError:
+                            mtime = 0
+                        vault_entries.append({"name": entry, "files": [{"name": entry, "ext": ".md", "mtime": mtime}]})
                 if vault_entries:
                     vault_entries.sort(key=lambda e: e["name"])
                     tree.append({"name": "Notes", "files": vault_entries})

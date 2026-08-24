@@ -102,6 +102,7 @@ export interface TimelineResponse {
 export interface ArtifactFile {
   name: string;
   path: string;
+  mtime?: number;
 }
 
 export interface ArtifactGroup {
@@ -116,6 +117,7 @@ export interface ArtifactNode {
   type: "dir" | "file";
   path?: string;
   ext?: string;
+  mtime?: number;
   view?: "text" | "image" | "none";
   children?: ArtifactNode[];
 }
