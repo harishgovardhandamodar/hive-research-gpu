@@ -27,7 +27,7 @@ from .llm import ChatClient
 from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
-from .ideagent import IdeagentEngine, persist_runs
+from .ideagent import IdeagentEngine, IdeaRun, persist_runs
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
@@ -87,7 +87,24 @@ class CompanionApp:
         self.plans: dict[str, Plan] = {}
         self.session_id = uuid.uuid4().hex[:12]
 
+    def _load_idea_history(self) -> None:
+        path = self.settings.data_dir / "ideas.jsonl"
+        if not path.exists():
+            return
+        try:
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    state.ideagent.history.append(IdeaRun.from_dict(json.loads(line)))
+                except Exception:
+                    continue
+        except OSError:
+            pass
+
     async def startup(self) -> None:
+        self._load_idea_history()
         if self.llm is not None and not await self.llm.available():
             logger.warning("LLM unreachable at %s — planner falls back to heuristics", self.settings.llm_base_url)
             self.llm = None
@@ -532,6 +549,7 @@ async def ideas_latest() -> dict[str, Any]:
 @app.get("/api/ideas/history")
 async def ideas_history() -> list[dict[str, Any]]:
     """All runs, newest first — GUI groups these by their query/topic."""
+    persist_runs(state.settings.data_dir, state.ideagent.history)
     return [r.to_dict() for r in reversed(state.ideagent.history)]
 
 

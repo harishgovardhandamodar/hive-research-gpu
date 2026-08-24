@@ -19,6 +19,10 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 from typing import Any
 
 from .kg import KGCache
@@ -97,6 +101,21 @@ class IdeaRun:
             "candidates_seen": len(self.candidates),
             "ideas": ideas,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "IdeaRun":
+        r = cls(d.get("topic", ""), d.get("iterations", 0))
+        r.id = d.get("id", uuid.uuid4().hex[:10])
+        r.status = d.get("status", "done")
+        r.started = d.get("started", utcnow().isoformat())
+        r.finished = d.get("finished")
+        r.error = d.get("error")
+        n_candidates = int(d.get("candidates_seen", len(d.get("ideas", []))))
+        r.candidates = [{"title": ""} for _ in range(n_candidates)]
+        for idea in d.get("ideas", []):
+            cell = tuple(idea.get("cell", "unknown/unknown").split("/"))
+            r.archive[cell] = idea
+        return r
 
     def rank(self) -> list[dict[str, Any]]:
         ideas = sorted(
