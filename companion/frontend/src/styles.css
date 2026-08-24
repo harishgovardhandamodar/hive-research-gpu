@@ -352,3 +352,6 @@ button.ghost { background: transparent; }
 .idea-group-head { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: 12.5px; }
 .idea-group-head::-webkit-details-marker { display: none; }
 .idea-group-query { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; }
+.chain-arrow { color: var(--dim); }

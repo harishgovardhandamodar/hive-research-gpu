@@ -27,7 +27,9 @@ from .llm import ChatClient
 from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
-from .ideagent import IdeagentEngine, IdeaRun, persist_runs
+from .deepideation import ConceptNetwork, DeepIdeationEngine, DeepRun
+from .ideagent import IdeagentEngine, IdeaRun, persist_runs as persist_idea_runs
+from .backup import BackupLoop, create_snapshot, list_snapshots
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
@@ -61,8 +63,27 @@ class CompanionApp:
             kg=self.kg,
             bus=self.bus,
             on_complete=lambda run: persist_runs(self.settings.data_dir, self.ideagent.history),
+            on_iteration=lambda run: persist_runs(self.settings.data_dir, self.ideagent.history),
         )
         self._ideagent_llms: list[Any] = [self.ideagent.llm_fast, self.ideagent.llm_main]
+        self.backups = BackupLoop(self.settings.data_dir)
+        self.deep_network = ConceptNetwork(self.kg)
+        ideation_url2 = self.settings.ideation_base_url or self.settings.llm_base_url
+        self.deep_llms = [
+            ChatClient(ideation_url2, self.settings.llm_fast_model),
+            ChatClient(ideation_url2, self.settings.llm_model),
+        ]
+        self._ideagent_llms.extend(x for x in self.deep_llms if x is not None)
+        self.deepideation = DeepIdeationEngine(
+            llm_fast=self.deep_llms[0],
+            llm_main=self.deep_llms[1],
+            kg=self.kg,
+            network=self.deep_network,
+            bus=self.bus,
+            on_complete=lambda run: self._persist_deep_runs(),
+            search_fn=lambda q: self.client.paper_search(q),
+            on_iteration=lambda run: self._persist_deep_runs(),
+        )
         self.schedules = ScheduleStore(self.settings.data_dir)
         self.scheduler = GoalScheduler(
             self.schedules,
@@ -88,8 +109,16 @@ class CompanionApp:
         self.plans: dict[str, Plan] = {}
         self.session_id = uuid.uuid4().hex[:12]
 
-    def _load_idea_history(self) -> None:
-        path = self.settings.data_dir / "ideas.jsonl"
+    def _persist_deep_runs(self) -> None:
+        path = self.settings.data_dir / "deepideas.jsonl"
+        lines = [json.dumps(r.to_dict(), default=str) for r in self.deepideation.history[-10:]]
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("\n".join(lines))
+        import os
+        os.replace(tmp, path)
+
+    def _load_deep_history(self) -> None:
+        path = self.settings.data_dir / "deepideas.jsonl"
         if not path.exists():
             return
         try:
@@ -98,24 +127,64 @@ class CompanionApp:
                 if not line:
                     continue
                 try:
-                    state.ideagent.history.append(IdeaRun.from_dict(json.loads(line)))
+                    raw = json.loads(line)
+                    run = DeepRun(raw.get("topic", ""), raw.get("iterations", 0), raw.get("depth", 2))
+                    run.id = raw.get("id", run.id)
+                    run.status = raw.get("status", "done")
+                    run.started = raw.get("started", run.started)
+                    run.finished = raw.get("finished")
+                    run.error = raw.get("error")
+                    run.ideas = raw.get("ideas", [])
+                    run.events = [{"ts": raw.get("started", "")}] * int(raw.get("candidates_seen", 0))
+                    self.deepideation.history.append(run)
                 except Exception:
                     continue
         except OSError:
             pass
 
+    def _load_idea_history(self) -> None:
+        from .backup import load_runs
+
+        path = self.settings.data_dir / "ideas.jsonl"
+        self.ideagent.history = load_runs(path, IdeaRun.from_dict)
+
+    def _load_deep_history(self) -> None:
+        from .backup import load_runs
+
+        path = self.settings.data_dir / "deepideas.jsonl"
+
+        def deep_factory(d: dict[str, Any]) -> DeepRun:
+            run = DeepRun(d.get("topic", ""), d.get("iterations", 0), d.get("depth", 2))
+            run.id = d.get("id", run.id)
+            run.status = d.get("status", "done")
+            run.started = d.get("started", run.started)
+            run.finished = d.get("finished")
+            run.error = d.get("error")
+            run.ideas = d.get("ideas", [])
+            return run
+
+        self.deepideation.history = load_runs(path, deep_factory)
+
     async def startup(self) -> None:
         self._load_idea_history()
+        self._load_deep_history()
+        try:
+            await self.kg.get()  # warm concept-network substrate
+            self.deep_network.refresh(force=True)
+        except Exception:
+            logger.warning("concept network warmup skipped")
         if self.llm is not None and not await self.llm.available():
             logger.warning("LLM unreachable at %s — planner falls back to heuristics", self.settings.llm_base_url)
             self.llm = None
             self.planner.llm = None
         self.proactive.start()
         self.scheduler.start()
+        self.backups.start()
 
     async def shutdown(self) -> None:
         await self.proactive.stop()
         await self.scheduler.stop()
+        await self.backups.stop()
         for llm in self._ideagent_llms:
             if llm is not None:
                 await llm.aclose()
@@ -562,6 +631,37 @@ async def ideas_get(run_id: str) -> dict[str, Any]:
     raise HTTPException(404, "run not found")
 
 
+# -- deep ideation ---------------------------------------------------------------
+
+
+class DeepIdeaRunRequest(BaseModel):
+    topic: str = Field(min_length=4, max_length=400)
+    iterations: int = Field(default=5, ge=2, le=12)
+    depth: int = Field(default=2, ge=0, le=3)
+    model: str = "fast"
+
+
+@app.post("/api/deepideas/run")
+async def deepideas_run(req: DeepIdeaRunRequest) -> dict[str, Any]:
+    try:
+        run = await state.deepideation.run(req.topic.strip(), req.iterations, req.depth, req.model)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    return run.to_dict()
+
+
+@app.get("/api/deepideas/latest")
+async def deepideas_latest() -> dict[str, Any]:
+    if not state.deepideation.history:
+        return {"status": "idle"}
+    return state.deepideation.history[-1].to_dict()
+
+
+@app.get("/api/deepideas/history")
+async def deepideas_history() -> list[dict[str, Any]]:
+    return [r.to_dict() for r in reversed(state.deepideation.history)]
+
+
 # -- schedules -----------------------------------------------------------------
 
 
@@ -608,6 +708,22 @@ async def run_due_schedules() -> dict[str, Any]:
 @app.get("/api/weekdays")
 async def weekdays() -> list[str]:
     return WEEKDAYS
+
+
+# -- backups -------------------------------------------------------------------
+
+
+@app.get("/api/backups")
+async def backups_list() -> list[dict[str, Any]]:
+    return list_snapshots(state.settings.data_dir)
+
+
+@app.post("/api/backups/run")
+async def backups_run_now() -> dict[str, Any]:
+    arc = create_snapshot(state.settings.data_dir)
+    if arc is None:
+        raise HTTPException(400, "no store files to snapshot")
+    return {"snapshot": arc.name, "bytes": arc.stat().st_size}
 
 
 # -- citations & comparison ----------------------------------------------------

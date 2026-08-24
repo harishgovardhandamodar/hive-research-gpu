@@ -138,12 +138,14 @@ class IdeagentEngine:
     """Runs QD idea searches; one active run at a time."""
 
     def __init__(self, llm_fast: ChatClient | None, llm_main: ChatClient | None, kg: KGCache, bus: Any = None,
-                 on_complete: Callable[[IdeaRun], None] | None = None) -> None:
+                 on_complete: Callable[[IdeaRun], None] | None = None,
+                 on_iteration: Callable[[IdeaRun], None] | None = None) -> None:
         self.llm_fast = llm_fast
         self.llm_main = llm_main
         self.kg = kg
         self.bus = bus
         self.on_complete = on_complete
+        self.on_iteration = on_iteration
         self.active: IdeaRun | None = None
         self.history: list[IdeaRun] = []
 
@@ -178,6 +180,11 @@ class IdeagentEngine:
                     candidate = await self._generate(run, llm, concepts)
                     judged = await self._ensure_scores(candidate, run, llm, concepts)
                     self._archive(run, judged, i)
+                    if self.on_iteration:
+                        try:
+                            self.on_iteration(run)
+                        except Exception:
+                            pass
                     self.bus_publish(run, judged)
                     consecutive_failures = 0
                 except Exception as exc:
