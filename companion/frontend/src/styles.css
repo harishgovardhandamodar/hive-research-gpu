@@ -347,3 +347,8 @@ button.ghost { background: transparent; }
 .idea-bar-label { width: 70px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; }
 .idea-bar-track { flex: 1; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; }
 .idea-bar-fill { height: 100%; background: linear-gradient(90deg, var(--ok), var(--accent)); border-radius: 3px; }
+
+.idea-group { border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); padding: 8px 10px; margin-bottom: 8px; }
+.idea-group-head { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: 12.5px; }
+.idea-group-head::-webkit-details-marker { display: none; }
+.idea-group-query { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

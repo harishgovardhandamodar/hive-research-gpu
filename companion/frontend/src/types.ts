@@ -180,3 +180,27 @@ export interface CompareEdge {
   author_overlap: number;
   abstract_sim: number;
 }
+
+export interface IdeaRunState {
+  id: string;
+  topic: string;
+  status: "idle" | "running" | "done" | "failed" | "cancelled";
+  error?: string | null;
+  iterations: number;
+  archive_cells: number;
+  cells_filled: number;
+  candidates_seen: number;
+  ideas: {
+    title: string;
+    summary: string;
+    approach: string;
+    risk: string;
+    novelty: number;
+    feasibility: number;
+    impact: number;
+    overall: number;
+    verdict?: string;
+    builds_on?: string[];
+    cell: string;
+  }[];
+}

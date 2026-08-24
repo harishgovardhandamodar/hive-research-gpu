@@ -529,6 +529,12 @@ async def ideas_latest() -> dict[str, Any]:
     return state.ideagent.history[-1].to_dict()
 
 
+@app.get("/api/ideas/history")
+async def ideas_history() -> list[dict[str, Any]]:
+    """All runs, newest first — GUI groups these by their query/topic."""
+    return [r.to_dict() for r in reversed(state.ideagent.history)]
+
+
 @app.get("/api/ideas/{run_id}")
 async def ideas_get(run_id: str) -> dict[str, Any]:
     for r in reversed(state.ideagent.history):

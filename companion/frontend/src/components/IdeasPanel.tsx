@@ -1,31 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { req } from "../api";
-
-interface Idea {
-  title: string;
-  summary: string;
-  approach: string;
-  risk: string;
-  novelty: number;
-  feasibility: number;
-  impact: number;
-  overall: number;
-  verdict?: string;
-  builds_on?: string[];
-  cell: string;
-}
-
-interface IdeaRunState {
-  id: string;
-  topic: string;
-  status: "idle" | "running" | "done" | "failed" | "cancelled";
-  error?: string | null;
-  iterations: number;
-  archive_cells: number;
-  cells_filled: number;
-  candidates_seen: number;
-  ideas: Idea[];
-}
+import type { IdeaRunState } from "../types";
 
 function Bar({ label, value }: { label: string; value: number }) {
   return (
@@ -39,26 +14,76 @@ function Bar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function IdeaCards({ ideas }: { ideas: IdeaRunState["ideas"] }) {
+  if (ideas.length === 0) return <p className="empty">no archived ideas in this run</p>;
+  return (
+    <ul className="pool-list">
+      {[...ideas]
+        .sort((a, b) => b.overall - a.overall)
+        .map((i) => (
+          <li key={i.title + i.cell} className="pool-card idea-card">
+            <div className="pool-head">
+              <strong>{i.title}</strong>
+              <span className="pill kind">{i.cell}</span>
+            </div>
+            <p className="pool-abstract">{i.summary}</p>
+            <Bar label="novelty" value={i.novelty} />
+            <Bar label="feasibility" value={i.feasibility} />
+            <Bar label="impact" value={i.impact} />
+            {i.verdict && <p className="hint">reviewer: {i.verdict}</p>}
+            {i.builds_on && i.builds_on.length > 0 && (
+              <p className="hint">builds on: {i.builds_on.join(", ")}</p>
+            )}
+          </li>
+        ))}
+    </ul>
+  );
+}
+
+function exportGroupMd(run: IdeaRunState) {
+  const lines = [
+    `# Research ideas — ${run.topic}`,
+    "",
+    `_IDEAgent quality-diversity search · ${run.cells_filled}/${run.archive_cells} archive cells · ${run.candidates_seen} candidates_`,
+    "",
+    ...[...run.ideas].map(
+      (i, idx) =>
+        `## ${idx + 1}. ${i.title}\n\n` +
+        `\`${i.cell}\` · overall **${i.overall}** · N ${i.novelty}/ F ${i.feasibility}/ I ${i.impact}\n\n` +
+        `${i.summary}\n\n` +
+        (i.builds_on?.length ? `_builds on: ${i.builds_on.join(", ")}_\n\n` : ""),
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ideas-${run.topic.slice(0, 40).replace(/\W+/g, "-").toLowerCase()}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export function IdeasPanel() {
   const [topic, setTopic] = useState("");
   const [iterations, setIterations] = useState(8);
   const [model, setModel] = useState("fast");
-  const [run, setRun] = useState<IdeaRunState | null>(null);
+  const [history, setHistory] = useState<IdeaRunState[]>([]);
   const [starting, setStarting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const poll = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const latest = await req<IdeaRunState>("/api/ideas/latest");
-      if (latest.status !== "idle") {
-        setRun(latest);
-        if (latest.status === "running" && !pollRef.current) {
+      const data = await req<{ status: string }>("/api/ideas/latest");
+      if (data.status !== "idle" || history.length === 0) {
+        const h = await req<IdeaRunState[]>("/api/ideas/history");
+        setHistory(h);
+        const anyRunning = h.some((r) => r.status === "running");
+        if (anyRunning && !pollRef.current) {
           pollRef.current = setInterval(async () => {
             try {
-              const r = await req<IdeaRunState>("/api/ideas/latest");
-              setRun(r);
-              if (r.status !== "running" && pollRef.current) {
+              const hh = await req<IdeaRunState[]>("/api/ideas/history");
+              setHistory(hh);
+              if (!hh.some((r) => r.status === "running") && pollRef.current) {
                 clearInterval(pollRef.current);
                 pollRef.current = null;
               }
@@ -71,30 +96,32 @@ export function IdeasPanel() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [history.length]);
 
   useEffect(() => {
-    void poll();
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [poll]);
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+  }, []);
 
   const start = async () => {
     if (topic.trim().length < 4 || starting) return;
     setStarting(true);
     setErr(null);
     try {
-      const r = await req<IdeaRunState>("/api/ideas/run", {
+      await req("/api/ideas/run", {
         method: "POST",
         body: JSON.stringify({ topic: topic.trim(), iterations, model }),
       });
-      setRun(r);
+      await refresh();
+      if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
         try {
-          const latest = await req<IdeaRunState>("/api/ideas/latest");
-          setRun(latest);
-          if (latest.status !== "running" && pollRef.current) {
+          const h = await req<IdeaRunState[]>("/api/ideas/history");
+          setHistory(h);
+          if (!h.some((r) => r.status === "running") && pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
           }
@@ -109,29 +136,7 @@ export function IdeasPanel() {
     }
   };
 
-  const running = run?.status === "running";
-  const exportMd = () => {
-    if (!run) return;
-    const lines = [
-      `# Research ideas — ${run.topic}`,
-      "",
-      `_IDEAgent quality-diversity search · ${run.cells_filled}/${run.archive_cells} archive cells · ${run.candidates_seen} candidates_`,
-      "",
-      ...[...run.ideas].map(
-        (i, idx) =>
-          `## ${idx + 1}. ${i.title}\n\n` +
-          `\`${i.cell}\` · overall **${i.overall}** · N ${i.novelty}/ F ${i.feasibility}/ I ${i.impact}\n\n` +
-          `${i.summary}\n\n` +
-          (i.builds_on?.length ? `_builds on: ${i.builds_on.join(", ")}_\n\n` : ""),
-      ),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `ideas-${run.topic.slice(0, 40).replace(/\W+/g, "-").toLowerCase()}.md`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const running = history.some((r) => r.status === "running");
 
   return (
     <div className="discover">
@@ -158,45 +163,42 @@ export function IdeasPanel() {
         <button onClick={() => void start()} disabled={running || starting || topic.trim().length < 4}>
           {running ? "searching…" : starting ? "…" : "run QD search"}
         </button>
-        {run && run.ideas.length > 0 && (
-          <button onClick={exportMd} title="export ranked ideas as markdown">⬇ md</button>
-        )}
       </div>
       {err && <p className="banner error">{err}</p>}
-      {run && (
-        <p className="hint" style={{ marginBottom: 6 }}>
-          status: <strong>{run.status}</strong> · archive {run.cells_filled}/{run.archive_cells} cells ·{" "}
-          {run.candidates_seen} candidates generated
-          {run.error ? ` · ${run.error}` : ""}
-        </p>
-      )}
-      {!run && (
+      {running && <p className="hint">quality-diversity search running… new ideas stream into their group below.</p>}
+      {history.length === 0 && !running && (
         <p className="empty">
           Quality-diversity search over your library (IDEAgent-style): each iteration proposes an idea grounded in
-          your concepts, judges its novelty/feasibility/impact, and archives the best idea per approach×risk cell —
-          filling rare cells pushes toward genuinely diverse, bolder ideas.
+          your concepts, judges its novelty/feasibility/impact, and archives the best idea per approach×risk cell.
         </p>
       )}
-      <ul className="pool-list">
-        {[...(run?.ideas ?? [])]
-          .sort((a, b) => b.overall - a.overall)
-          .map((i) => (
-            <li key={i.title + i.cell} className="pool-card idea-card">
-              <div className="pool-head">
-                <strong>{i.title}</strong>
-                <span className="pill kind">{i.cell}</span>
-              </div>
-              <p className="pool-abstract">{i.summary}</p>
-              <Bar label="novelty" value={i.novelty} />
-              <Bar label="feasibility" value={i.feasibility} />
-              <Bar label="impact" value={i.impact} />
-              {i.verdict && <p className="hint">reviewer: {i.verdict}</p>}
-              {i.builds_on && i.builds_on.length > 0 && (
-                <p className="hint">builds on: {i.builds_on.join(", ")}</p>
-              )}
-            </li>
-          ))}
-      </ul>
+
+      {history.map((r, idx) => (
+        <details key={r.id} className="idea-group" open={idx === 0}>
+          <summary className="idea-group-head">
+            <span className={`dot ${r.status === "running" ? "" : r.status === "done" ? "ok" : "bad"}`} />
+            <strong className="idea-group-query">{r.topic}</strong>
+            <span className="pill kind">{r.status}</span>
+            <span className="pill">
+              cells {r.cells_filled}/{r.archive_cells}
+            </span>
+            <span className="stat">{r.candidates_seen} candidates</span>
+            <span
+              className="ghost"
+              role="button"
+              title="export this group as markdown"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                exportGroupMd(r);
+              }}
+            >
+              ⬇ md
+            </span>
+          </summary>
+          <IdeaCards ideas={r.ideas} />
+        </details>
+      ))}
     </div>
   );
 }
