@@ -106,7 +106,13 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Hive Research Companion</h1>
+        <h1 className="brand">
+          <img src="/fox-logo.png" alt="Fox Companion logo" className="brand-logo" />
+          <span>
+            Fox Companion
+            <span className="brand-sub">for hive research</span>
+          </span>
+        </h1>
         <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
         {state && <StatusBar state={state} />}
       </header>

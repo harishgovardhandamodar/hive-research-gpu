@@ -25,7 +25,7 @@ class TestSpaRoutes(unittest.TestCase):
             resp = client.get("/")
             self.assertEqual(resp.status_code, 200)
             self.assertIn("<", resp.text[:20])
-            self.assertIn("Hive Research Companion", resp.text)
+            self.assertIn("Fox Companion", resp.text)
 
     def test_unknown_api_path_is_json_404_not_html(self) -> None:
         with _NoRaiseLifespan() as client:

@@ -170,7 +170,7 @@ docker-compose up --build
 
 This launches two Ollama instances (one per GPU), the web server with NVIDIA GPU passthrough, and the Companion agent GUI.
 
-### Companion — Agentic Research GUI (parallel app)
+### Fox Companion — Agentic Research GUI (parallel app)
 
 A second web app at `http://localhost:8001` that turns the dashboard into an
 **agent**: describe a goal and it plans tool calls over your live library,

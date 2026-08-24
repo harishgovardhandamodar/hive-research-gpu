@@ -131,7 +131,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await state.shutdown()
 
 
-app = FastAPI(title="Hive Research Companion", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Fox Companion", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -418,9 +418,9 @@ def _resolve_dist_dir() -> Path:
 
 _dist_dir = _resolve_dist_dir()
 
-_NOT_BUILT_PAGE = """<!doctype html><html><head><title>Companion — frontend not built</title></head>
+_NOT_BUILT_PAGE = """<!doctype html><html><head><title>Fox Companion — frontend not built</title></head>
 <body style="font-family:system-ui;background:#0e1116;color:#d7dee9;padding:40px;line-height:1.6">
-<h2>Companion frontend not built yet</h2>
+<h2>Fox Companion frontend not built yet</h2>
 <p>The API is running fine — only the React UI is missing.</p>
 <pre style="background:#1c2330;padding:14px;border-radius:8px">npm --prefix companion/frontend install
 npm --prefix companion/frontend run build</pre>

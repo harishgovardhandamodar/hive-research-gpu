@@ -1,4 +1,4 @@
-# Companion — the agentic GUI
+# Fox Companion — the agentic GUI
 
 A parallel web app for hive-research: an agent with **episodic memory**, a
 **proactive engine**, and **reinforcement loops** that learns your preferences
