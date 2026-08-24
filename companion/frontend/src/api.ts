@@ -2,6 +2,7 @@ import type {
   Approval,
   AppState,
   ArtifactGroup,
+  ArtifactNode,
   AutonomyMode,
   Episode,
   Plan,
@@ -48,6 +49,7 @@ export const api = {
     req<{ items: Episode[] }>(`/api/episodes?query=${encodeURIComponent(query)}&limit=${limit}`),
   timeline: () => req<TimelineResponse>("/api/timeline?limit=40"),
   artifacts: () => req<{ groups: ArtifactGroup[] }>("/api/artifacts"),
+  explorer: () => req<ArtifactNode>("/api/explorer"),
   artifactContent: (path: string) =>
     req<{ path: string; content: string }>(`/api/artifacts/content?path=${encodeURIComponent(path)}`),
   chat: (message: string, mode: string, conversationId?: string | null) =>

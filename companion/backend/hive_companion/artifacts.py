@@ -9,6 +9,7 @@ markdown-based, so binaries (figures, PDFs) are excluded.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 GROUP_SPECS = [
@@ -22,7 +23,7 @@ MAX_NOTES_FILES = 80
 
 
 def _readable(name: str) -> bool:
-    import os
+
 
     base = os.path.basename(name)
     if base.startswith(".") or base.endswith(".bak"):
@@ -55,3 +56,51 @@ def shape_artifacts(tree: list[dict[str, Any]]) -> dict[str, Any]:
         groups[gid]["total"] = len(groups[gid]["files"])
     groups["notes"]["files"] = sorted(groups["notes"]["files"], key=lambda f: f["name"])[:MAX_NOTES_FILES]
     return {"groups": [groups[gid] for gid, _ in GROUP_SPECS]}
+
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+VIEWABLE_TEXT_EXTS = {".md", ".txt"}
+
+
+def _build_dir(name: str, rel_paths: list[str], folder_prefix: str) -> dict[str, Any]:
+    """Nest flat relative paths ('figures/x.png', 'notes.md') into a dir node."""
+    node: dict[str, Any] = {"name": name, "type": "dir", "children": []}
+    index = node["children"]
+    for rel in sorted(rel_paths):
+        parts = [p for p in rel.split("/") if p]
+        cursor = index
+        for i, part in enumerate(parts):
+            last = i == len(parts) - 1
+            existing = next((c for c in cursor if c["name"] == part and c["type"] == ("file" if last else "dir")), None)
+            if existing:
+                cursor = existing.setdefault("children", [])
+                continue
+            child: dict[str, Any] = {"name": part, "type": "file" if last else "dir"}
+            if last:
+                ext = os.path.splitext(part)[1].lower()
+                child["ext"] = ext
+                child["view"] = "text" if ext in VIEWABLE_TEXT_EXTS else ("image" if ext in IMAGE_EXTS else "none")
+                child["path"] = f"{folder_prefix}/{rel}"
+                cursor.append(child)
+            else:
+                child["children"] = []
+                cursor.append(child)
+                cursor = child["children"]
+    return node
+
+
+def build_explorer(tree: list[dict[str, Any]]) -> dict[str, Any]:
+    """Full vault hierarchy for the GUI file explorer (figures included)."""
+    notes = next((e for e in tree if e.get("name") == "Notes"), None)
+    children: list[dict[str, Any]] = []
+    if notes:
+        for sub in notes.get("files", []):
+            sub_name = sub.get("name", "")
+            rels = [
+                f["name"]
+                for f in sub.get("files", [])
+                if not os.path.basename(f["name"]).startswith(".") and not f["name"].endswith(".bak")
+            ]
+            children.append(_build_dir(sub_name, rels, f"Notes/{sub_name}"))
+        children.sort(key=lambda c: (c["type"] != "dir", c["name"].lower()))
+    return {"name": "vault", "type": "dir", "children": children}

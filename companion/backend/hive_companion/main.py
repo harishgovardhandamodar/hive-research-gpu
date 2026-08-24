@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .autonomy import MODES, AutonomyMode, resolve_mode
-from .artifacts import shape_artifacts
+from .artifacts import build_explorer, shape_artifacts
 from .episodic import EpisodeStore
 from .events import EventBus
 from .executor import ApprovalStore, PlanExecutor
@@ -340,6 +340,15 @@ async def artifact_content(path: str = "") -> dict[str, Any]:
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
     return {"path": path, "content": data.get("content", "")}
+
+
+@app.get("/api/explorer")
+async def explorer_tree() -> dict[str, Any]:
+    try:
+        tree = await state.client.browse()
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    return build_explorer(tree.get("tree", []))
 
 
 @app.get("/api/artifacts/raw")

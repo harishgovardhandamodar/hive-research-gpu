@@ -9,6 +9,7 @@ import { ApprovalInbox } from "./components/ApprovalInbox";
 import { SuggestionsFeed } from "./components/SuggestionsFeed";
 import { TimelineView } from "./components/TimelineView";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
+import { Explorer } from "./components/Explorer";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -127,6 +128,7 @@ export default function App() {
               <PlanCard key={p.id} plan={p} onModeSwitch={refreshState} />
             ))}
           </div>
+          <Explorer />
         </section>
         <section className="col col-chat">
           <ChatPanel />

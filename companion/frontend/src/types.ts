@@ -110,3 +110,12 @@ export interface ArtifactGroup {
   files: ArtifactFile[];
   total: number;
 }
+
+export interface ArtifactNode {
+  name: string;
+  type: "dir" | "file";
+  path?: string;
+  ext?: string;
+  view?: "text" | "image" | "none";
+  children?: ArtifactNode[];
+}
