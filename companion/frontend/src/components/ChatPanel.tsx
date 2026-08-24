@@ -48,7 +48,7 @@ export function ChatPanel() {
   return (
     <div className="chat">
       <div className="chat-head">
-        <h2>Companion Chat</h2>
+        <h2>Fox Chat</h2>
         <select value={mode} onChange={(e) => setMode(e.target.value)} title="Fox reasoning mode">
           {FOX_MODES.map((m) => (
             <option key={m} value={m}>
@@ -88,13 +88,13 @@ export function ChatPanel() {
             )}
           </div>
         ))}
-        {busy && <p className="typing">companion is thinking…</p>}
+        {busy && <p className="typing">the fox is thinking…</p>}
         <div ref={endRef} />
       </div>
       <div className="chat-input">
         <textarea
           value={input}
-          placeholder="Ask the companion…"
+          placeholder="Ask the fox…"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
