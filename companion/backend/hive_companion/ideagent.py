@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .kg import KGCache
 from .llm import ChatClient
@@ -137,11 +137,13 @@ def _bucket(value: str, options: list[str]) -> str:
 class IdeagentEngine:
     """Runs QD idea searches; one active run at a time."""
 
-    def __init__(self, llm_fast: ChatClient | None, llm_main: ChatClient | None, kg: KGCache, bus: Any = None) -> None:
+    def __init__(self, llm_fast: ChatClient | None, llm_main: ChatClient | None, kg: KGCache, bus: Any = None,
+                 on_complete: Callable[[IdeaRun], None] | None = None) -> None:
         self.llm_fast = llm_fast
         self.llm_main = llm_main
         self.kg = kg
         self.bus = bus
+        self.on_complete = on_complete
         self.active: IdeaRun | None = None
         self.history: list[IdeaRun] = []
 
@@ -201,6 +203,11 @@ class IdeagentEngine:
             run.finished = datetime.now(timezone.utc).isoformat()
             if self.active is run:
                 self.active = None
+            if self.on_complete:
+                try:
+                    self.on_complete(run)
+                except Exception:
+                    logger.exception("on_complete failed")
 
     def bus_publish(self, run: IdeaRun, idea: dict[str, Any]) -> None:
         if self.bus is not None:

@@ -60,6 +60,7 @@ class CompanionApp:
             llm_main=ChatClient(ideation_url, self.settings.llm_model),
             kg=self.kg,
             bus=self.bus,
+            on_complete=lambda run: persist_runs(self.settings.data_dir, self.ideagent.history),
         )
         self._ideagent_llms: list[Any] = [self.ideagent.llm_fast, self.ideagent.llm_main]
         self.schedules = ScheduleStore(self.settings.data_dir)
