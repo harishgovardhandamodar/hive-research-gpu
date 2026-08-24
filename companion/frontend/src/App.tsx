@@ -11,11 +11,13 @@ import { TimelineView } from "./components/TimelineView";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { Explorer } from "./components/Explorer";
 import { JobsBar } from "./components/JobsBar";
+import { KnowledgeGraph } from "./components/KnowledgeGraph";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showKG, setShowKG] = useState(false);
   const plansRef = useRef<Map<string, Plan>>(new Map());
 
   const refreshPlans = useCallback(async () => {
@@ -117,6 +119,9 @@ export default function App() {
         </h1>
         <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
         {state && <StatusBar state={state} />}
+        <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph">
+          ⬡ Knowledge Graph
+        </button>
       </header>
       {error && <div className="banner error">{error}</div>}
       <main className="columns">
@@ -141,6 +146,7 @@ export default function App() {
           <TimelineView />
         </section>
       </main>
+      {showKG && <KnowledgeGraph onClose={() => setShowKG(false)} />}
       <JobsBar />
     </div>
   );

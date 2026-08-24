@@ -1,7 +1,145 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { loadArtifact, type LoadedArtifact } from "../lib/artifactView";
-import type { ArtifactNode } from "../types";
+import type { ArtifactNode, RelatedSubgraph } from "../types";
+
+/** Static radial mini-graph: seeds left, keywords center, related papers right. */
+function RelatedGraph({ data }: { data: RelatedSubgraph }) {
+  if (!data.papers.length && !data.concepts.length) return null;
+  const W = 660;
+  const rowH = 22;
+  const papers = data.papers.slice(0, 6);
+  const concepts = data.concepts.slice(0, 8);
+  const seeds = data.seeds.slice(0, 2);
+  const H = Math.max(papers.length, concepts.length, seeds.length) * rowH + 30;
+  const seedX = 110;
+  const conceptX = 330;
+  const paperX = 545;
+  const yPos = (i: number, n: number) => H / 2 + (i - (n - 1) / 2) * rowH;
+
+  const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+
+  return (
+    <div className="related-block">
+      <p className="artifact-label">Related in the knowledge graph</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="related-svg">
+        {seeds.map((s, si) =>
+          concepts.map((c, ci) => (
+            <line key={`${s.id}-${c.id}`} x1={seedX + 70} y1={yPos(si, seeds.length)} x2={conceptX - 80} y2={yPos(ci, concepts.length)} stroke="rgba(240,180,41,0.25)" strokeWidth={1} />
+          )),
+        )}
+        {concepts.map((c, ci) =>
+          papers.slice(0, 3).map((p, pi) => (
+            <line key={`${c.id}-${p.id}`} x1={conceptX + 80} y1={yPos(ci, concepts.length)} x2={paperX - 90} y2={yPos(pi, papers.length)} stroke="rgba(109,179,242,0.18)" strokeWidth={1} />
+          )),
+        )}
+        {seeds.map((s, si) => {
+          const y = yPos(si, seeds.length);
+          return (
+            <g key={s.id}>
+              <circle cx={seedX} cy={y} r={7} fill="#f0b429" />
+              <text x={seedX - 12} y={y + 4} textAnchor="end" className="rl-label">{clip(s.label, 26)}</text>
+            </g>
+          );
+        })}
+        {concepts.map((c, ci) => {
+          const y = yPos(ci, concepts.length);
+          return (
+            <g key={c.id}>
+              <circle cx={conceptX} cy={y} r={4.5} fill="#f0b429" opacity={0.75} />
+              <text x={conceptX - 10} y={y + 4} textAnchor="end" className="rl-dim">{clip(c.label, 28)}</text>
+            </g>
+          );
+        })}
+        {papers.map((p, pi) => {
+          const y = yPos(pi, papers.length);
+          return (
+            <g key={p.id}>
+              <circle cx={paperX} cy={y} r={5} fill="#6db3f2" />
+              <text x={paperX + 12} y={y + 4} className="rl-label">{clip(p.label, 34)}</text>
+              <text x={paperX + 12} y={y + 16} className="rl-dim">{p.direct ? "direct edge" : `via shared concepts · ${p.score}`}</text>
+            </g>
+          );
+        })}
+      </svg>
+      {data.keywords.length > 0 && (
+        <div className="keyword-chips">
+          {data.keywords.map((k) => (
+            <span key={k} className="chip">{k}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ArtifactViewer({
+  loaded,
+  busy,
+  onClose,
+}: {
+  loaded: LoadedArtifact | null;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  const [related, setRelated] = useState<RelatedSubgraph | null>(null);
+
+  useEffect(() => {
+    setRelated(null);
+    if (loaded?.kind !== "markdown" || !loaded.path) return;
+    let cancelled = false;
+    api
+      .artifactRelated(loaded.path)
+      .then((r) => {
+        if (!cancelled && (r.papers.length || r.concepts.length)) setRelated(r);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded?.path, loaded?.kind]);
+
+  if (!loaded && !busy) return null;
+  return (
+    <div className="artifact-modal" onClick={onClose}>
+      <div className="artifact-box" onClick={(e) => e.stopPropagation()}>
+        <div className="artifact-head">
+          <code>{loaded?.path ?? "loading…"}</code>
+          {loaded?.kind === "raw" && loaded.rawUrl && (
+            <a className="raw-link" href={loaded.rawUrl} target="_blank" rel="noreferrer">
+              open raw
+            </a>
+          )}
+          <button onClick={onClose}>close</button>
+        </div>
+        {busy && <p className="typing" style={{ padding: "14px" }}>loading…</p>}
+        {!busy && loaded?.kind === "markdown" && (
+          <div className="artifact-scroll">
+            <div className="artifact-body md-body" dangerouslySetInnerHTML={{ __html: loaded.html ?? "" }} />
+            {related && <RelatedGraph data={related} />}
+          </div>
+        )}
+        {!busy && loaded?.kind === "image" && (
+          <div className="artifact-body image-body">
+            <img src={loaded.rawUrl} alt={loaded.path} />
+          </div>
+        )}
+        {!busy && loaded?.kind === "raw" && (
+          <div className="artifact-body">
+            <p>No inline preview for this file type.</p>
+            {loaded.rawUrl && (
+              <p>
+                <a className="raw-link" href={loaded.rawUrl} target="_blank" rel="noreferrer">
+                  open raw file
+                </a>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function useArtifactOpener() {
   const [loaded, setLoaded] = useState<LoadedArtifact | null>(null);
@@ -31,53 +169,6 @@ export function useArtifactOpener() {
   return { loaded, setLoaded, busy, open };
 }
 
-export function ArtifactViewer({
-  loaded,
-  busy,
-  onClose,
-}: {
-  loaded: LoadedArtifact | null;
-  busy: boolean;
-  onClose: () => void;
-}) {
-  if (!loaded && !busy) return null;
-  return (
-    <div className="artifact-modal" onClick={onClose}>
-      <div className="artifact-box" onClick={(e) => e.stopPropagation()}>
-        <div className="artifact-head">
-          <code>{loaded?.path ?? "loading…"}</code>
-          {loaded?.kind === "raw" && loaded.rawUrl && (
-            <a className="raw-link" href={loaded.rawUrl} target="_blank" rel="noreferrer">
-              open raw
-            </a>
-          )}
-          <button onClick={onClose}>close</button>
-        </div>
-        {busy && <p className="typing" style={{ padding: "14px" }}>loading…</p>}
-        {!busy && loaded?.kind === "markdown" && (
-          <div className="artifact-body md-body" dangerouslySetInnerHTML={{ __html: loaded.html ?? "" }} />
-        )}
-        {!busy && loaded?.kind === "image" && (
-          <div className="artifact-body image-body">
-            <img src={loaded.rawUrl} alt={loaded.path} />
-          </div>
-        )}
-        {!busy && loaded?.kind === "raw" && (
-          <div className="artifact-body">
-            <p>No inline preview for this file type.</p>
-            {loaded.rawUrl && (
-              <p>
-                <a className="raw-link" href={loaded.rawUrl} target="_blank" rel="noreferrer">
-                  open raw file
-                </a>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export type SortKey = "recent" | "name";
 

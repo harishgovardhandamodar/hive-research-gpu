@@ -121,3 +121,23 @@ export interface ArtifactNode {
   view?: "text" | "image" | "none";
   children?: ArtifactNode[];
 }
+
+export interface KGNode {
+  id: string;
+  label: string;
+  type: string;
+  seed?: boolean;
+  definition?: string;
+}
+
+export interface KGData {
+  nodes: KGNode[];
+  links: { source: string; target: string; relation: string }[];
+}
+
+export interface RelatedSubgraph {
+  seeds: { id: string; label: string }[];
+  papers: { id: string; label: string; score: number; direct: boolean }[];
+  concepts: { id: string; label: string; links: number }[];
+  keywords: string[];
+}

@@ -92,6 +92,9 @@ class HiveClient:
     async def graph_clusters(self) -> Any:
         return await self.get("/api/graph/clusters")
 
+    async def graph(self) -> dict[str, Any]:
+        return await self.get("/api/graph")
+
     async def similarity(self, paper_ids: list[str], algorithm: str = "combined") -> Any:
         return await self.post("/api/similarity", {"paper_ids": paper_ids, "algorithm": algorithm})
 

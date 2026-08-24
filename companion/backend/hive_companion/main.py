@@ -25,6 +25,7 @@ from .executor import ApprovalStore, PlanExecutor
 from .hive_client import HiveApiError, HiveClient
 from .llm import ChatClient
 from .jobsbar import collect as collect_statusbar
+from .kg import KGCache, extract_arxiv_ids
 from .planner import Plan, Planner
 from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
@@ -48,6 +49,7 @@ class CompanionApp:
         self.approvals = ApprovalStore(self.settings.data_dir)
         self.suggestions = SuggestionStore(self.settings.data_dir)
         self.registry = ToolRegistry(self.client)
+        self.kg = KGCache(self.client)
         self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
         self.planner = Planner(self.registry, self.llm, self.policy)
         self.executor = PlanExecutor(
@@ -350,6 +352,40 @@ async def explorer_tree() -> dict[str, Any]:
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
     return build_explorer(tree.get("tree", []))
+
+
+@app.get("/api/kg")
+async def kg_full() -> dict[str, Any]:
+    try:
+        return state.kg.slim()
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+
+
+@app.get("/api/kg/search")
+async def kg_search(q: str = "") -> dict[str, Any]:
+    if len(q.strip()) < 2:
+        raise HTTPException(400, "query too short")
+    try:
+        return await state.kg.search(q)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+
+
+@app.get("/api/artifacts/related")
+async def artifact_related(path: str = "") -> dict[str, Any]:
+    """Related papers + keyword concepts for an artifact, via the KG."""
+    if not path or ".." in path:
+        raise HTTPException(400, "bad path")
+    try:
+        data = await state.client.read_file(path)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    ids = extract_arxiv_ids(data.get("content", ""))
+    try:
+        return state.kg.related_subgraph(ids)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
 
 
 @app.get("/api/statusbar")

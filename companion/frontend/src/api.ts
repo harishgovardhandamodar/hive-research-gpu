@@ -8,6 +8,8 @@ import type {
   Plan,
   Suggestion,
   TimelineResponse,
+  RelatedSubgraph,
+  KGData,
 } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -50,6 +52,11 @@ export const api = {
   timeline: () => req<TimelineResponse>("/api/timeline?limit=40"),
   artifacts: () => req<{ groups: ArtifactGroup[] }>("/api/artifacts"),
   explorer: () => req<ArtifactNode>("/api/explorer"),
+  kg: () => req<KGData>("/api/kg"),
+  kgSearch: (q: string) =>
+    req<KGData>(`/api/kg/search?q=${encodeURIComponent(q)}`),
+  artifactRelated: (path: string) =>
+    req<RelatedSubgraph>(`/api/artifacts/related?path=${encodeURIComponent(path)}`),
   artifactContent: (path: string) =>
     req<{ path: string; content: string }>(`/api/artifacts/content?path=${encodeURIComponent(path)}`),
   chat: (message: string, mode: string, conversationId?: string | null) =>
