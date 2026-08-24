@@ -24,6 +24,7 @@ from .events import EventBus
 from .executor import ApprovalStore, PlanExecutor
 from .hive_client import HiveApiError, HiveClient
 from .llm import ChatClient
+from .jobsbar import collect as collect_statusbar
 from .planner import Plan, Planner
 from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
@@ -349,6 +350,24 @@ async def explorer_tree() -> dict[str, Any]:
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
     return build_explorer(tree.get("tree", []))
+
+
+@app.get("/api/statusbar")
+async def status_bar() -> dict[str, Any]:
+    plans_by_status: dict[str, int] = {}
+    for plan in state.plans.values():
+        if plan.status in ("running", "ready"):
+            plans_by_status["running"] = plans_by_status.get("running", 0) + 1
+    snapshot = await collect_statusbar(
+        state.client,
+        plans_by_status,
+        approvals_pending=len(state.approvals.pending()),
+        suggestions_open=len(state.suggestions.open()),
+        fox_step_episodes=state.episodes.recent(kind="step", limit=300),
+    )
+    snapshot["episodes"] = state.episodes.stats()["count"]
+    snapshot["last_scan"] = state.proactive.last_cycle.get("at")
+    return snapshot
 
 
 @app.get("/api/artifacts/raw")

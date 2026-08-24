@@ -10,7 +10,7 @@ import type {
   TimelineResponse,
 } from "./types";
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...init,

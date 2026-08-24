@@ -10,6 +10,7 @@ import { SuggestionsFeed } from "./components/SuggestionsFeed";
 import { TimelineView } from "./components/TimelineView";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { Explorer } from "./components/Explorer";
+import { JobsBar } from "./components/JobsBar";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -140,6 +141,7 @@ export default function App() {
           <TimelineView />
         </section>
       </main>
+      <JobsBar />
     </div>
   );
 }
