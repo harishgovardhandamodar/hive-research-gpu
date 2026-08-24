@@ -1,4 +1,4 @@
-import type { Approval, AppState, AutonomyMode, Episode, Plan, Suggestion } from "./types";
+import type { Approval, AppState, AutonomyMode, Episode, Plan, Suggestion, TimelineResponse } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
@@ -37,6 +37,7 @@ export const api = {
     req<Suggestion>(`/api/suggestions/${id}/reject`, { method: "POST", body: "{}" }),
   episodes: (query = "", limit = 60) =>
     req<{ items: Episode[] }>(`/api/episodes?query=${encodeURIComponent(query)}&limit=${limit}`),
+  timeline: () => req<TimelineResponse>("/api/timeline?limit=40"),
   chat: (message: string, mode: string, conversationId?: string | null) =>
     req<{
       answer: string;

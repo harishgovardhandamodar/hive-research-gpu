@@ -71,3 +71,30 @@ export interface ChatMessage {
   memoryRecalled?: { kind: string; ts: string; summary: string }[];
   grounded?: boolean;
 }
+
+export interface TimelineStep {
+  ts: string;
+  tool: string;
+  status: string;
+  summary: string;
+}
+
+export interface TimelineThread {
+  goal_id: string;
+  goal: string;
+  started: string;
+  last: string;
+  span_s: number;
+  status: string;
+  steps_ok: number;
+  steps_failed: number;
+  steps_skipped: number;
+  steps: TimelineStep[];
+  decisions: { ts: string; summary: string }[];
+}
+
+export interface TimelineResponse {
+  threads: TimelineThread[];
+  unfiled: { ts: string; kind: string; summary: string }[];
+  total_threads: number;
+}

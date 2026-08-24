@@ -4,6 +4,14 @@
 **Date:** 2026-08-24 · **System:** hive-research-gpu + Companion agent GUI (`feat/companion-gui`)
 **Method:** the same research goal executed under all three autonomy modes (`approve`, `tiered`, `auto`), driven through the live Companion at `:8001` against the running hive server on `:7777`.
 
+> **Addendum (evening, post-fix).** The §7 infrastructure issue was fixed by routing embeddings to a dedicated instance (`OLLAMA_EMBED_BASE_URL=http://localhost:11434`, commit `3d36c9e`). Verified outcomes after the fix:
+>
+> - `/api/query` grounded answer completes in **52 s** (previously aborted at 180 s on every attempt).
+> - Auto-mode plan `5ee0ff991021`: **4/4 steps done unattended** (search → pool → clusters → survey launch) — first fully green run.
+> - Tiered plan `536bca1376f5` (LLM-planned, 5 steps incl. a self-added `system.jobs` verification step): **5/5 done**; its `survey.start` gate was approved ("relaunch after embed fix").
+> - Survey job `ff46f44e9d62` progressed past its former death point into *writing: Abstract*.
+> - New in the GUI: **Agent timeline** panel (`/api/timeline`) rendering every goal thread as a vertical rail — steps with ✓/✗/⤼ states, ◆ decision nodes, spans and ok-counts.
+
 ---
 
 ## 1. Executive summary

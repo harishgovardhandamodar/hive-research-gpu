@@ -27,6 +27,7 @@ from .planner import Plan, Planner
 from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
 from .settings import load_settings
+from .timeline import build_timeline
 from .tools import ToolRegistry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -313,6 +314,11 @@ async def list_episodes(query: str = "", limit: int = 50, kind: str = "") -> dic
 @app.get("/api/episodes/stats")
 async def episode_stats() -> dict[str, Any]:
     return state.episodes.stats()
+
+
+@app.get("/api/timeline")
+async def agent_timeline(limit: int = 40) -> dict[str, Any]:
+    return build_timeline(state.episodes, limit=min(limit, 100))
 
 
 @app.get("/api/sessions/current/summary")

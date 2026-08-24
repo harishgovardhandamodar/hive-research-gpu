@@ -7,7 +7,7 @@ import { PlanCard } from "./components/PlanCard";
 import { ChatPanel } from "./components/ChatPanel";
 import { ApprovalInbox } from "./components/ApprovalInbox";
 import { SuggestionsFeed } from "./components/SuggestionsFeed";
-import { EpisodeBrowser } from "./components/EpisodeBrowser";
+import { TimelineView } from "./components/TimelineView";
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -127,7 +127,7 @@ export default function App() {
         <section className="col col-side">
           <ApprovalInbox onChanged={refreshPlans} />
           <SuggestionsFeed />
-          <EpisodeBrowser />
+          <TimelineView />
         </section>
       </main>
     </div>
