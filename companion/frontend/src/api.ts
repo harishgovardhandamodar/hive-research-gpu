@@ -10,6 +10,8 @@ import type {
   TimelineResponse,
   RelatedSubgraph,
   KGData,
+  PoolPaper,
+  LibraryHit,
 } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -55,6 +57,25 @@ export const api = {
   kg: () => req<KGData>("/api/kg"),
   kgSearch: (q: string) =>
     req<KGData>(`/api/kg/search?q=${encodeURIComponent(q)}`),
+  discover: () =>
+    req<{ topics: string[]; papers: PoolPaper[] }>("/api/discover"),
+  importPoolPaper: (arxivId: string, mode: string) =>
+    req<Plan>("/api/discover/import", {
+      method: "POST",
+      body: JSON.stringify({ arxiv_id: arxivId, mode }),
+    }),
+  poolTopic: (action: "add" | "remove", topic: string) =>
+    req<unknown>("/api/discover/topics", {
+      method: "POST",
+      body: JSON.stringify({ action, topic }),
+    }),
+  librarySearch: (q: string) =>
+    req<{ items: LibraryHit[] }>(`/api/library/search?q=${encodeURIComponent(q)}`),
+  rateArtifact: (kind: string, rating: number, comment = "") =>
+    req<unknown>("/api/rate", {
+      method: "POST",
+      body: JSON.stringify({ kind, rating, comment }),
+    }),
   artifactRelated: (path: string) =>
     req<RelatedSubgraph>(`/api/artifacts/related?path=${encodeURIComponent(path)}`),
   artifactContent: (path: string) =>

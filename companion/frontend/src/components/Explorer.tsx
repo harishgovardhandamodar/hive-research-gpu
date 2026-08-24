@@ -73,6 +73,11 @@ function RelatedGraph({ data }: { data: RelatedSubgraph }) {
   );
 }
 
+function kindForPath(path: string): string {
+  if (path.includes("/reports/") || path.includes("/digests/")) return "report";
+  return "notes";
+}
+
 export function ArtifactViewer({
   loaded,
   busy,
@@ -83,9 +88,11 @@ export function ArtifactViewer({
   onClose: () => void;
 }) {
   const [related, setRelated] = useState<RelatedSubgraph | null>(null);
+  const [rated, setRated] = useState<number | null>(null);
 
   useEffect(() => {
     setRelated(null);
+    setRated(null);
     if (loaded?.kind !== "markdown" || !loaded.path) return;
     let cancelled = false;
     api
@@ -111,6 +118,45 @@ export function ArtifactViewer({
             </a>
           )}
           <button onClick={onClose}>close</button>
+        </div>
+        <div className="artifact-actions">
+          <button
+            className={rated === 5 ? "ok" : ""}
+            disabled={!loaded || loaded.kind !== "markdown"}
+            title="useful — teach the loop"
+            onClick={() => {
+              if (!loaded) return;
+              setRated(5);
+              void api.rateArtifact(kindForPath(loaded.path), 5);
+            }}
+          >
+            👍 helpful
+          </button>
+          <button
+            className={rated === 2 ? "bad" : ""}
+            disabled={!loaded || loaded.kind !== "markdown"}
+            title="not useful — re-analysis will be guided by this"
+            onClick={() => {
+              if (!loaded) return;
+              setRated(2);
+              void api.rateArtifact(kindForPath(loaded.path), 2);
+            }}
+          >
+            👎 not useful
+          </button>
+          <button
+            onClick={() => {
+              if (!loaded) return;
+              const name = loaded.path.split("/").slice(-1)[0].replace(/\.(md|txt)$/, "");
+              window.dispatchEvent(
+                new CustomEvent("fox-prefill", {
+                  detail: `Walk me through "${name}" — its key contributions, methods, and how it fits my library.`,
+                }),
+              );
+            }}
+          >
+            💬 ask Fox about this
+          </button>
         </div>
         {busy && <p className="typing" style={{ padding: "14px" }}>loading…</p>}
         {!busy && loaded?.kind === "markdown" && (

@@ -24,9 +24,10 @@ from .events import EventBus
 from .executor import ApprovalStore, PlanExecutor
 from .hive_client import HiveApiError, HiveClient
 from .llm import ChatClient
+from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
-from .planner import Plan, Planner
+from .planner import Plan, Planner, Step
 from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
 from .settings import load_settings
@@ -386,6 +387,98 @@ async def artifact_related(path: str = "") -> dict[str, Any]:
         return state.kg.related_subgraph(ids)
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
+
+
+# -- discovery & retrieval -----------------------------------------------------
+
+
+class ImportRequest(BaseModel):
+    arxiv_id: str = Field(min_length=4, max_length=64)
+    mode: str = "tiered"
+
+
+class TopicRequest(BaseModel):
+    action: str  # add | remove
+    topic: str = Field(min_length=2, max_length=120)
+
+
+class RateRequest(BaseModel):
+    kind: str = "notes"
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=500)
+
+
+@app.get("/api/discover")
+async def discover() -> dict[str, Any]:
+    try:
+        topics, papers = await asyncio.gather(state.client.pool_topics(), state.client.pool_papers())
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    shaped = sorted(
+        (shape_pool_paper(p) for p in papers),
+        key=lambda p: p.get("published", ""),
+        reverse=True,
+    )
+    topic_list = topics.get("topics", []) if isinstance(topics, dict) else []
+    return {"topics": topic_list, "papers": shaped}
+
+
+@app.post("/api/discover/import")
+async def discover_import(req: ImportRequest) -> dict[str, Any]:
+    """Import a pool paper through the governed plan pipeline."""
+    plan = Plan(
+        id=uuid.uuid4().hex[:12],
+        goal_id="",
+        goal=f"import pool paper {req.arxiv_id}",
+        steps=[Step(index=0, tool="library.add_paper", args={"arxiv_id": req.arxiv_id}, rationale="selected from watch pool")],
+        planner="discover",
+    )
+    launched = await state.launch_plan(f"import {req.arxiv_id} from watch pool", req.mode, plan=plan)
+    return launched.to_dict()
+
+
+@app.post("/api/discover/topics")
+async def discover_topics(req: TopicRequest) -> dict[str, Any]:
+    try:
+        if req.action == "add":
+            return await state.client.pool_topic_add(req.topic.strip())
+        if req.action == "remove":
+            return await state.client.pool_topic_remove(req.topic.strip())
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    raise HTTPException(400, "action must be add or remove")
+
+
+@app.get("/api/library/search")
+async def library_search(q: str = "", limit: int = 12) -> dict[str, Any]:
+    if len(q.strip()) < 2:
+        raise HTTPException(400, "query too short")
+    import asyncio as _asyncio
+
+    try:
+        hits, papers = await _asyncio.gather(
+            state.client.paper_search(q.strip()),
+            state.client.papers(),
+        )
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    joined = join_note_paths(hits[:limit], papers)
+    return {"items": joined}
+
+
+@app.post("/api/rate")
+async def rate_artifact(req: RateRequest) -> dict[str, Any]:
+    try:
+        result = await state.client.record_feedback(req.kind, req.rating, req.comment)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+    state.episodes.append(
+        "feedback",
+        f"rated {req.kind} {req.rating}/5" + (f": {req.comment}" if req.comment else ""),
+        session_id=state.session_id,
+        status="ok",
+    )
+    return result
 
 
 @app.get("/api/statusbar")

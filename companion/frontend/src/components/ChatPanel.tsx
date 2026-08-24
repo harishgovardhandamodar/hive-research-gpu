@@ -16,6 +16,18 @@ export function ChatPanel() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (text) {
+        setInput(text);
+        window.dispatchEvent(new CustomEvent("fox-focus-chat"));
+      }
+    };
+    window.addEventListener("fox-prefill", onPrefill);
+    return () => window.removeEventListener("fox-prefill", onPrefill);
+  }, []);
+
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;

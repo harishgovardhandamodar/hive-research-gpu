@@ -141,3 +141,22 @@ export interface RelatedSubgraph {
   concepts: { id: string; label: string; links: number }[];
   keywords: string[];
 }
+
+export interface PoolPaper {
+  arxiv_id: string;
+  title: string;
+  authors: string;
+  published: string;
+  abstract: string;
+  topics: string[];
+  imported: boolean;
+}
+
+export interface LibraryHit {
+  arxiv_id: string;
+  title: string;
+  authors: string;
+  published: string;
+  abstract: string;
+  note_path: string | null;
+}
