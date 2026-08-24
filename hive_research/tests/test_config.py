@@ -4,6 +4,7 @@ import os
 import unittest
 
 from hive_research.config import Config
+from hive_research.llm import LLMInterface
 from hive_research.tests.base import TempDirTestCase, make_config
 
 
@@ -65,3 +66,48 @@ class TestFeedbackConfig(TempDirTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEmbedBaseURL(TempDirTestCase):
+    def test_default_is_empty_uses_main_url(self) -> None:
+        cfg = Config(self.tmp / "nope.yaml")
+        self.assertEqual(cfg.ollama_embed_base_url, "")
+
+    def test_env_override(self) -> None:
+        old = os.environ.get("OLLAMA_EMBED_BASE_URL")
+        os.environ["OLLAMA_EMBED_BASE_URL"] = "http://embed-host:9999"
+        try:
+            cfg = Config(self.tmp / "nope.yaml")
+            self.assertEqual(cfg.ollama_embed_base_url, "http://embed-host:9999")
+        finally:
+            if old is None:
+                del os.environ["OLLAMA_EMBED_BASE_URL"]
+            else:
+                os.environ["OLLAMA_EMBED_BASE_URL"] = old
+
+    def test_embed_routes_to_dedicated_instance(self) -> None:
+        llm = LLMInterface(make_config(self.tmp))
+        llm.embed_base_url = "http://embed-host:9999"
+        captured: dict = {}
+
+        def fake_request(endpoint, payload, retries=3, gpu_id=None, base_url_override=""):
+            captured["endpoint"] = endpoint
+            captured["override"] = base_url_override
+            return {"embeddings": [[0.1, 0.2]]}
+
+        llm._request = fake_request  # type: ignore[method-assign]
+        self.assertEqual(llm.embed("hello"), [0.1, 0.2])
+        self.assertEqual(captured["endpoint"], "embed")
+        self.assertEqual(captured["override"], "http://embed-host:9999")
+
+    def test_embed_without_override_keeps_legacy_routing(self) -> None:
+        llm = LLMInterface(Config(self.tmp / "nope.yaml"))
+        captured: dict = {}
+
+        def fake_request(endpoint, payload, retries=3, gpu_id=None, base_url_override=""):
+            captured["override"] = base_url_override
+            return {"embedding": [1.0]}
+
+        llm._request = fake_request  # type: ignore[method-assign]
+        self.assertEqual(llm.embed("hello"), [1.0])
+        self.assertEqual(captured["override"], "")

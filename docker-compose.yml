@@ -7,6 +7,9 @@ services:
       - hive_data:/app/data
     environment:
       - OLLAMA_BASE_URL=http://localhost:8210
+      # Keep embeddings off the chat model's instance: a 27B chat model
+      # monopolizing VRAM makes embed requests stall for minutes.
+      - OLLAMA_EMBED_BASE_URL=http://localhost:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:latest}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}

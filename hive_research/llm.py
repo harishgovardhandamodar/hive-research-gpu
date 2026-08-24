@@ -20,6 +20,7 @@ class LLMInterface:
         self.config = config
         self.gpu_mgr = gpu_mgr
         self.base_url = config.ollama_base_url.rstrip("/")
+        self.embed_base_url = config.ollama_embed_base_url.rstrip("/")
         self._lock = threading.Lock()
 
     def _get_base_url(self, gpu_id: int | None = None) -> str:
@@ -33,8 +34,9 @@ class LLMInterface:
         payload: dict[str, Any],
         retries: int = 3,
         gpu_id: int | None = None,
+        base_url_override: str = "",
     ) -> dict[str, Any]:
-        base_url = self._get_base_url(gpu_id)
+        base_url = base_url_override or self._get_base_url(gpu_id)
         url = f"{base_url}/api/{endpoint}"
         last_error: Exception | None = None
         for attempt in range(retries):
@@ -268,17 +270,18 @@ class LLMInterface:
             "model": model or self.config.ollama_embed_model,
             "input": text,
         }
-        if gpu_id is None and self.gpu_mgr:
+        embed_url = self.embed_base_url
+        if gpu_id is None and self.gpu_mgr and not embed_url:
             gpu_id = self.gpu_mgr.get_next_embed_gpu()
         try:
-            data = self._request("embed", payload, gpu_id=gpu_id, retries=1)
+            data = self._request("embed", payload, gpu_id=gpu_id, retries=1, base_url_override=embed_url)
         except RuntimeError as e:
             # Older Ollama builds / proxies only implement the legacy
             # /api/embeddings endpoint — fall back transparently.
             if "501" in str(e) or "404" in str(e):
                 legacy = dict(payload)
                 legacy["prompt"] = legacy.pop("input")
-                data = self._request("embeddings", legacy, gpu_id=gpu_id)
+                data = self._request("embeddings", legacy, gpu_id=gpu_id, base_url_override=embed_url)
             else:
                 raise
         if isinstance(data.get("embeddings"), list) and data["embeddings"]:

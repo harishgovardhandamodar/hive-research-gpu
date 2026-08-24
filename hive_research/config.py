@@ -74,6 +74,18 @@ class Config:
             self._get("ollama", "embed_model", default="nomic-embed-text")
         )
 
+    @property
+    def ollama_embed_base_url(self) -> str:
+        """Optional dedicated Ollama instance for embeddings.
+
+        Embed models stall behind large chat models that share VRAM on one
+        instance; routing them elsewhere keeps RAG responsive. Empty means
+        'use ollama_base_url like before'.
+        """
+        return os.environ.get("OLLAMA_EMBED_BASE_URL") or str(
+            self._get("ollama", "embed_base_url", default="")
+        )
+
     def resolve_model(self, model: str | None) -> str | None:
         if not model or model == "large":
             return self.ollama_model
