@@ -61,63 +61,91 @@ function themeEdgeColor(style: RelStyle): RelStyle {
   return style;
 }
 
-function simulate(nodes: SimNode[], links: { source: string; target: string }[], width: number, height: number) {
+/** One tick of the live d3-style simulation; caller drives alpha decay. */
+function physicsTick(
+  nodes: SimNode[],
+  links: { source: string; target: string }[],
+  width: number,
+  height: number,
+  alpha: number,
+) {
   const index = new Map(nodes.map((n) => [n.id, n]));
-  const R = Math.min(width, height) * 0.38;
-  nodes.forEach((n, i) => {
-    if (n.x !== 0 || n.y !== 0) return;
-    const a = (i / nodes.length) * Math.PI * 2;
-    n.x = width / 2 + R * Math.cos(a);
-    n.y = height / 2 + R * Math.sin(a);
-  });
-  for (let tick = 0; tick < 300; tick++) {
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let d2 = dx * dx + dy * dy;
-        if (d2 < 1) {
-          dx = Math.random() - 0.5;
-          dy = Math.random() - 0.5;
-          d2 = 1;
-        }
-        const repulse = a.type === "paper" || b.type === "paper" ? 2600 : 1400;
-        const f = repulse / d2;
-        const d = Math.sqrt(d2);
-        const fx = (dx / d) * f;
-        const fy = (dy / d) * f;
-        a.vx -= fx;
-        a.vy -= fy;
-        b.vx += fx;
-        b.vy += fy;
+  // many-body repulsion — papers push harder than concepts
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i];
+      const b = nodes[j];
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1) {
+        dx = Math.random() - 0.5;
+        dy = Math.random() - 0.5;
+        d2 = 1;
       }
-    }
-    for (const l of links) {
-      const a = index.get(l.source);
-      const b = index.get(l.target);
-      if (!a || !b) continue;
-      const target = 110;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const f = ((d - target) / d) * 0.28;
-      a.vx += dx * f;
-      a.vy += dy * f;
-      b.vx -= dx * f;
-      b.vy -= dy * f;
-    }
-    for (const n of nodes) {
-      n.vx *= 0.82;
-      n.vy *= 0.82;
-      n.x += n.vx;
-      n.y += n.vy;
+      const strength = a.type === "paper" || b.type === "paper" ? -320 : -160;
+      const f = (strength * alpha) / d2;
+      const d = Math.sqrt(d2);
+      a.vx += (dx / d) * f;
+      a.vy += (dy / d) * f;
+      b.vx -= (dx / d) * f;
+      b.vy -= (dy / d) * f;
     }
   }
+  // link springs
+  for (const l of links) {
+    const a = index.get(l.source);
+    const b = index.get(l.target);
+    if (!a || !b) continue;
+    const target = 110;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = ((d - target) / d) * 0.3 * alpha;
+    a.vx += dx * f;
+    a.vy += dy * f;
+    b.vx -= dx * f;
+    b.vy -= dy * f;
+  }
+  // soft center gravity
+  const cx = width / 2;
+  const cy = height / 2;
   for (const n of nodes) {
-    n.x = Math.max(PAPER_SIZE, Math.min(width - PAPER_SIZE, n.x));
-    n.y = Math.max(PAPER_SIZE, Math.min(height - PAPER_SIZE, n.y));
+    n.vx += (cx - n.x) * 0.0016 * alpha;
+    n.vy += (cy - n.y) * 0.0016 * alpha;
+  }
+  // collision separation so labels/nodes don't stack
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i];
+      const b = nodes[j];
+      const min = (a.type === "paper" ? PAPER_SIZE : CONCEPT_SIZE * 2) + (b.type === "paper" ? PAPER_SIZE : CONCEPT_SIZE * 2);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < min * min && d2 > 0.01) {
+        const d = Math.sqrt(d2);
+        const push = ((min - d) / d) * 0.22;
+        a.vx -= dx * push;
+        a.vy -= dy * push;
+        b.vx += dx * push;
+        b.vy += dy * push;
+      }
+    }
+  }
+  // integrate with d3-like velocity decay; pinned nodes stay put
+  for (const n of nodes) {
+    if ((n as SimNode & { pinned?: boolean }).pinned) {
+      n.vx = 0;
+      n.vy = 0;
+      continue;
+    }
+    n.vx *= 0.62;
+    n.vy *= 0.62;
+    n.x += n.vx;
+    n.y += n.vy;
+    n.x = Math.max(10, Math.min(width - 10, n.x));
+    n.y = Math.max(10, Math.min(height - 10, n.y));
   }
 }
 
@@ -152,6 +180,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const linksRef = useRef<{ source: string; target: string; relation?: string }[]>([]);
   const posRef = useRef<Map<string, { x: number; y: number }>>(new Map()); // persists layout across refreshes
   const viewRef = useRef({ x: 0, y: 0, k: 1 });
+  const alphaRef = useRef({ a: 0.9, target: 0 }); // live simulation energy
   const tipRef = useRef<Tip | null>(null);
   const dragRef = useRef<{
     kind: "none" | "pan" | "node";
@@ -218,8 +247,18 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
     const index = new Map(nodes.map((n) => [n.id, n]));
     simNodesRef.current = nodes;
     linksRef.current = data.links;
-    simulate(nodes, data.links, width, height);
+    // ring placement for brand-new nodes, then let the LIVE simulation
+    // unfold the layout organically (alpha decays each frame)
+    const R = Math.min(width, height) * 0.38;
+    nodes.forEach((n, i) => {
+      if (n.x === 0 && n.y === 0) {
+        const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
+        n.x = width / 2 + R * Math.cos(a);
+        n.y = height / 2 + R * Math.sin(a);
+      }
+    });
     for (const n of nodes) posRef.current.set(n.id, { x: n.x, y: n.y });
+    alphaRef.current.a = Math.max(alphaRef.current.a, 0.9);
 
     const citedIds = new Set(data.links.filter((l) => l.relation === "cites").map((l) => l.target));
 
@@ -256,6 +295,13 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
     const nodeHitRadius = (n: SimNode) => (n.type === "paper" ? PAPER_SIZE : CONCEPT_SIZE) + 4;
 
     const draw = () => {
+      // live physics: alpha cools each frame; drags and data changes re-heat it
+      const alphaObj = alphaRef.current;
+      alphaObj.a += (alphaObj.target - alphaObj.a) * 0.028;
+      if (alphaObj.a > 0.004) {
+        physicsTick(nodes, data.links, width, height, alphaObj.a);
+        for (const n of nodes) posRef.current.set(n.id, { x: n.x, y: n.y });
+      }
       const view = viewRef.current;
       const { relFilter: rf, showLabels: sl, showRelLabels: srl } = settingsRef.current;
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
@@ -371,7 +417,6 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
       raf = requestAnimationFrame(draw);
     };
     let raf = requestAnimationFrame(draw);
-
     // ── pointer interactions: hover tooltip, click pin, node drag, pan, zoom ──
     const toWorld = (mx: number, my: number) => {
       const v = viewRef.current;
@@ -402,7 +447,13 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
         if (n) {
           n.x = world.x - drag.offX;
           n.y = world.y - drag.offY;
+          n.vx = 0;
+          n.vy = 0;
+          (n as SimNode & { pinned?: boolean }).pinned = true;
           posRef.current.set(n.id, { x: n.x, y: n.y });
+          // dragging stirs the simulation — keep it hot while held
+          alphaRef.current.target = 0.32;
+          alphaRef.current.a = Math.max(alphaRef.current.a, 0.32);
         }
         return;
       }
@@ -452,6 +503,8 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
     const onMouseUp = (ev: MouseEvent) => {
       const drag = dragRef.current;
       dragRef.current = { kind: "none", offX: 0, offY: 0, moved: false, lastX: 0, lastY: 0 };
+      // release the heat: simulation cools back down after stirring
+      alphaRef.current.target = 0;
       if (drag.moved || drag.kind === "none") return;
       const rect = canvas.getBoundingClientRect();
       const world = toWorld(ev.clientX - rect.left, ev.clientY - rect.top);
@@ -592,7 +645,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
             <span><i style={{ background: REL_COLORS.cites.color }} /> cites</span>
             <span><i style={{ background: REL_COLORS.extends.color }} /> extends</span>
             <span><i style={{ background: REL_COLORS.related_to.color }} /> related</span>
-            <span className="stat" style={{ marginLeft: 6, opacity: 0.8 }}>kg v3 · hive parity</span>
+            <span className="stat" style={{ marginLeft: 6, opacity: 0.8 }}>kg v4 · fluid</span>
           </div>
         </div>
       </div>
