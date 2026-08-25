@@ -13,8 +13,9 @@ import type {
   PoolPaper,
   LibraryHit,
   Schedule,
-  CompareEdge,
-} from "./types";
+   CompareEdge,
+   IngestFailure,
+ } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
@@ -23,7 +24,10 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`${resp.status}: ${body.slice(0, 200)}`);
+    const message = `${resp.status}: ${body.slice(0, 200)}`;
+    // surface failures globally — panels may swallow them locally
+    window.dispatchEvent(new CustomEvent("api-error", { detail: { path, message } }));
+    throw new Error(message);
   }
   return resp.json() as Promise<T>;
 }
@@ -65,6 +69,17 @@ export const api = {
     req<Plan>("/api/discover/import", {
       method: "POST",
       body: JSON.stringify({ arxiv_id: arxivId, mode }),
+    }),
+  ingestFailures: () =>
+    req<{ count: number; failures: IngestFailure[] }>("/api/ingest/failures"),
+  retryIngest: (arxivIds: string[], mode = "tiered") =>
+    req<Plan>("/api/ingest/retry", {
+      method: "POST",
+      body: JSON.stringify({ arxiv_ids: arxivIds, mode }),
+    }),
+  dismissIngestFailure: (arxivId: string) =>
+    req<{ dismissed: string }>(`/api/ingest/failures/${encodeURIComponent(arxivId)}`, {
+      method: "DELETE",
     }),
   poolTopic: (action: "add" | "remove", topic: string) =>
     req<unknown>("/api/discover/topics", {

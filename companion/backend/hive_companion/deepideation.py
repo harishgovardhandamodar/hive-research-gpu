@@ -266,6 +266,8 @@ class DeepIdeationEngine:
             pair_list = pair_list[: run.iterations]
 
             consecutive_failures = 0
+            failed_pairs = 0
+            last_error = ""
             i = 0
             while i < len(pair_list) and consecutive_failures < 3:
                 seed, bridge = pair_list[i]
@@ -274,10 +276,17 @@ class DeepIdeationEngine:
                     consecutive_failures = 0
                 except Exception as exc:
                     consecutive_failures += 1
+                    failed_pairs += 1
+                    last_error = str(exc)[:300]
                     logger.warning("pair %s-%s failed (%d in a row): %s", seed, bridge, consecutive_failures, exc)
                 i += 1
                 await asyncio.sleep(0)
-            run.status = "done"
+            if not run.ideas and failed_pairs:
+                # zero explored pairs must not masquerade as a finished search
+                run.status = "failed"
+                run.error = f"all {failed_pairs} explored pairs failed; last error: {last_error or 'unknown'}"
+            else:
+                run.status = "done"
         except asyncio.CancelledError:
             run.status = "cancelled"
             raise

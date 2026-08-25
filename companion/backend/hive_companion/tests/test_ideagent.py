@@ -123,14 +123,14 @@ class TestEngineRun(unittest.TestCase):
         self.assertTrue(all(i["overall"] >= 0.3 for i in run.rank()))
 
     def test_second_run_accepted_after_previous_completes(self) -> None:
-        llm = FakeLLM([])  # every call raises → iterations survive as failures
+        llm = FakeLLM([])  # every call raises → zero-candidate run must fail loudly
         engine = IdeagentEngine(llm_fast=llm, llm_main=None, kg=_kg())
         run = asyncio.run(engine.run("t", iterations=2, wait=True))
-        self.assertEqual(run.status, "done")  # resilient: failures logged, run completes
+        self.assertEqual(run.status, "failed")  # no silent "done" with 0 candidates
         self.assertEqual(len(run.candidates), 0)
         # active slot released
         run2 = asyncio.run(engine.run("t2", iterations=2, wait=True))
-        self.assertEqual(run2.status, "done")
+        self.assertEqual(run2.status, "failed")
 
 
 if __name__ == "__main__":

@@ -82,6 +82,7 @@ class IdeaRun:
         self.started = datetime.now(timezone.utc).isoformat()
         self.finished: str | None = None
         self.error: str | None = None
+        self.failed_iterations = 0
         self.archive: dict[tuple[str, str], dict[str, Any]] = {}
         self.candidates: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
@@ -95,6 +96,7 @@ class IdeaRun:
             "started": self.started,
             "finished": self.finished,
             "error": self.error,
+            "failed_iterations": self.failed_iterations,
             "iterations": self.iterations,
             "archive_cells": len(APPROACHES) * len(RISKS),
             "cells_filled": len(self.archive),
@@ -174,6 +176,8 @@ class IdeagentEngine:
         try:
             concepts = await self._library_concepts(run.topic)
             consecutive_failures = 0
+            failed_iterations = 0
+            last_error = ""
             i = 0
             while i < run.iterations and consecutive_failures < 3:
                 try:
@@ -189,6 +193,8 @@ class IdeagentEngine:
                     consecutive_failures = 0
                 except Exception as exc:
                     consecutive_failures += 1
+                    failed_iterations += 1
+                    last_error = str(exc)[:300]
                     run.events.append({
                         "ts": datetime.now(timezone.utc).isoformat(),
                         "iteration": i + 1,
@@ -198,7 +204,13 @@ class IdeagentEngine:
                     logger.warning("iteration %d failed (%d in a row): %s", i + 1, consecutive_failures, exc)
                 i += 1
                 await asyncio.sleep(0)
-            run.status = "done"
+            if not run.candidates and failed_iterations:
+                # A run that produced nothing must not look like a success.
+                run.status = "failed"
+                run.error = f"all {failed_iterations} iterations failed; last error: {last_error or 'unknown'}"
+            else:
+                run.status = "done"
+                run.failed_iterations = failed_iterations
         except asyncio.CancelledError:
             run.status = "cancelled"
             raise
@@ -222,7 +234,7 @@ class IdeagentEngine:
 
     async def _library_concepts(self, topic: str) -> list[str]:
         try:
-            slim = self.kg.slim() if hasattr(self.kg, "slim") else {"nodes": []}
+            slim = await self.kg.slim() if hasattr(self.kg, "slim") else {"nodes": []}
         except Exception:
             slim = {"nodes": []}
         tokens = _tokenize_set(topic)

@@ -64,9 +64,14 @@ class KGCache:
 
     # -- views ---------------------------------------------------------------
 
-    def slim(self) -> dict[str, Any]:
-        """Nodes without heavy fields — enough to render the global graph."""
-        g = self._graph or {}
+    async def slim(self) -> dict[str, Any]:
+        """Nodes without heavy fields — enough to render the global graph.
+
+        Refreshes through get() first: a bare read of _graph would hand back
+        an expired cache (or nothing at all before the first fetch), which
+        silently starved ideation of library concepts.
+        """
+        g = await self.get()
         nodes = [
             {
                 "id": n["id"],
@@ -148,8 +153,9 @@ class KGCache:
         ][:10]
         return {"query": query, "nodes": nodes, "links": links, "matched": len(seeds), "keywords": keywords}
 
-    def related_subgraph(self, seed_ids: list[str]) -> dict[str, Any]:
+    async def related_subgraph(self, seed_ids: list[str]) -> dict[str, Any]:
         """Papers connected to the seeds via shared concepts or direct edges."""
+        await self.get()
         by_id, adj = self._indexes()
         seeds = [s for s in seed_ids if s in by_id]
         concepts: dict[str, int] = {}

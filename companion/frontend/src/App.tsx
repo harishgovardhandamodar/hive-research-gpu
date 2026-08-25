@@ -72,6 +72,16 @@ export default function App() {
 
   const layout = useLayout();
 
+  useEffect(() => {
+    // any failed API call anywhere surfaces in the banner
+    const onApiError = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ message: string }>).detail;
+      if (detail?.message) setError(detail.message);
+    };
+    window.addEventListener("api-error", onApiError);
+    return () => window.removeEventListener("api-error", onApiError);
+  }, []);
+
   const refreshPlans = useCallback(async () => {
     try {
       const list = await api.plans();
@@ -108,6 +118,7 @@ export default function App() {
       const planId = event.plan_id as string | undefined;
       if (!planId) {
         if (event.type === "suggestion" || event.type === "suggestion_resolved") window.dispatchEvent(new Event("suggestions-changed"));
+        if (event.type === "ingest_failed" || event.type === "idea") window.dispatchEvent(new Event("hive-activity"));
         return;
       }
       const plan = plansRef.current.get(planId);
@@ -116,6 +127,8 @@ export default function App() {
         void refreshPlans();
         return;
       }
+      // let live panels (Discover etc.) react to plan activity without polling
+      window.dispatchEvent(new Event("plans-changed"));
       if (event.type === "awaiting_approval" && plan) {
         const step = plan.steps[event.step_index as number];
         if (step) step.state = "awaiting_approval";
@@ -179,7 +192,12 @@ export default function App() {
           </button>
         </header>
         <GlobalProgress />
-        {error && <div className="banner error">{error}</div>}
+        {error && (
+          <div className="banner error">
+            <span>{error}</span>
+            <button className="ghost" onClick={() => setError(null)} title="Dismiss">✕</button>
+          </div>
+        )}
         <main className="columns" ref={containerRef}>
           {/* ── left rail (collapsed) ── */}
           {ly.collapsedLeft && (

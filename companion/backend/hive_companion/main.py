@@ -22,13 +22,14 @@ from .artifacts import build_explorer, shape_artifacts
 from .episodic import EpisodeStore
 from .events import EventBus
 from .executor import ApprovalStore, PlanExecutor
+from .ingest_failures import IngestFailureStore, inner_add_status
 from .hive_client import HiveApiError, HiveClient
 from .llm import ChatClient
 from .discover import join_note_paths, shape_pool_paper
 from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
 from .deepideation import ConceptNetwork, DeepIdeationEngine, DeepRun
-from .ideagent import IdeagentEngine, IdeaRun, persist_runs as persist_idea_runs
+from .ideagent import IdeagentEngine, IdeaRun, persist_runs
 from .backup import BackupLoop, create_snapshot, list_snapshots
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
@@ -55,7 +56,8 @@ class CompanionApp:
         self.policy = ReinforcementPolicy(self.settings.data_dir)
         self.approvals = ApprovalStore(self.settings.data_dir)
         self.suggestions = SuggestionStore(self.settings.data_dir)
-        self.registry = ToolRegistry(self.client)
+        self.ingest_failures = IngestFailureStore(self.settings.data_dir)
+        self.registry = ToolRegistry(self.client, failures=self.ingest_failures)
         self.kg = KGCache(self.client)
         ideation_url = self.settings.ideation_base_url or self.settings.llm_base_url
         self.ideagent = IdeagentEngine(
@@ -107,6 +109,7 @@ class CompanionApp:
             self.policy,
             self.bus,
             interval_s=self.settings.proactive_interval_s,
+            failures=self.ingest_failures,
         )
         self.plans: dict[str, Plan] = {}
         self.session_id = uuid.uuid4().hex[:12]
@@ -219,14 +222,36 @@ class CompanionApp:
 
         async def pump() -> None:
             try:
-                async for _event in self.executor.run_plan(plan, goal_id, self.session_id, resolved):
-                    pass  # executor already publishes to the bus
+                async for event in self.executor.run_plan(plan, goal_id, self.session_id, resolved):
+                    if event.get("type") == "step_finished" and event.get("tool") == "library.add_paper":
+                        self._record_ingest_outcome(plan, event)
                 self._persist_plan_final(plan)
             except Exception:
                 logger.exception("plan %s crashed", plan.id)
 
         asyncio.create_task(pump())
         return plan
+
+    def _record_ingest_outcome(self, plan: Plan, event: dict[str, Any]) -> None:
+        """Keep the ingestion failure ledger in sync with add_paper steps."""
+        idx = event.get("step_index")
+        step = plan.steps[idx] if isinstance(idx, int) and 0 <= idx < len(plan.steps) else None
+        arxiv_id = str((step.args or {}).get("arxiv_id", "")) if step else ""
+        if not arxiv_id:
+            return
+        failed = not event.get("ok") or inner_add_status(event.get("result")) == "error"
+        if failed:
+            result = event.get("result") or {}
+            error = str(result.get("error") or (result.get("result") or {}).get("error") or "ingestion failed")
+            entry = self.ingest_failures.record_failure(arxiv_id, error=error)
+            self.bus.publish(
+                "ingest_failed",
+                {"arxiv_id": arxiv_id, "attempts": entry["attempts"], "error": entry.get("error", ""), "plan_id": plan.id},
+            )
+        else:
+            self.ingest_failures.record_success(arxiv_id)
+            # fresh paper/concepts should show up in KG views immediately
+            self.kg.invalidate()
 
     def _persist_plan_final(self, plan: Plan) -> None:
         path = self.settings.data_dir / "plans_final.jsonl"
@@ -314,6 +339,10 @@ async def get_state() -> dict[str, Any]:
         "episodes": state.episodes.stats(),
         "policy": state.policy.snapshot(),
         "ws_clients": state.bus.subscriber_count,
+        "approvals_pending": len(state.approvals.pending()),
+        "suggestions_open": len(state.suggestions.open()),
+        "ingest_failures": state.ingest_failures.count(),
+        "plans_running": sum(1 for p in state.plans.values() if p.status == "running"),
     }
 
 
@@ -468,7 +497,7 @@ async def explorer_tree() -> dict[str, Any]:
 @app.get("/api/kg")
 async def kg_full() -> dict[str, Any]:
     try:
-        return state.kg.slim()
+        return await state.kg.slim()
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
 
@@ -494,7 +523,7 @@ async def artifact_related(path: str = "") -> dict[str, Any]:
         raise _hive_error(exc) from exc
     ids = extract_arxiv_ids(data.get("content", ""))
     try:
-        return state.kg.related_subgraph(ids)
+        return await state.kg.related_subgraph(ids)
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
 
@@ -558,6 +587,49 @@ async def discover_topics(req: TopicRequest) -> dict[str, Any]:
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
     raise HTTPException(400, "action must be add or remove")
+
+
+@app.get("/api/ingest/failures")
+async def ingest_failures() -> dict[str, Any]:
+    items = state.ingest_failures.items()
+    return {"count": len(items), "failures": items}
+
+
+@app.delete("/api/ingest/failures/{arxiv_id}")
+async def dismiss_ingest_failure(arxiv_id: str) -> dict[str, Any]:
+    if not state.ingest_failures.dismiss(arxiv_id):
+        raise HTTPException(404, "no failure recorded for this id")
+    return {"dismissed": arxiv_id}
+
+
+class RetryRequest(BaseModel):
+    arxiv_ids: list[str] = Field(default_factory=list)
+    mode: str = "tiered"
+
+
+@app.post("/api/ingest/retry")
+async def ingest_retry(req: RetryRequest) -> dict[str, Any]:
+    """Relaunch ingestion for failed papers through the governed plan pipeline."""
+    from .planner import Step
+
+    ids = [i for i in req.arxiv_ids if i] or [
+        f["arxiv_id"] for f in state.ingest_failures.items()
+    ]
+    if not ids:
+        raise HTTPException(400, "no failed ingestions to retry")
+    steps = [
+        Step(index=n, tool="library.add_paper", args={"arxiv_id": aid}, rationale="retry after failure")
+        for n, aid in enumerate(ids)
+    ]
+    plan = Plan(
+        id=uuid.uuid4().hex[:12],
+        goal_id="",
+        goal=f"retry {len(ids)} failed ingestion{'s' if len(ids) > 1 else ''}",
+        steps=steps,
+        planner="retry",
+    )
+    launched = await state.launch_plan(plan.goal, req.mode, plan=plan)
+    return launched.to_dict()
 
 
 @app.get("/api/library/search")
@@ -835,8 +907,12 @@ async def weekdays() -> list[str]:
 
 
 @app.get("/api/backups")
-async def backups_list() -> list[dict[str, Any]]:
-    return list_snapshots(state.settings.data_dir)
+async def backups_list() -> dict[str, Any]:
+    return {
+        "snapshots": list_snapshots(state.settings.data_dir),
+        "last_snapshot": state.backups.last_snapshot,
+        "last_error": state.backups.last_error,
+    }
 
 
 @app.post("/api/backups/run")
@@ -917,6 +993,7 @@ async def status_bar() -> dict[str, Any]:
     snapshot["episodes"] = state.episodes.stats()["count"]
     snapshot["last_scan"] = state.proactive.last_cycle.get("at")
     snapshot["plan_progress"] = plan_progress
+    snapshot["ingest_failures"] = state.ingest_failures.count()
     return snapshot
 
 

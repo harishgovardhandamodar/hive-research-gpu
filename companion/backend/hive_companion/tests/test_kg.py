@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 
 from hive_companion.kg import KGCache, extract_arxiv_ids
@@ -49,14 +50,14 @@ class TestExtractIds(unittest.TestCase):
 
 class TestKGViews(unittest.TestCase):
     def test_slim_drops_heavy_fields(self) -> None:
-        slim = _cache().slim()
+        slim = asyncio.run(_cache().slim())
         node = next(n for n in slim["nodes"] if n["id"] == "2202.09061v4")
         self.assertNotIn("abstract", node)
         self.assertEqual(node["label"], "VLP: A Survey on Vision-Language Pre-Training")
         self.assertEqual(len(slim["links"]), 3)
 
     def test_related_scores_shared_concepts_and_cites(self) -> None:
-        related = _cache().related_subgraph(["2202.09061v4"])
+        related = asyncio.run(_cache().related_subgraph(["2202.09061v4"]))
         papers = {p["id"]: p for p in related["papers"]}
         # direct cite scores higher than nothing
         self.assertIn("2107.01994v1", papers)

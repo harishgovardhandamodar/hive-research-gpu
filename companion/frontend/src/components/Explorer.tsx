@@ -298,6 +298,7 @@ function TreeRow({
 
 export function Explorer() {
   const [root, setRoot] = useState<ArtifactNode | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
   const { loaded, setLoaded, busy, open } = useArtifactOpener();
@@ -305,8 +306,9 @@ export function Explorer() {
   const refresh = useCallback(async () => {
     try {
       setRoot(await api.explorer());
-    } catch {
-      /* ignore */
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "failed to load vault");
     }
   }, []);
 
@@ -347,8 +349,17 @@ export function Explorer() {
           children.map((c) => (
             <TreeRow key={c.path ?? c.name} node={c} depth={0} onOpen={open} forceExpand={searching} />
           ))
+        ) : loadError ? (
+          <li className="empty">
+            vault unavailable: {loadError}
+            <button className="ghost" style={{ marginLeft: 8 }} onClick={() => void refresh()}>retry</button>
+          </li>
+        ) : root?.children?.length && searching ? (
+          <li className="empty">{`no matches for "${query}"`}</li>
+        ) : root?.children && root.children.length === 0 ? (
+          <li className="empty">vault is empty — import papers to generate notes and figures</li>
         ) : (
-          <li className="empty">{root ? `no matches for "${query}"` : "loading vault…"}</li>
+          <li className="empty">loading vault…</li>
         )}
       </ul>
       <ArtifactViewer loaded={loaded} busy={busy} onClose={() => setLoaded(null)} />

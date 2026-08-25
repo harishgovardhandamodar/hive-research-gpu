@@ -61,6 +61,10 @@ export interface AppState {
   episodes: { count: number; by_kind: Record<string, number> };
   policy: { weights: Record<string, number>; window: number };
   ws_clients: number;
+  approvals_pending?: number;
+  suggestions_open?: number;
+  ingest_failures?: number;
+  plans_running?: number;
 }
 
 export interface ChatMessage {
@@ -150,6 +154,14 @@ export interface PoolPaper {
   abstract: string;
   topics: string[];
   imported: boolean;
+}
+
+export interface IngestFailure {
+  arxiv_id: string;
+  title?: string;
+  error?: string;
+  attempts: number;
+  failed_at?: string;
 }
 
 export interface LibraryHit {

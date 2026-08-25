@@ -468,3 +468,18 @@ button.ghost { background: transparent; }
 .jb-progress { width: 60px; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
 .jb-progress-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease; }
 .jb-plan-meta { font-size: 10px; color: var(--dim); white-space: nowrap; }
+
+/* failed-ingestion strip in Discover */
+.ingest-failures { border: 1px solid var(--bad); border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.fail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pill.fail { border-color: var(--bad); color: var(--bad); }
+.fail-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fail-row { display: grid; grid-template-columns: auto 1fr auto auto auto auto; gap: 8px; align-items: center; font-size: 11px; }
+.fail-row code { color: var(--dim); }
+.fail-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fail-err { color: var(--bad); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.fail-attempts { color: var(--dim); }
+
+/* status-bar attention badges */
+.badge-attention { color: #f59e0b; font-weight: 600; cursor: pointer; text-decoration: none; }
+.badge-fail { color: var(--bad); font-weight: 600; cursor: pointer; text-decoration: none; }

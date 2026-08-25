@@ -83,6 +83,7 @@ function simulate(nodes: SimNode[], links: { source: string; target: string }[],
 export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const [data, setData] = useState<KGData | null>(null);
   const [mode, setMode] = useState<{ kind: "full" | "search"; q?: string }>({ kind: "full" });
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [hover, setHover] = useState<SimNode | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,9 +93,10 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const loadFull = useCallback(async () => {
     try {
       setData(await api.kg());
+      setError(null);
       setMode({ kind: "full" });
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed to load knowledge graph");
     }
   }, []);
 
@@ -190,9 +192,10 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
     try {
       const result = await api.kgSearch(query.trim());
       setData(result);
+      setError(null);
       setMode({ kind: "search", q: query.trim() });
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "graph search failed");
     }
   };
 
@@ -214,6 +217,12 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
           </h2>
           <button onClick={onClose}>close</button>
         </div>
+        {error && (
+          <div className="banner error" style={{ margin: "8px 14px" }}>
+            <span>{error}</span>
+            <button className="ghost" onClick={() => void loadFull()}>retry</button>
+          </div>
+        )}
         <div className="composer-row" style={{ margin: "0 14px" }}>
           <input
             className="search"

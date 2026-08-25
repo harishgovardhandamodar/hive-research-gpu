@@ -6,6 +6,7 @@ import { useArtifactOpener, ArtifactViewer } from "./Explorer";
 export function LibraryPanel() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<LibraryHit[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -46,8 +47,10 @@ export function LibraryPanel() {
     try {
       const data = await api.librarySearch(query.trim());
       setHits(data.items);
-    } catch {
+      setLoadError(null);
+    } catch (e) {
       setHits([]);
+      setLoadError(e instanceof Error ? e.message : "library search failed");
     } finally {
       setBusy(false);
     }
@@ -82,7 +85,12 @@ export function LibraryPanel() {
         {hits === null && (
           <li className="empty">Search across ingested papers. Results link straight to their vault notes.</li>
         )}
-        {hits?.length === 0 && <li className="empty">No matches in your library.</li>}
+        {hits?.length === 0 && !loadError && <li className="empty">No matches in your library.</li>}
+        {loadError && (
+          <li className="empty" style={{ color: "var(--bad)" }}>
+            {loadError}
+          </li>
+        )}
         {hits?.map((h) => (
           <li key={h.arxiv_id} className={`pool-card ${selected.includes(h.arxiv_id) ? "selected" : ""}`}>
             <div className="pool-head">

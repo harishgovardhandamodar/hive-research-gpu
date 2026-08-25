@@ -9,9 +9,12 @@ from __future__ import annotations
 import inspect
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .hive_client import HiveApiError, HiveClient
+
+if TYPE_CHECKING:
+    from .ingest_failures import IngestFailureStore
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +32,9 @@ class Tool:
 
 
 class ToolRegistry:
-    def __init__(self, client: HiveClient) -> None:
+    def __init__(self, client: HiveClient, failures: IngestFailureStore | None = None) -> None:
         self.client = client
+        self.failures = failures
         self._tools: dict[str, Tool] = {}
         self._register_all()
 
@@ -106,6 +110,33 @@ class ToolRegistry:
         )
         async def _add(arxiv_id: str) -> Any:
             return await client.add_paper(arxiv_id)
+
+        @self._register(
+            "library.retry_failed",
+            "Re-ingest papers whose previous ingestion failed, one by one.",
+            mutates=True,
+        )
+        async def _retry_failed() -> Any:
+            if self.failures is None:
+                return {"retried": 0, "message": "failure ledger unavailable"}
+            ids = [i["arxiv_id"] for i in self.failures.items()]
+            if not ids:
+                return {"retried": 0, "message": "no failed ingestions to retry"}
+            results = []
+            recovered = 0
+            for aid in ids:
+                try:
+                    res = await client.add_paper(aid)
+                except HiveApiError as exc:
+                    res = {"status": "error", "error": str(exc)}
+                ok = isinstance(res, dict) and res.get("status") == "added"
+                if ok:
+                    self.failures.record_success(aid)
+                    recovered += 1
+                else:
+                    self.failures.record_failure(aid, error=str(res.get("error", "")) if isinstance(res, dict) else "")
+                results.append({"arxiv_id": aid, "status": res.get("status") if isinstance(res, dict) else "?"})
+            return {"retried": len(ids), "recovered": recovered, "still_failed": len(ids) - recovered, "results": results}
 
         @self._register(
             "library.import_query",

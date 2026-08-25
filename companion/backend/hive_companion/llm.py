@@ -15,10 +15,16 @@ class LLMError(RuntimeError):
 
 
 class ChatClient:
-    def __init__(self, base_url: str, model: str, timeout: float = 120.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        timeout: float = 120.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self._base = base_url.rstrip("/")
         self._model = model
-        self._client = httpx.AsyncClient(timeout=timeout)
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -34,6 +40,9 @@ class ChatClient:
         body: dict[str, Any] = {
             "model": self._model,
             "stream": False,
+            # Thinking models otherwise spend the whole num_predict budget on
+            # message.thinking and return empty content (done_reason: length).
+            "think": False,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -44,6 +53,10 @@ class ChatClient:
             body["format"] = "json"
         try:
             resp = await self._client.post(f"{self._base}/api/chat", json=body)
+            if resp.status_code >= 400 and "think" in resp.text.lower():
+                # model predates the think flag; retry without it
+                body.pop("think")
+                resp = await self._client.post(f"{self._base}/api/chat", json=body)
         except httpx.HTTPError as exc:
             raise LLMError(f"llm unreachable: {exc}") from exc
         if resp.status_code >= 400:
@@ -51,7 +64,19 @@ class ChatClient:
         data = resp.json()
         content = data.get("message", {}).get("content", "")
         if not content:
-            raise LLMError("empty completion")
+            # Generation may have been cut off before any answer text; give it
+            # one more chance with a much larger budget before giving up.
+            if data.get("done_reason") == "length":
+                body["options"]["num_predict"] = num_predict * 4
+                try:
+                    resp = await self._client.post(f"{self._base}/api/chat", json=body)
+                except httpx.HTTPError as exc:
+                    raise LLMError(f"llm unreachable: {exc}") from exc
+                data = resp.json()
+                content = data.get("message", {}).get("content", "")
+        if not content:
+            reason = data.get("done_reason") or "no output"
+            raise LLMError(f"empty completion (done_reason: {reason})")
         return content
 
     async def available(self) -> bool:

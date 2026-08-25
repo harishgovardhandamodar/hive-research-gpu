@@ -3,14 +3,46 @@ import { api } from "../api";
 import type { ChatMessage } from "../types";
 
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
+const CHAT_STORAGE_KEY = "fox-chat-v1";
+
+interface PersistedChat {
+  messages: ChatMessage[];
+  conversationId: string | null;
+  mode: string;
+}
+
+function loadPersisted(): PersistedChat {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PersistedChat;
+      if (Array.isArray(parsed.messages)) return parsed;
+    }
+  } catch {
+    /* corrupt or unavailable storage */
+  }
+  return { messages: [], conversationId: null, mode: "rag" };
+}
 
 export function ChatPanel() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const initial = loadPersisted();
+  const [messages, setMessages] = useState<ChatMessage[]>(initial.messages.slice(-50));
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState("rag");
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [mode, setMode] = useState(initial.mode);
+  const [conversationId, setConversationId] = useState<string | null>(initial.conversationId);
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        CHAT_STORAGE_KEY,
+        JSON.stringify({ messages: messages.slice(-50), conversationId, mode } satisfies PersistedChat),
+      );
+    } catch {
+      /* storage full or unavailable */
+    }
+  }, [messages, conversationId, mode]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });

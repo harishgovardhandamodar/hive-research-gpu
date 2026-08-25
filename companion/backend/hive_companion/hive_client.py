@@ -16,20 +16,27 @@ logger = logging.getLogger(__name__)
 
 
 class HiveApiError(RuntimeError):
-    def __init__(self, path: str, status: int, body: str) -> None:
-        super().__init__(f"GET {path} -> {status}: {body[:200]}")
+    def __init__(self, path: str, status: int, body: str, method: str = "GET") -> None:
+        super().__init__(f"{method} {path} -> {status}: {body[:200]}")
         self.path = path
         self.status = status
+        self.method = method
 
 
 class HiveClient:
     # Read-only POST endpoints — safe to retry on transport errors.
     _SAFE_POSTS = {"/api/query", "/api/search", "/api/similarity"}
 
-    def __init__(self, base_url: str, token: str = "", timeout: float = 600.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str = "",
+        timeout: float = 600.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self._base = base_url.rstrip("/")
         self._token = token
-        self._client = httpx.AsyncClient(timeout=timeout)
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -59,9 +66,9 @@ class HiveClient:
                 if attempt + 1 < attempts:
                     await asyncio.sleep(2.0)
         else:
-            raise HiveApiError(path, 0, f"connection failed: {last_exc}")
+            raise HiveApiError(path, 0, f"connection failed: {last_exc}", method=method)
         if resp.status_code >= 400:
-            raise HiveApiError(path, resp.status_code, resp.text)
+            raise HiveApiError(path, resp.status_code, resp.text, method=method)
         if not resp.content:
             return {}
         return resp.json()
@@ -179,10 +186,12 @@ class HiveClient:
         return await self.post("/api/pool/import", body)
 
     async def pool_topic_add(self, topic: str) -> Any:
-        return await self.post("/api/pool/topics/add", {"topic": topic})
+        # hive's /api/pool/topics/add expects {name, query}; the topic text
+        # doubles as the arxiv search query.
+        return await self.post("/api/pool/topics/add", {"name": topic, "query": topic})
 
     async def pool_topic_remove(self, topic: str) -> Any:
-        return await self.post("/api/pool/topics/remove", {"topic": topic})
+        return await self.post("/api/pool/topics/remove", {"name": topic})
 
     async def record_feedback(
         self,

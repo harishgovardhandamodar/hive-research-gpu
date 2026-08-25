@@ -123,31 +123,39 @@ class BackupLoop:
         self.interval_s = interval_s
         self.keep = keep
         self.last_snapshot: str | None = None
+        self.last_error: str | None = None
         self._task = None
 
     async def _loop(self) -> None:
         import asyncio
+        import logging
 
+        logger = logging.getLogger(__name__)
         while True:
             try:
                 arc = create_snapshot(self.data_dir, keep=self.keep)
                 if arc:
                     self.last_snapshot = arc.name
-            except Exception:
-                pass
+                    self.last_error = None
+            except Exception as exc:
+                self.last_error = str(exc)[:300]
+                logger.warning("backup snapshot failed: %s", exc)
             await asyncio.sleep(self.interval_s)
 
     def start(self) -> None:
         import asyncio
+        import logging
 
+        logger = logging.getLogger(__name__)
         if self._task is None or self._task.done():
             # immediate first snapshot, then periodic
             try:
                 arc = create_snapshot(self.data_dir, keep=self.keep)
                 if arc:
                     self.last_snapshot = arc.name
-            except Exception:
-                pass
+            except Exception as exc:
+                self.last_error = str(exc)[:300]
+                logger.warning("initial backup snapshot failed: %s", exc)
             self._task = asyncio.create_task(self._loop())
 
     async def stop(self) -> None:

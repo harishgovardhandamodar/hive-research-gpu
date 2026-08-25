@@ -196,6 +196,14 @@ export function IdeasPanel() {
               ⬇ md
             </span>
           </summary>
+          {r.status === "failed" && r.error && (
+            <p className="banner error" style={{ margin: "6px 12px" }}>
+              run failed: {r.error}
+            </p>
+          )}
+          {r.status !== "failed" && r.candidates_seen === 0 && r.status === "done" && (
+            <p className="empty" style={{ padding: "0 12px 8px" }}>no candidates were produced this run</p>
+          )}
           <IdeaCards ideas={r.ideas} />
         </details>
       ))}

@@ -17,12 +17,15 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Coroutine
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 from .cite import topic_drift
 from .events import EventBus
 from .hive_client import HiveApiError, HiveClient
 from .policy import ReinforcementPolicy
+
+if TYPE_CHECKING:
+    from .ingest_failures import IngestFailureStore
 
 logger = logging.getLogger(__name__)
 
@@ -102,12 +105,14 @@ class ProactiveEngine:
         bus: EventBus,
         interval_s: float = 300.0,
         data_dir: Path | None = None,
+        failures: IngestFailureStore | None = None,
     ) -> None:
         self.client = client
         self.store = store
         self.policy = policy
         self.bus = bus
         self.interval_s = interval_s
+        self.failures = failures
         self.baseline_path = (data_dir / "topic_baseline.json") if data_dir else None
         self._task: asyncio.Task | None = None
         self.last_cycle: dict[str, Any] = {"at": None, "signals": {}, "new": 0}
@@ -142,6 +147,7 @@ class ProactiveEngine:
             ("pool_backlog", self._signal_pool),
             ("vault_idle", self._signal_idle),
             ("topic_drift", self._signal_topic_drift),
+            ("ingest_failures", self._signal_ingest_failures),
         ]
         strengths: dict[str, float] = {}
         created: list[dict[str, Any]] = []
@@ -228,6 +234,28 @@ class ProactiveEngine:
             "args": {"topic": top},
             "dedupe_key": top,
             "strength": 0.5,
+        }
+
+    async def _signal_ingest_failures(self) -> dict[str, Any] | None:
+        if self.failures is None:
+            return None
+        items = self.failures.items()
+        if not items:
+            return None
+        count = len(items)
+        label = ", ".join(str(i["arxiv_id"]) for i in items[:3]) + ("…" if count > 3 else "")
+        return {
+            "kind": "ingest_retry",
+            "title": f"{count} paper ingestion{'s' if count > 1 else ''} failed — rerun?",
+            "rationale": (
+                f"Failed: {label}. Re-running re-downloads and re-analyzes them into the knowledge graph."
+            ),
+            "tool": "library.retry_failed",
+            "args": {},
+            # attempts in the key so a still-failing rerun raises a fresh suggestion
+            "dedupe_key": ":".join(sorted(str(i["arxiv_id"]) for i in items))
+            + f":a{max(int(i.get('attempts', 1)) for i in items)}",
+            "strength": min(0.4 + 0.15 * count, 1.0),
         }
 
     async def _signal_idle(self) -> dict[str, Any] | None:
