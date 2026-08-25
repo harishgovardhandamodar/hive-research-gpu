@@ -29,6 +29,10 @@ class Settings:
     proactive_interval_s: int = field(default_factory=lambda: int(_get("COMPANION_PROACTIVE_INTERVAL", "300")))
     approval_timeout_s: int = field(default_factory=lambda: int(_get("COMPANION_APPROVAL_TIMEOUT", "1800")))
 
+    # agentic guardrails: keep autonomous plans cheap and bounded
+    plan_max_mutations: int = field(default_factory=lambda: int(_get("COMPANION_PLAN_MAX_MUTATIONS", "6")))
+    plan_budget_s: int = field(default_factory=lambda: int(_get("COMPANION_PLAN_BUDGET_S", "1800")))
+
     def ensure_dirs(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
 

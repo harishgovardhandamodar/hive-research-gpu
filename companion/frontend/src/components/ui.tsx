@@ -71,3 +71,40 @@ export function ArgsView({ args }: { args: Record<string, unknown> }) {
     </span>
   );
 }
+
+const AUTONOMY_HELP: Record<string, string> = {
+  approve: "Every mutating step waits for your approval.",
+  tiered: "Reads run automatically; mutations wait for approval.",
+  auto: "Whole plan runs unattended once submitted.",
+};
+
+/** The one true autonomy-mode dropdown — previously duplicated in four panels. */
+export function AutonomySelect({
+  value,
+  onChange,
+  modes,
+  label,
+  disabled,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  modes: string[];
+  label?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      title={AUTONOMY_HELP[value] ?? "autonomy mode"}
+      aria-label={label ?? "autonomy mode"}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {modes.map((m) => (
+        <option key={m} value={m}>
+          {label ? `${label}: ${m}` : m}
+        </option>
+      ))}
+    </select>
+  );
+}

@@ -183,6 +183,7 @@ export function IdeasPanel() {
               cells {r.cells_filled}/{r.archive_cells}
             </span>
             <span className="stat">{r.candidates_seen} candidates</span>
+            {r.duplicates ? <span className="pill">🔁 {r.duplicates} dupes</span> : null}
             <span
               className="ghost"
               role="button"

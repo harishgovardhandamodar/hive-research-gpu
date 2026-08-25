@@ -25,6 +25,7 @@ from .hive_client import HiveApiError, HiveClient
 from .policy import ReinforcementPolicy
 
 if TYPE_CHECKING:
+    from .episodic import EpisodeStore
     from .ingest_failures import IngestFailureStore
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ class ProactiveEngine:
         interval_s: float = 300.0,
         data_dir: Path | None = None,
         failures: IngestFailureStore | None = None,
+        episodes: EpisodeStore | None = None,
     ) -> None:
         self.client = client
         self.store = store
@@ -113,6 +115,7 @@ class ProactiveEngine:
         self.bus = bus
         self.interval_s = interval_s
         self.failures = failures
+        self.episodes = episodes
         self.baseline_path = (data_dir / "topic_baseline.json") if data_dir else None
         self._task: asyncio.Task | None = None
         self.last_cycle: dict[str, Any] = {"at": None, "signals": {}, "new": 0}
@@ -148,6 +151,7 @@ class ProactiveEngine:
             ("vault_idle", self._signal_idle),
             ("topic_drift", self._signal_topic_drift),
             ("ingest_failures", self._signal_ingest_failures),
+            ("memory_consolidation", self._signal_memory),
         ]
         strengths: dict[str, float] = {}
         created: list[dict[str, Any]] = []
@@ -234,6 +238,32 @@ class ProactiveEngine:
             "args": {"topic": top},
             "dedupe_key": top,
             "strength": 0.5,
+        }
+
+    async def _signal_memory(self) -> dict[str, Any] | None:
+        """Generative-Agents style nudge: lots of raw episodes and no recent
+        consolidation means experience is accumulating without being distilled."""
+        if self.episodes is None:
+            return None
+        stats = self.episodes.stats()
+        total = int(stats.get("count", 0) or 0)
+        if total < 150:
+            return None
+        insights = self.episodes.recent(kind="insight", limit=1)
+        by_kind = stats.get("by_kind", {})
+        if total - int(by_kind.get("insight", 0) or 0) < 150:
+            return None
+        return {
+            "kind": "memory_consolidation",
+            "title": f"{total} episodes of experience not yet distilled",
+            "rationale": (
+                "Reflection turns the activity log into durable research insights "
+                "(what you work on, what works). Run memory consolidation?"
+            ),
+            "tool": "memory.reflect",
+            "args": {},
+            "dedupe_key": f"e{total // 150}",
+            "strength": 0.45,
         }
 
     async def _signal_ingest_failures(self) -> dict[str, Any] | None:

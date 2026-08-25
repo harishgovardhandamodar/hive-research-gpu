@@ -11,6 +11,7 @@ export function DiscoverPanel() {
   const [activeTopic, setActiveTopic] = useState<string>("");
   const [newTopic, setNewTopic] = useState("");
   const [importing, setImporting] = useState<string | null>(null);
+  const [poolQuery, setPoolQuery] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -65,7 +66,12 @@ export function DiscoverPanel() {
     await refresh();
   };
 
-  const shown = activeTopic ? papers.filter((p) => p.topics.includes(activeTopic)) : papers;
+  const shown = papers.filter(
+    (p) =>
+      (!activeTopic || p.topics.includes(activeTopic)) &&
+      (poolQuery.trim() === "" ||
+        `${p.title} ${p.authors}`.toLowerCase().includes(poolQuery.trim().toLowerCase())),
+  );
 
   return (
     <div className="discover">
@@ -79,7 +85,7 @@ export function DiscoverPanel() {
             title="click to filter"
           >
             {String(t)}
-            <button className="chip-x" onClick={(e) => { e.stopPropagation(); void toggleTopic(String(t), "remove"); }}>×</button>
+            <button className="chip-x" aria-label={`stop watching ${t}`} onClick={(e) => { e.stopPropagation(); void toggleTopic(String(t), "remove"); }}>×</button>
           </span>
         ))}
         <input
@@ -95,6 +101,14 @@ export function DiscoverPanel() {
           }}
         />
       </div>
+      <input
+        className="search"
+        style={{ margin: "6px 0" }}
+        placeholder="filter observed preprints…"
+        value={poolQuery}
+        onChange={(e) => setPoolQuery(e.target.value)}
+        aria-label="filter preprints"
+      />
       <p className="hint">{shown.length} observed preprints{activeTopic ? ` in “${activeTopic}”` : " across all topics"} · importing runs under tiered autonomy (approval gated)</p>
       {failures.length > 0 && (
         <div className="ingest-failures">

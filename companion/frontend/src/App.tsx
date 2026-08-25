@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { api, connectWs } from "./api";
-import type { AppState, AutonomyMode, Plan } from "./types";
+import { memo, useCallback, useEffect, useState } from "react";
+import { api } from "./api";
+import type { AppState, AutonomyMode } from "./types";
 import { PulseProvider, usePulse } from "./hooks/usePulse";
 import { useLayout } from "./hooks/useLayout";
-import { StatusBar } from "./components/StatusBar";
+import { useLivePlans } from "./hooks/useLivePlans";
+import { HeaderBar } from "./components/HeaderBar";
 import { GoalComposer } from "./components/GoalComposer";
 import { PlanCard } from "./components/PlanCard";
 import { ChatPanel } from "./components/ChatPanel";
@@ -86,14 +87,13 @@ function Gutter({
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showKG, setShowKG] = useState(false);
   const [centerTab, setCenterTab] = useState<CenterTab>("chat");
   const [theme, setTheme] = useState<"dark" | "light">(() =>
     (localStorage.getItem("fox-theme") as "light" | null) === "light" ? "light" : "dark",
   );
-  const plansRef = useRef<Map<string, Plan>>(new Map());
+  const { plans, refreshPlans } = useLivePlans();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -116,14 +116,18 @@ export default function App() {
     return () => window.removeEventListener("api-error", onApiError);
   }, []);
 
-  const refreshPlans = useCallback(async () => {
-    try {
-      const list = await api.plans();
-      plansRef.current = new Map(list.map((p) => [p.id, p]));
-      setPlans(list);
-    } catch {
-      /* server restarting */
-    }
+  // Alt+<digit> jumps straight to a workspace tab
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= TABS.length) {
+        e.preventDefault();
+        setCenterTab(TABS[n - 1].id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const refreshState = useCallback(async () => {
@@ -141,65 +145,6 @@ export default function App() {
     return () => clearInterval(t);
   }, [refreshState, refreshPlans]);
 
-  const applyEvent = useCallback(
-    (raw: MessageEvent) => {
-      let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(raw.data as string);
-      } catch {
-        return;
-      }
-      const planId = event.plan_id as string | undefined;
-      if (!planId) {
-        if (event.type === "suggestion" || event.type === "suggestion_resolved") window.dispatchEvent(new Event("suggestions-changed"));
-        if (event.type === "ingest_failed" || event.type === "idea") window.dispatchEvent(new Event("hive-activity"));
-        return;
-      }
-      const plan = plansRef.current.get(planId);
-      if (!plan && event.type !== "plan_started") return;
-      if (event.type === "plan_started") {
-        void refreshPlans();
-        return;
-      }
-      // let live panels (Discover etc.) react to plan activity without polling
-      window.dispatchEvent(new Event("plans-changed"));
-      if (event.type === "awaiting_approval" && plan) {
-        const step = plan.steps[event.step_index as number];
-        if (step) step.state = "awaiting_approval";
-        setPlans([...plansRef.current.values()]);
-        return;
-      }
-      if (!plan) return;
-      if (event.type === "step_started") {
-        const step = plan.steps[event.step_index as number];
-        if (step) step.state = "running";
-      } else if (event.type === "step_finished") {
-        const step = plan.steps[event.step_index as number];
-        if (step) step.state = event.ok ? "done" : "failed";
-      } else if (event.type === "plan_finished") {
-        plan.status = String(event.status ?? "done");
-      }
-      setPlans([...plansRef.current.values()]);
-    },
-    [refreshPlans],
-  );
-
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let retry: ReturnType<typeof setTimeout>;
-    const open = () => {
-      ws = connectWs(applyEvent);
-      ws.onopen = () => setError(null);
-      ws.onclose = () => {
-        retry = setTimeout(open, 3000);
-      };
-    };
-    open();
-    return () => {
-      clearTimeout(retry);
-      ws?.close();
-    };
-  }, [applyEvent]);
 
   const createGoal = async (goal: string, mode: AutonomyMode) => {
     await api.createGoal(goal, mode);
@@ -211,29 +156,12 @@ export default function App() {
   return (
     <PulseProvider>
       <div className="app">
-        <header className="header">
-          <h1 className="brand">
-            <img src="/fox-logo.png" alt="Fox Companion logo" className="brand-logo" />
-            <span>
-              Fox Companion
-              <span className="brand-sub">for hive research</span>
-            </span>
-          </h1>
-          {state && <StatusBar state={state} />}
-          <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
-          <div className="header-actions">
-            <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph" aria-label="Open knowledge graph">
-              ⬡ Knowledge Graph
-            </button>
-            <button
-              className="theme-toggle"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              title="Switch color theme"
-            >
-              {theme === "dark" ? "☀" : "☾"}
-            </button>
-          </div>
-        </header>
+        <HeaderBar
+          state={state}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onOpenKG={() => setShowKG(true)}
+        />
         <GlobalProgress />
         {error && (
           <div className="banner error" role="alert">
@@ -287,6 +215,7 @@ export default function App() {
                     tabIndex={centerTab === t.id ? 0 : -1}
                     className={centerTab === t.id ? "tabbtn active" : "tabbtn"}
                     onClick={() => setCenterTab(t.id)}
+                    title={`Alt+${TABS.indexOf(t) + 1}`}
                   >
                     {t.label}
                   </button>

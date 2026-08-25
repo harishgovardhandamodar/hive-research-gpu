@@ -195,10 +195,29 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const settingsRef = useRef({ relFilter, showLabels, showRelLabels });
   settingsRef.current = { relFilter, showLabels, showRelLabels };
 
-  // modal hygiene: Escape closes, search field gets focus on open
+  // modal hygiene: Escape closes, search gets focus, Tab stays inside the modal
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const box = wrapRef.current;
+      if (!box) return;
+      const focusables = box.querySelectorAll<HTMLElement>(
+        'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     searchRef.current?.focus();
@@ -645,7 +664,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
             <span><i style={{ background: REL_COLORS.cites.color }} /> cites</span>
             <span><i style={{ background: REL_COLORS.extends.color }} /> extends</span>
             <span><i style={{ background: REL_COLORS.related_to.color }} /> related</span>
-            <span className="stat" style={{ marginLeft: 6, opacity: 0.8 }}>kg v4 · fluid</span>
+            <span className="stat" style={{ marginLeft: 6, opacity: 0.8 }}>kg v5 · fluid</span>
           </div>
         </div>
       </div>

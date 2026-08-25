@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { EmptyState } from "./ui";
+import { AutonomySelect, EmptyState } from "./ui";
 import { toast } from "../lib/toast";
 import type { AutonomyMode, Suggestion } from "../types";
 
@@ -45,11 +45,12 @@ export function SuggestionsFeed() {
         {items.length > 0 && <span className="badge">{items.length}</span>}
       </h2>
       <div className="composer-row">
-        <select value={mode} onChange={(e) => setMode(e.target.value as AutonomyMode)} title="Autonomy used when accepting a suggestion">
-          <option value="approve">accept under: approve</option>
-          <option value="tiered">accept under: tiered</option>
-          <option value="auto">accept under: auto</option>
-        </select>
+        <AutonomySelect
+          value={mode}
+          onChange={(m) => setMode(m as AutonomyMode)}
+          modes={["approve", "tiered", "auto"]}
+          label="accept under"
+        />
       </div>
       {items.length === 0 && (
         <EmptyState hint="No open suggestions. The companion watches your library state in the background and will speak up when something needs attention." />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { req } from "../api";
+import { EmptyState } from "./ui";
 
 interface Agent {
   id: string;
@@ -161,7 +162,7 @@ export function AgentsPanel() {
       </div>
 
       <div className="agent-grid">
-        {filtered.length === 0 && <p className="empty">No agents match your filter.</p>}
+        {filtered.length === 0 && <EmptyState hint="No agents match your filter." />}
         {filtered.map((a) => (
           <div key={a.id} className={a.enabled ? "agent-card enabled" : "agent-card"} style={{ borderLeftColor: a.color }}>
             <div className="agent-card-head">

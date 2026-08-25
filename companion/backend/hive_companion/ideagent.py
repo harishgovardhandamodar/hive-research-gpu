@@ -83,6 +83,7 @@ class IdeaRun:
         self.finished: str | None = None
         self.error: str | None = None
         self.failed_iterations = 0
+        self.duplicates = 0
         self.archive: dict[tuple[str, str], dict[str, Any]] = {}
         self.candidates: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
@@ -101,6 +102,7 @@ class IdeaRun:
             "archive_cells": len(APPROACHES) * len(RISKS),
             "cells_filled": len(self.archive),
             "candidates_seen": len(self.candidates),
+            "duplicates": self.duplicates,
             "ideas": ideas,
         }
 
@@ -183,6 +185,21 @@ class IdeagentEngine:
                 try:
                     candidate = await self._generate(run, llm, concepts)
                     judged = await self._ensure_scores(candidate, run, llm, concepts)
+                    # novelty search: suppress near-duplicates of ideas from
+                    # earlier runs so the archive keeps exploring new ground
+                    if self._is_duplicate(judged.get("title", ""), exclude=run):
+                        run.duplicates += 1
+                        run.events.append({
+                            "ts": datetime.now(timezone.utc).isoformat(),
+                            "iteration": i + 1,
+                            "kept": False,
+                            "duplicate_of": True,
+                            "title": str(judged.get("title", ""))[:120],
+                        })
+                        logger.info("iteration %d suppressed as duplicate novelty", i + 1)
+                        i += 1
+                        await asyncio.sleep(0)
+                        continue
                     self._archive(run, judged, i)
                     if self.on_iteration:
                         try:
@@ -231,6 +248,28 @@ class IdeagentEngine:
     def bus_publish(self, run: IdeaRun, idea: dict[str, Any]) -> None:
         if self.bus is not None:
             self.bus.publish("idea", {"run_id": run.id, "title": idea["title"], "overall": idea["overall"]})
+
+    _DUPLICATE_THRESHOLD = 0.72
+
+    def _is_duplicate(self, title: str, exclude: IdeaRun | None = None) -> bool:
+        """Cross-run novelty check: token-Jaccard against earlier runs' ideas.
+
+        Within-run variety is already handled by the QD archive cells.
+        """
+        tokens = _tokenize_set(title)
+        if not tokens:
+            return False
+        for past_run in self.history:
+            if exclude is not None and past_run.id == exclude.id:
+                continue
+            for idea in past_run.rank():
+                past_tokens = _tokenize_set(idea.get("title", ""))
+                if not past_tokens:
+                    continue
+                j = len(tokens & past_tokens) / len(tokens | past_tokens)
+                if j >= self._DUPLICATE_THRESHOLD:
+                    return True
+        return False
 
     async def _library_concepts(self, topic: str) -> list[str]:
         try:

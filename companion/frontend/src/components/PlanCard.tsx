@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { AutonomyMode, Plan, Step } from "../types";
-import { ArgsView } from "./ui";
+import { ArgsView, AutonomySelect } from "./ui";
 
 const STATE_ICON: Record<Step["state"], string> = {
   pending: "·",
@@ -79,11 +79,12 @@ export function PlanCard({ plan, onModeSwitch }: { plan: Plan; onModeSwitch: () 
             ))}
           </ol>
           <div className="composer-row">
-            <select value={mode} onChange={(e) => void switchMode(e.target.value as AutonomyMode)}>
-              <option value="approve">switch: approve</option>
-              <option value="tiered">switch: tiered</option>
-              <option value="auto">switch: auto</option>
-            </select>
+            <AutonomySelect
+              value={mode}
+              onChange={(m) => void switchMode(m as AutonomyMode)}
+              modes={["approve", "tiered", "auto"]}
+              label="switch"
+            />
           </div>
         </>
       )}

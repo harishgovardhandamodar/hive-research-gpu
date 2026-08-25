@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { EmptyState } from "./ui";
 import type { TimelineResponse, TimelineThread } from "../types";
 
 const STEP_ICON: Record<string, string> = { done: "✓", failed: "✗", skipped: "⤼" };
@@ -15,6 +16,23 @@ function fmtSpan(s: number): string {
   if (s < 90) return `${s}s`;
   if (s < 5400) return `${Math.round(s / 60)}m`;
   return `${(s / 3600).toFixed(1)}h`;
+}
+
+const KIND_ICON: Record<string, string> = {
+  reflection: "\u{1FA9F}",
+  verdict: "\u2696\uFE0F",
+  insight: "\u{1F4A1}",
+};
+
+/** Decision nodes carry special agentic artifacts — give them their own glyph. */
+function decisionIcon(summary: string): string {
+  const lower = summary.toLowerCase();
+  if (lower.startsWith("success-criteria verdict")) return summary.includes("pass") ? "\u2705" : "\u274C";
+  if (lower.startsWith("success-criteria")) return KIND_ICON.verdict;
+  if (lower.includes("reflection:")) return KIND_ICON.reflection;
+  if (lower.includes("insight")) return KIND_ICON.insight;
+  if (lower.includes("budget") || lower.includes("skipped")) return "\u23F8";
+  return "\u25C6";
 }
 
 export function TimelineView() {
@@ -60,8 +78,8 @@ export function TimelineView() {
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="timeline">
-        {!data && <p className="empty">loading…</p>}
-        {data && threads.length === 0 && <p className="empty">No matching workflow threads.</p>}
+        {!data && <EmptyState skeleton />}
+        {data && threads.length === 0 && <EmptyState hint="No matching workflow threads." />}
         {threads.map((t) => (
           <div key={t.goal_id} className={`thread ${STATUS_CLASS[t.status] ?? ""}`}>
             <div className="thread-head">
@@ -78,7 +96,7 @@ export function TimelineView() {
             <ol className="rail">
               {t.decisions.map((d) => (
                 <li key={"d" + d.ts} className="node node-decision">
-                  <span className="node-icon">◆</span>
+                  <span className="node-icon">{decisionIcon(d.summary)}</span>
                   <div>
                     <span className="node-ts">{d.ts.slice(11, 19)}</span>
                     <span className="node-text">{d.summary}</span>

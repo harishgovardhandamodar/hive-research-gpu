@@ -202,6 +202,7 @@ export interface IdeaRunState {
   archive_cells: number;
   cells_filled: number;
   candidates_seen: number;
+  duplicates?: number;
   ideas: {
     title: string;
     summary: string;

@@ -1,0 +1,51 @@
+/* ── artifacts ── */
+.artifact-group { margin-bottom: 10px; }
+.artifact-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim); margin: 8px 0 4px; }
+.artifact-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.artifact-file {
+  width: 100%; text-align: left; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 5px 8px; font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.artifact-file:hover { border-color: var(--accent); color: var(--accent); }
+.artifact-more { font-size: 10px; color: var(--dim); list-style: none; }
+.artifact-modal {
+  position: fixed; inset: 0; background: rgba(5, 8, 12, 0.72); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 30px;
+}
+.artifact-box {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  width: min(900px, 92vw); max-height: 86vh; display: flex; flex-direction: column;
+}
+.artifact-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.artifact-body { margin: 0; padding: 14px 18px; overflow: auto; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, "Cascadia Code", Menlo, monospace; }
+
+/* ── rendered markdown in artifact viewer ── */
+.md-body h1, .md-body h2, .md-body h3 { color: var(--text); margin: 18px 0 8px; line-height: 1.3; }
+.md-body h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.md-body h2 { font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.md-body h3 { font-size: 14px; }
+.md-body p { margin: 8px 0; }
+.md-body ul, .md-body ol { margin: 8px 0; padding-left: 22px; }
+.md-body li { margin: 3px 0; }
+.md-body a { color: #6db3f2; }
+.md-body code {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 5px; font-size: 11.5px;
+}
+.md-body pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+.md-body pre code { background: none; border: none; padding: 0; }
+.md-body blockquote { margin: 8px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--dim); background: rgba(240, 180, 41, 0.05); }
+.md-body table { border-collapse: collapse; margin: 10px 0; width: 100%; font-size: 12px; }
+.md-body th, .md-body td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+.md-body th { background: var(--bg3); color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+.md-body tr:hover td { background: var(--surface2, var(--bg3)); }
+.md-body img { max-width: 100%; border-radius: 6px; }
+.md-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.md-body img { display: block; margin: 10px 0; background: #fff; padding: 6px; border-radius: 4px; }
+.md-body figcaption, .md-body em.caption { color: var(--dim); font-size: 11px; }
+
+/* ── brand ── */
+.brand { display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: 0.4px; }
+.brand-logo { width: 34px; height: auto; border-radius: 8px; }
+.brand-sub { display: block; font-size: 10px; font-weight: 500; color: var(--dim); letter-spacing: 1.2px; text-transform: uppercase; margin-top: -2px; }

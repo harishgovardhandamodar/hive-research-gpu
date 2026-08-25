@@ -107,7 +107,47 @@ class Planner:
             ]
         if dropped:
             logger.info("dropped invalid steps: %s", dropped)
-        return Plan(id=plan_id, goal_id="", goal=goal_text, steps=steps, planner=used)
+        plan = Plan(id=plan_id, goal_id="", goal=goal_text, steps=steps, planner=used)
+        if used == "llm":
+            await self._critique(plan)
+        return plan
+
+    async def _critique(self, plan: Plan) -> None:
+        """LLM-as-critic pre-flight: drop redundant/off-goal steps before execution.
+
+        Self-Refine-style second pass — the planner drafts, the critic trims.
+        Failures here are non-fatal; a bad critique just means we run as planned.
+        """
+        if self.llm is None or len(plan.steps) < 2:
+            return
+        try:
+            listing = "\n".join(
+                f"{i}: {s.tool} {json.dumps(s.args)}" for i, s in enumerate(plan.steps)
+            )
+            content = await self.llm.chat(
+                system=(
+                    "You are a plan critic. Given a goal and numbered plan steps, "
+                    'return exactly {"drop": [<step indices to remove>]} — only steps that are '
+                    "redundant, off-goal, or duplicated. Drop nothing when the plan is tight."
+                ),
+                user=f"Goal: {plan.goal}\nSteps:\n{listing}",
+                json_mode=True,
+                num_predict=120,
+            )
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            if not match:
+                return
+            drop = [int(i) for i in json.loads(match.group(0)).get("drop", [])]
+            keep = [s for i, s in enumerate(plan.steps) if i not in drop]
+            if not keep or len(keep) == len(plan.steps):
+                return
+            logger.info("critic dropped steps %s from plan", drop)
+            plan.steps = [
+                Step(index=n, tool=s.tool, args=s.args, rationale=s.rationale)
+                for n, s in enumerate(keep)
+            ]
+        except Exception as exc:
+            logger.debug("plan critic skipped: %s", exc)
 
     # -- LLM path ------------------------------------------------------------
 

@@ -32,9 +32,17 @@ class Tool:
 
 
 class ToolRegistry:
-    def __init__(self, client: HiveClient, failures: IngestFailureStore | None = None) -> None:
+    def __init__(
+        self,
+        client: HiveClient,
+        failures: IngestFailureStore | None = None,
+        episodes: Any = None,
+        llm: Any = None,
+    ) -> None:
         self.client = client
         self.failures = failures
+        self.episodes = episodes
+        self.llm = llm
         self._tools: dict[str, Tool] = {}
         self._register_all()
 
@@ -209,6 +217,57 @@ class ToolRegistry:
         @self._register("system.gpu", "GPU status and utilization.")
         async def _gpu() -> Any:
             return await client.gpu()
+
+        @self._register(
+            "memory.reflect",
+            "Consolidate recent episodic memory into durable research insights (Generative-Agents style reflection).",
+            mutates=True,
+        )
+        async def _reflect() -> Any:
+            if self.episodes is None or self.llm is None:
+                return {"consolidated": 0, "message": "memory reflection unavailable"}
+            recent = self.episodes.recent(limit=200)
+            if len(recent) < 10:
+                return {"consolidated": 0, "message": "not enough episodes to reflect on yet"}
+            transcript = "\n".join(f"[{e['kind']}] {e['summary']}" for e in recent[-120:])[:6000]
+            content = await self.llm.chat(
+                system=(
+                    "Distill this research-agent activity log into at most 5 durable insights about "
+                    "the researcher's interests, workflows and quality patterns. "
+                    'Respond exactly as {"insights": ["...", ...]}.'
+                ),
+                user=transcript,
+                json_mode=True,
+                num_predict=400,
+            )
+            import json as _json
+            import re as _re
+
+            match = _re.search(r"\{.*\}", content, re.DOTALL)
+            insights = _json.loads(match.group(0)).get("insights", []) if match else []
+            made = 0
+            for text in insights[:5]:
+                if isinstance(text, str) and text.strip():
+                    self.episodes.append("insight", text.strip()[:400])
+                    made += 1
+            return {"consolidated": made, "reviewed_episodes": len(recent)}
+
+        @self._register(
+            "verify.attribution",
+            "Check that arxiv ids cited in a vault note actually exist in the library — anti-hallucination pass.",
+            args={"path": "vault-relative note path"},
+        )
+        async def _verify_attribution(path: str) -> Any:
+            from .kg import extract_arxiv_ids
+
+            file = await client.read_file(path)
+            ids = extract_arxiv_ids(file.get("content", ""), limit=25)
+            if not ids:
+                return {"checked": 0, "missing": [], "message": "no arxiv references found in the note"}
+            library = {str(p.get("arxiv_id", p.get("id", ""))) for p in await client.papers()}
+            bases = {i.split("v")[0] for i in library}
+            missing = [i for i in ids if i.split("v")[0] not in bases]
+            return {"checked": len(ids), "known": len(ids) - len(missing), "missing": missing}
 
         @self._register(
             "pool.watch_topic",

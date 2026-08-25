@@ -1,0 +1,27 @@
+/* ── agent timeline ── */
+.timeline { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; }
+.thread { border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--bg2); }
+.thread-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.thread-goal { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-dot { font-size: 8px; }
+.tl-done .tl-dot::before { color: var(--ok); }
+.tl-failed .tl-dot::before { color: var(--bad); }
+.tl-running .tl-dot::before { color: var(--accent); }
+.rail { list-style: none; margin: 0; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
+.node { position: relative; font-size: 11px; padding-left: 14px; display: flex; align-items: baseline; gap: 6px; }
+.node::before { content: ""; position: absolute; left: -16.5px; top: 7px; width: 20px; height: 1px; background: var(--border); }
+.node-icon { position: absolute; left: -5.5px; top: 1px; width: 11px; text-align: center; font-size: 9px; color: var(--dim); }
+.node-done .node-icon { color: var(--ok); }
+.node-failed .node-icon { color: var(--bad); }
+.node-skipped .node-icon { color: var(--warn); }
+.node-decision .node-icon { color: var(--accent); }
+.node-ts { color: var(--dim); margin-right: 6px; font-size: 10px; }
+.node-state { margin-left: 6px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; }
+.st-done { color: var(--ok); }
+.st-failed { color: var(--bad); }
+.st-skipped { color: var(--warn); }
+.node code { color: var(--text); }
+.node-text { margin: 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.node div { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.unfiled { font-size: 11px; color: var(--dim); margin-top: 4px; }
+.unfiled ul { margin: 6px 0 0; padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }

@@ -57,7 +57,8 @@ class CompanionApp:
         self.approvals = ApprovalStore(self.settings.data_dir)
         self.suggestions = SuggestionStore(self.settings.data_dir)
         self.ingest_failures = IngestFailureStore(self.settings.data_dir)
-        self.registry = ToolRegistry(self.client, failures=self.ingest_failures)
+        self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
+        self.registry = ToolRegistry(self.client, failures=self.ingest_failures, episodes=self.episodes, llm=self.llm)
         self.kg = KGCache(self.client)
         ideation_url = self.settings.ideation_base_url or self.settings.llm_base_url
         self.ideagent = IdeagentEngine(
@@ -93,7 +94,6 @@ class CompanionApp:
             self.schedules,
             launcher=lambda goal, mode: state.launch_plan(goal, mode),
         )
-        self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
         self.planner = Planner(self.registry, self.llm, self.policy)
         self.executor = PlanExecutor(
             self.registry,
@@ -102,6 +102,9 @@ class CompanionApp:
             self.bus,
             self.approvals,
             approval_timeout_s=self.settings.approval_timeout_s,
+            max_mutations=self.settings.plan_max_mutations,
+            budget_s=self.settings.plan_budget_s,
+            judge=self.llm,
         )
         self.proactive = ProactiveEngine(
             self.client,
@@ -110,6 +113,7 @@ class CompanionApp:
             self.bus,
             interval_s=self.settings.proactive_interval_s,
             failures=self.ingest_failures,
+            episodes=self.episodes,
         )
         self.plans: dict[str, Plan] = {}
         self.session_id = uuid.uuid4().hex[:12]
@@ -209,25 +213,79 @@ class CompanionApp:
         goal_text: str,
         mode: str,
         plan: Plan | None = None,
+        success_criteria: str = "",
     ) -> Plan:
         resolved = resolve_mode(mode)
         goal_episode = self.episodes.append("goal", goal_text, session_id=self.session_id)
         goal_id = goal_episode["id"]
         if plan is None:
             memory_context = self.episodes.context_for_prompt(goal_text)
+            # agent-profile conditioning: enabled research agents bias the planner
+            try:
+                selected_ids = self.agents.get()
+                if selected_ids:
+                    profiles = [
+                        f"- {a['name']}: {a.get('tagline', '')} (workflow: {' → '.join(a.get('workflow', [])[:4])})"
+                        for a in catalog_dicts()
+                        if a["id"] in selected_ids
+                    ]
+                    if profiles:
+                        memory_context += "\nActive agent profiles to emulate:\n" + "\n".join(profiles[:5])
+            except Exception:
+                logger.debug("agent-profile context unavailable", exc_info=True)
             plan = await self.planner.build(goal_text, memory_context=memory_context)
             plan.goal_id = goal_id
+            if success_criteria:
+                setattr(plan, "verdict_criteria", success_criteria)
         self.plans[plan.id] = plan
         self._persist_plan(plan)
 
         async def pump() -> None:
             try:
                 async for event in self.executor.run_plan(plan, goal_id, self.session_id, resolved):
-                    if event.get("type") == "step_finished" and event.get("tool") == "library.add_paper":
-                        self._record_ingest_outcome(plan, event)
+                    if event.get("type") == "step_finished":
+                        if event.get("tool") == "library.add_paper":
+                            self._record_ingest_outcome(plan, event)
+                        # Reflexion-style verbal self-correction: on failure,
+                        # produce a short diagnosis that future planner calls
+                        # will retrieve through episodic memory.
+                        if not event.get("ok") and self.llm is not None:
+                            asyncio.create_task(self._reflect_on_failure(plan, event))
                 self._persist_plan_final(plan)
             except Exception:
                 logger.exception("plan %s crashed", plan.id)
+
+    async def _reflect_on_failure(self, plan: Plan, event: dict[str, Any]) -> None:
+        idx = event.get("step_index")
+        step = plan.steps[idx] if isinstance(idx, int) and 0 <= idx < len(plan.steps) else None
+        tool = (event.get("tool") or "step")[:60]
+        error = ""
+        result = event.get("result") or {}
+        error = str(result.get("error") or (result.get("result") or {}).get("error") or "unknown error")[:200]
+        try:
+            content = await self.llm.chat(
+                system=(
+                    "A research-agent step just failed. In one or two sentences, diagnose the most "
+                    "likely cause and state the concrete adjustment for the next attempt. "
+                    "Plain text only, no preamble."
+                ),
+                user=f"Goal: {plan.goal}\nTool: {tool}\nArgs: {json.dumps(step.args)[:300] if step else '{}'}\nError: {error}",
+                num_predict=160,
+            )
+            reflection = content.strip()[:400]
+        except Exception as exc:
+            logger.debug("reflection LLM call failed: %s", exc)
+            return
+        self.episodes.append(
+            "reflection",
+            f"{tool} failed ({error}); reflection: {reflection}",
+            session_id=self.session_id,
+            goal_id=plan.goal_id,
+            plan_id=plan.id,
+            tool=tool,
+            status="reflected",
+        )
+        self.bus.publish("reflection", {"plan_id": plan.id, "arxiv_hint": "", "reflection": reflection})
 
         asyncio.create_task(pump())
         return plan
@@ -285,6 +343,7 @@ app.add_middleware(
 class GoalRequest(BaseModel):
     goal: str = Field(min_length=3, max_length=2000)
     mode: str = "tiered"
+    success_criteria: str = Field(default="", max_length=500)
 
 
 class ModeRequest(BaseModel):
@@ -353,7 +412,7 @@ async def get_tools() -> list[dict[str, Any]]:
 
 @app.post("/api/goals")
 async def create_goal(req: GoalRequest) -> dict[str, Any]:
-    plan = await state.launch_plan(req.goal.strip(), req.mode)
+    plan = await state.launch_plan(req.goal.strip(), req.mode, success_criteria=req.success_criteria.strip())
     return plan.to_dict()
 
 

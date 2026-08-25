@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../api";
 import { usePolling } from "../hooks/usePolling";
 import { toast } from "../lib/toast";
+import { AutonomySelect } from "./ui";
 import type { Schedule } from "../types";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -60,11 +61,7 @@ export function SchedulesPanel() {
               ))}
             </select>
           )}
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="approve">approve</option>
-            <option value="tiered">tiered</option>
-            <option value="auto">auto</option>
-          </select>
+          <AutonomySelect value={mode} onChange={setMode} modes={["approve", "tiered", "auto"]} label="autonomy" />
           <button onClick={() => void add()} disabled={goal.trim().length < 5}>schedule</button>
         </div>
       </div>

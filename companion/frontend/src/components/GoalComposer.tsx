@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AutonomyMode } from "../types";
+import { AutonomySelect } from "./ui";
 
 const MODE_HELP: Record<AutonomyMode, string> = {
   approve: "Every mutating step waits for your approval.",
@@ -51,13 +52,7 @@ export function GoalComposer({
         }}
       />
       <div className="composer-row">
-        <select value={mode} onChange={(e) => setMode(e.target.value as AutonomyMode)} title={MODE_HELP[mode]}>
-          {modes.map((m) => (
-            <option key={m} value={m}>
-              autonomy: {m}
-            </option>
-          ))}
-        </select>
+        <AutonomySelect value={mode} onChange={(m) => setMode(m as AutonomyMode)} modes={modes} label="autonomy" />
         <button
           onClick={() => void submit()}
           disabled={busy || goal.trim().length < 3}
