@@ -22,4 +22,5 @@ from .hive_datatype import (
     FederationStats,
     aggregate_stats,
     build_meta_graph,
+    validate_relation,
 )
