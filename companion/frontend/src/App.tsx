@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { api, connectWs } from "./api";
 import type { AppState, AutonomyMode, Plan } from "./types";
+import { PulseProvider } from "./hooks/usePulse";
+import { useLayout } from "./hooks/useLayout";
 import { StatusBar } from "./components/StatusBar";
 import { GoalComposer } from "./components/GoalComposer";
 import { PlanCard } from "./components/PlanCard";
@@ -18,6 +20,35 @@ import { SchedulesPanel } from "./components/SchedulesPanel";
 import { IdeasPanel } from "./components/IdeasPanel";
 import { DeepIdeasPanel } from "./components/DeepIdeasPanel";
 
+const MemoPlanCard = memo(PlanCard);
+const MemoApprovalInbox = memo(ApprovalInbox);
+
+function Gutter({
+  id,
+  onDrag,
+  onNudge,
+}: {
+  id: string;
+  onDrag: (ev: React.MouseEvent) => void;
+  onNudge: (dir: number) => void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${id} panels`}
+      tabIndex={0}
+      className="gutter"
+      onMouseDown={onDrag}
+      onDoubleClick={() => onNudge(0)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") onNudge(-1);
+        if (e.key === "ArrowRight") onNudge(1);
+      }}
+    />
+  );
+}
+
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -25,6 +56,8 @@ export default function App() {
   const [showKG, setShowKG] = useState(false);
   const [centerTab, setCenterTab] = useState<"chat" | "discover" | "ideas" | "deepideas" | "library">("chat");
   const plansRef = useRef<Map<string, Plan>>(new Map());
+
+  const layout = useLayout();
 
   const refreshPlans = useCallback(async () => {
     try {
@@ -113,59 +146,120 @@ export default function App() {
     await refreshPlans();
   };
 
+  const { state: ly, containerRef, beginDrag, nudge, toggleLeft, toggleRight, resetLayout } = layout;
+
   return (
-    <div className="app">
-      <header className="header">
-        <h1 className="brand">
-          <img src="/fox-logo.png" alt="Fox Companion logo" className="brand-logo" />
-          <span>
-            Fox Companion
-            <span className="brand-sub">for hive research</span>
-          </span>
-        </h1>
-        <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
-        {state && <StatusBar state={state} />}
-        <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph">
-          ⬡ Knowledge Graph
-        </button>
-      </header>
-      {error && <div className="banner error">{error}</div>}
-      <main className="columns">
-        <section className="col col-goals">
-          <h2>Goals &amp; Plans</h2>
-          <GoalComposer onCreate={createGoal} modes={state?.autonomy_modes ?? ["approve", "tiered", "auto"]} />
-          <div className="plan-list">
-            {plans.length === 0 && <p className="empty">No goals yet. Describe what you need — the companion will plan and execute it.</p>}
-            {[...plans].reverse().map((p) => (
-              <PlanCard key={p.id} plan={p} onModeSwitch={refreshState} />
-            ))}
-          </div>
-          <SchedulesPanel />
-          <Explorer />
-        </section>
-        <section className="col col-chat">
-          <div className="center-tabs">
-            <button className={centerTab === "chat" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("chat")}>Fox Chat</button>
-            <button className={centerTab === "discover" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("discover")}>Discover · arxiv pool</button>
-            <button className={centerTab === "ideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("ideas")}>💡 IDEAgent</button>
-            <button className={centerTab === "deepideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("deepideas")}>🕸 Deep Ideation</button>
-            <button className={centerTab === "library" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("library")}>Library search</button>
-          </div>
-          {centerTab === "chat" && <ChatPanel />}
-          {centerTab === "discover" && <DiscoverPanel />}
-          {centerTab === "ideas" && <IdeasPanel />}
-          {centerTab === "deepideas" && <DeepIdeasPanel />}
-          {centerTab === "library" && <LibraryPanel />}
-        </section>
-        <section className="col col-side">
-          <ApprovalInbox onChanged={refreshPlans} />
-          <SuggestionsFeed />
-          <ArtifactsPanel />
-          <TimelineView />
-        </section>
-      </main>
-      {showKG && <KnowledgeGraph onClose={() => setShowKG(false)} />}
-      <JobsBar />
-    </div>
+    <PulseProvider>
+      <div className="app">
+        <header className="header">
+          <h1 className="brand">
+            <img src="/fox-logo.png" alt="Fox Companion logo" className="brand-logo" />
+            <span>
+              Fox Companion
+              <span className="brand-sub">for hive research</span>
+            </span>
+          </h1>
+          <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
+          {state && <StatusBar state={state} />}
+          <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph">
+            ⬡ Knowledge Graph
+          </button>
+        </header>
+        {error && <div className="banner error">{error}</div>}
+        <main className="columns" ref={containerRef}>
+          {/* ── left rail (collapsed) ── */}
+          {ly.collapsedLeft && (
+            <button className="rail rail-left" onClick={toggleLeft} title="Show goals panel">
+              ⫿ Goals
+            </button>
+          )}
+
+          {!ly.collapsedLeft && (
+            <section className="col col-goals" style={{ width: `${ly.leftPct}%` }}>
+              <div className="col-head">
+                <h2>Goals &amp; Plans</h2>
+                <button className="col-collapse" onClick={toggleLeft} title="Collapse panel">
+                  ⟨
+                </button>
+              </div>
+              <div className="col-body">
+                <GoalComposer onCreate={createGoal} modes={state?.autonomy_modes ?? ["approve", "tiered", "auto"]} />
+                <div className="plan-list">
+                  {plans.length === 0 && (
+                    <p className="empty">No goals yet. Describe what you need — the companion will plan and execute it.</p>
+                  )}
+                  {[...plans].reverse().map((p) => (
+                    <MemoPlanCard key={p.id} plan={p} onModeSwitch={refreshState} />
+                  ))}
+                </div>
+                <SchedulesPanel />
+                <Explorer />
+              </div>
+            </section>
+          )}
+
+          {!ly.collapsedLeft && <Gutter id="left" onDrag={beginDrag("left")} onNudge={(d) => nudge("left", d)} />}
+
+          {/* ── workspace ── */}
+          <section className="col col-chat" style={{ width: `${ly.centerPct}%` }}>
+            <div className="col-head">
+              <div className="center-tabs">
+                <button className={centerTab === "chat" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("chat")}>Fox Chat</button>
+                <button className={centerTab === "discover" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("discover")}>Discover</button>
+                <button className={centerTab === "ideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("ideas")}>💡 IDEAgent</button>
+                <button className={centerTab === "deepideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("deepideas")}>🕸 Deep Ideation</button>
+                <button className={centerTab === "library" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("library")}>Library</button>
+              </div>
+              {(ly.collapsedLeft || ly.collapsedRight) && (
+                <button className="col-collapse" onClick={ly.collapsedLeft ? toggleLeft : toggleRight} title="Expand side panel">
+                  ⟩
+                </button>
+              )}
+            </div>
+            <div className="col-body">
+              {centerTab === "chat" && <ChatPanel />}
+              {centerTab === "discover" && <DiscoverPanel />}
+              {centerTab === "ideas" && <IdeasPanel />}
+              {centerTab === "deepideas" && <DeepIdeasPanel />}
+              {centerTab === "library" && <LibraryPanel />}
+            </div>
+          </section>
+
+          {!ly.collapsedRight && <Gutter id="right" onDrag={beginDrag("right")} onNudge={(d) => nudge("right", d)} />}
+
+          {/* ── right rail (collapsed) ── */}
+          {ly.collapsedRight && (
+            <button className="rail rail-right" onClick={toggleRight} title="Show insights panel">
+              Insights ⫸
+            </button>
+          )}
+
+          {!ly.collapsedRight && (
+            <section className="col col-side" style={{ width: `${ly.rightPct}%` }}>
+              <div className="col-head">
+                <h2>Insights</h2>
+                <button className="col-collapse" onClick={toggleRight} title="Collapse panel">
+                  ⟩
+                </button>
+              </div>
+              <div className="col-body">
+                <MemoApprovalInbox onChanged={refreshPlans} />
+                <SuggestionsFeed />
+                <ArtifactsPanel />
+                <TimelineView />
+              </div>
+            </section>
+          )}
+        </main>
+        <footer className="layout-footer">
+          <button className="ghost" onClick={resetLayout} title="Reset panel widths">
+            reset layout
+          </button>
+          <span className="stat">drag gutters to resize · double-click a gutter to even out</span>
+        </footer>
+        {showKG && <KnowledgeGraph onClose={() => setShowKG(false)} />}
+        <JobsBar />
+      </div>
+    </PulseProvider>
   );
 }
