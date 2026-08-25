@@ -19,6 +19,7 @@ import { LibraryPanel } from "./components/LibraryPanel";
 import { SchedulesPanel } from "./components/SchedulesPanel";
 import { IdeasPanel } from "./components/IdeasPanel";
 import { DeepIdeasPanel } from "./components/DeepIdeasPanel";
+import { AgentsPanel } from "./components/AgentsPanel";
 
 const MemoPlanCard = memo(PlanCard);
 const MemoApprovalInbox = memo(ApprovalInbox);
@@ -54,7 +55,7 @@ export default function App() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showKG, setShowKG] = useState(false);
-  const [centerTab, setCenterTab] = useState<"chat" | "discover" | "ideas" | "deepideas" | "library">("chat");
+  const [centerTab, setCenterTab] = useState<"chat" | "discover" | "ideas" | "deepideas" | "library" | "agents">("chat");
   const plansRef = useRef<Map<string, Plan>>(new Map());
 
   const layout = useLayout();
@@ -205,6 +206,7 @@ export default function App() {
             <div className="col-head">
               <div className="center-tabs">
                 <button className={centerTab === "chat" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("chat")}>Fox Chat</button>
+                <button className={centerTab === "agents" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("agents")}>🤖 Agents</button>
                 <button className={centerTab === "discover" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("discover")}>Discover</button>
                 <button className={centerTab === "ideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("ideas")}>💡 IDEAgent</button>
                 <button className={centerTab === "deepideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("deepideas")}>🕸 Deep Ideation</button>
@@ -218,6 +220,7 @@ export default function App() {
             </div>
             <div className="col-body">
               {centerTab === "chat" && <ChatPanel />}
+              {centerTab === "agents" && <AgentsPanel />}
               {centerTab === "discover" && <DiscoverPanel />}
               {centerTab === "ideas" && <IdeasPanel />}
               {centerTab === "deepideas" && <DeepIdeasPanel />}

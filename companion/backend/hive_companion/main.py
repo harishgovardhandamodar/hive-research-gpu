@@ -37,6 +37,7 @@ from .policy import ReinforcementPolicy
 from .proactive import ProactiveEngine, SuggestionStore
 from .settings import load_settings
 from .timeline import build_timeline
+from .agents_catalog import AgentSelectionStore, CATEGORY_LABEL, CATALOG_BY_ID, catalog_dicts
 from .tools import ToolRegistry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -84,6 +85,7 @@ class CompanionApp:
             search_fn=lambda q: self.client.paper_search(q),
             on_iteration=lambda run: self._persist_deep_runs(),
         )
+        self.agents = AgentSelectionStore(self.settings.data_dir / "agent_selection.json")
         self.schedules = ScheduleStore(self.settings.data_dir)
         self.scheduler = GoalScheduler(
             self.schedules,
@@ -703,6 +705,36 @@ async def toggle_schedule(sid: str) -> dict[str, Any]:
 async def run_due_schedules() -> dict[str, Any]:
     fired = await state.scheduler.run_pending_now()
     return {"fired": fired}
+
+
+# -- agent collection --------------------------------------------------------
+
+
+@app.get("/api/agents")
+async def list_agents() -> dict[str, Any]:
+    selected = set(state.agents.get())
+    items = []
+    for d in catalog_dicts():
+        row = dict(d)
+        row["enabled"] = row["id"] in selected
+        items.append(row)
+    return {"categories": CATEGORY_LABEL, "agents": items, "selected_ids": sorted(selected)}
+
+
+@app.get("/api/agents/selection")
+async def get_agent_selection() -> dict[str, Any]:
+    return {"selected_ids": state.agents.get()}
+
+
+class AgentSelectionIn(BaseModel):
+    selected_ids: list[str] = Field(default_factory=list)
+
+
+@app.post("/api/agents/selection")
+async def set_agent_selection(body: AgentSelectionIn) -> dict[str, Any]:
+    valid = [str(x) for x in body.selected_ids if str(x) in CATALOG_BY_ID]
+    saved = state.agents.set(valid)
+    return {"selected_ids": saved}
 
 
 @app.get("/api/weekdays")
