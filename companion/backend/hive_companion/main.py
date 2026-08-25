@@ -1102,9 +1102,13 @@ from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402 (top-leve
 class _NoCacheAssets(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         resp = await call_next(request)
-        if request.url.path.startswith("/assets/"):
+        path = request.url.path
+        # hashed assets are safe to cache; index.html must revalidate so a
+        # stale page can't keep pointing at an old bundle after redeploy
+        if path.startswith("/assets/"):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif not path.startswith("/api/") and (path == "/" or "." not in path or path.endswith(".html")):
             resp.headers["Cache-Control"] = "no-cache, must-revalidate"
-            resp.headers["Pragma"] = "no-cache"
         return resp
 
 

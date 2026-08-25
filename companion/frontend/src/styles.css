@@ -570,3 +570,11 @@ button.ghost { background: transparent; }
 .msg-md code { background: var(--bg3); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 .msg-md pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; overflow-x: auto; }
 .msg-md h1, .msg-md h2, .msg-md h3 { margin: 10px 0 6px; font-size: 14px; }
+
+/* KG feature-parity additions */
+.kg-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: 13px; pointer-events: none; padding: 20px; text-align: center;
+}
+.kg-tip-rels { list-style: none; margin: 6px 0 0; padding: 0; font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
+.kg-tip-rels li span { font-weight: 600; }
