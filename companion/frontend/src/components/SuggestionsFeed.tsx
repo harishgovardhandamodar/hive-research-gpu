@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { EmptyState } from "./ui";
+import { toast } from "../lib/toast";
 import type { AutonomyMode, Suggestion } from "../types";
 
 export function SuggestionsFeed() {
@@ -27,10 +29,12 @@ export function SuggestionsFeed() {
 
   const accept = async (id: string) => {
     await api.acceptSuggestion(id, mode);
+    toast("suggestion accepted — plan launched");
     await refresh();
   };
   const reject = async (id: string) => {
     await api.rejectSuggestion(id);
+    toast("suggestion dismissed", "info");
     await refresh();
   };
 
@@ -48,7 +52,7 @@ export function SuggestionsFeed() {
         </select>
       </div>
       {items.length === 0 && (
-        <p className="empty">No open suggestions. The companion watches your library state in the background and will speak up when something needs attention.</p>
+        <EmptyState hint="No open suggestions. The companion watches your library state in the background and will speak up when something needs attention." />
       )}
       {items.map((s) => (
         <div key={s.id} className="suggestion-card">

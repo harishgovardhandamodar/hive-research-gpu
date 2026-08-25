@@ -6,6 +6,7 @@ export interface PulseSnapshot {
   plans_running: number;
   approvals_pending: number;
   suggestions_open: number;
+  ingest_failures: number;
   fox_jobs: { id: string; status: string; stage: string; progress: number }[];
   hive_jobs: { label: string; status: string }[];
   episodes: number;
@@ -18,6 +19,7 @@ const EMPTY: PulseSnapshot = {
   plans_running: 0,
   approvals_pending: 0,
   suggestions_open: 0,
+  ingest_failures: 0,
   fox_jobs: [],
   hive_jobs: [],
   episodes: 0,
@@ -55,13 +57,20 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refreshNow();
-    const t = setInterval(() => void refreshNow(), 5000);
+    let t: ReturnType<typeof setInterval> | null = setInterval(() => void refreshNow(), 5000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refreshNow();
+      if (document.visibilityState === "visible") {
+        void refreshNow();
+        // resume polling only while the tab is actually open
+        if (t === null) t = setInterval(() => void refreshNow(), 5000);
+      } else if (t !== null) {
+        clearInterval(t);
+        t = null;
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      clearInterval(t);
+      if (t !== null) clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refreshNow]);

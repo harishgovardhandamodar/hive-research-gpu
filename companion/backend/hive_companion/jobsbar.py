@@ -39,6 +39,7 @@ async def collect(
     approvals_pending: int,
     suggestions_open: int,
     fox_step_episodes: list[dict[str, Any]],
+    ingest_failures: int = 0,
 ) -> dict[str, Any]:
     """Best-effort snapshot; never raises — the bar must stay alive."""
     hive_ok = True
@@ -76,6 +77,7 @@ async def collect(
         "plans_running": plans_by_status.get("running", 0),
         "approvals_pending": approvals_pending,
         "suggestions_open": suggestions_open,
+        "ingest_failures": ingest_failures,
         "hive_jobs": hive_jobs,
         "fox_jobs": fox_jobs,
     }

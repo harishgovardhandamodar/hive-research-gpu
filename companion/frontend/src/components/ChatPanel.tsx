@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, req } from "../api";
 import type { ChatMessage } from "../types";
 
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
@@ -31,7 +31,20 @@ export function ChatPanel() {
   const [mode, setMode] = useState(initial.mode);
   const [conversationId, setConversationId] = useState<string | null>(initial.conversationId);
   const [busy, setBusy] = useState(false);
+  const [modes, setModes] = useState<string[]>(FOX_MODES);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // hive may expose different fox modes; fall back to the known list
+    req<{ modes?: unknown[] }>("/api/fox/modes")
+      .then((d) => {
+        const list = (d.modes ?? [])
+          .map((m) => (typeof m === "string" ? m : typeof m === "object" && m !== null && "name" in m ? String((m as { name: unknown }).name) : ""))
+          .filter(Boolean);
+        if (list.length) setModes(list);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     try {
@@ -97,7 +110,7 @@ export function ChatPanel() {
           Fox Chat
         </h2>
         <select value={mode} onChange={(e) => setMode(e.target.value)} title="Fox reasoning mode">
-          {FOX_MODES.map((m) => (
+          {modes.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>

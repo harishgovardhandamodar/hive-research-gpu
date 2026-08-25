@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { loadArtifact, type LoadedArtifact } from "../lib/artifactView";
+import { usePolling } from "../hooks/usePolling";
+import { EmptyState, ErrorNote } from "./ui";
 import type { ArtifactNode, RelatedSubgraph } from "../types";
 
 /** Static radial mini-graph: seeds left, keywords center, related papers right. */
@@ -312,11 +314,7 @@ export function Explorer() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 20000);
-    return () => clearInterval(t);
-  }, [refresh]);
+  usePolling(refresh, 20000);
 
   const searching = query.trim().length > 0;
   const children = useMemo(() => {
@@ -351,15 +349,14 @@ export function Explorer() {
           ))
         ) : loadError ? (
           <li className="empty">
-            vault unavailable: {loadError}
-            <button className="ghost" style={{ marginLeft: 8 }} onClick={() => void refresh()}>retry</button>
+            <ErrorNote message={`vault unavailable: ${loadError}`} onRetry={() => void refresh()} />
           </li>
         ) : root?.children?.length && searching ? (
-          <li className="empty">{`no matches for "${query}"`}</li>
+          <EmptyState as="li" hint={`no matches for "${query}"`} />
         ) : root?.children && root.children.length === 0 ? (
-          <li className="empty">vault is empty — import papers to generate notes and figures</li>
+          <EmptyState as="li" hint="vault is empty — import papers to generate notes and figures" />
         ) : (
-          <li className="empty">loading vault…</li>
+          <EmptyState as="li" skeleton />
         )}
       </ul>
       <ArtifactViewer loaded={loaded} busy={busy} onClose={() => setLoaded(null)} />

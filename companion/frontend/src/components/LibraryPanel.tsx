@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
+import { EmptyState } from "./ui";
 import type { CompareEdge, LibraryHit } from "../types";
 import { useArtifactOpener, ArtifactViewer } from "./Explorer";
 
@@ -83,7 +84,7 @@ export function LibraryPanel() {
       )}
       <ul className="pool-list">
         {hits === null && (
-          <li className="empty">Search across ingested papers. Results link straight to their vault notes.</li>
+          <EmptyState as="li" hint="Search across ingested papers. Results link straight to their vault notes." />
         )}
         {hits?.length === 0 && !loadError && <li className="empty">No matches in your library.</li>}
         {loadError && (

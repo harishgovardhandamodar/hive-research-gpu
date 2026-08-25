@@ -31,24 +31,47 @@ def _tokenize(text: str) -> set[str]:
 
 
 class EpisodeStore:
+    """Append-only episodic memory.
+
+    The file is kept bounded (compacted to the most recent MAX_EPISODES on
+    load) and parsed lines are cached in memory, so the statusbar's frequent
+    `recent()` calls don't re-read and re-parse a growing JSONL every few
+    seconds.
+    """
+
+    MAX_EPISODES = 5000
+
     def __init__(self, data_dir: Path) -> None:
         self.path = data_dir / "episodes.jsonl"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._tail: list[dict[str, Any]] | None = None  # parsed cache of the file
 
     def _load(self) -> list[dict[str, Any]]:
-        if not self.path.exists():
-            return []
-        episodes = []
-        with open(self.path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    episodes.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+        if self._tail is not None:
+            return self._tail
+        episodes: list[dict[str, Any]] = []
+        if self.path.exists():
+            with open(self.path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        episodes.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        if len(episodes) > self.MAX_EPISODES:
+            episodes = episodes[-self.MAX_EPISODES:]
+            try:
+                tmp = self.path.with_suffix(".tmp")
+                with open(tmp, "w") as f:
+                    for ep in episodes:
+                        f.write(json.dumps(ep) + "\n")
+                os.replace(tmp, self.path)
+            except OSError:
+                pass  # keep serving from memory even if compaction fails
+        self._tail = episodes
         return episodes
 
     def append(self, kind: str, summary: str, session_id: str = "", goal_id: str = "", **context: Any) -> dict[str, Any]:
@@ -64,6 +87,10 @@ class EpisodeStore:
         with self._lock:
             with open(self.path, "a") as f:
                 f.write(json.dumps(episode) + "\n")
+            if self._tail is not None:
+                self._tail.append(episode)
+                if len(self._tail) > self.MAX_EPISODES:
+                    self._tail = self._tail[-self.MAX_EPISODES:]
         logger.info("episode %s: %s", kind, episode["summary"][:80])
         return episode
 
@@ -76,10 +103,16 @@ class EpisodeStore:
         return episodes[-limit:]
 
     def retrieve(self, query: str, limit: int = 8, kinds: list[str] | None = None) -> list[dict[str, Any]]:
-        """Keyword-overlap retrieval over summary + context, newest first."""
+        """Keyword retrieval with mild recency bias, newest first.
+
+        Raw overlap alone lets years-old episodes crowd out recent, more
+        relevant ones in planner/chat context; a half-life decay keeps them
+        findable but not dominant.
+        """
         q_tokens = _tokenize(query)
         if not q_tokens:
             return []
+        now = datetime.now(timezone.utc)
         scored: list[tuple[float, dict[str, Any]]] = []
         for ep in self._load():
             if kinds and ep["kind"] not in kinds:
@@ -91,7 +124,12 @@ class EpisodeStore:
             overlap = len(q_tokens & tokens)
             if overlap == 0:
                 continue
-            score = overlap / (len(q_tokens) ** 0.5)
+            try:
+                age_days = max(0.0, (now - datetime.fromisoformat(ep["ts"])).total_seconds() / 86400)
+            except (KeyError, TypeError, ValueError):
+                age_days = 0.0
+            recency = 0.5 ** (age_days / 30.0)  # half-life: 30 days
+            score = (overlap / (len(q_tokens) ** 0.5)) * (0.5 + 0.5 * recency)
             scored.append((score, ep))
         scored.sort(key=lambda pair: (pair[0], pair[1]["ts"]))
         return [ep for _, ep in reversed(scored[-limit:])]

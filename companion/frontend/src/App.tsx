@@ -20,9 +20,31 @@ import { SchedulesPanel } from "./components/SchedulesPanel";
 import { IdeasPanel } from "./components/IdeasPanel";
 import { DeepIdeasPanel } from "./components/DeepIdeasPanel";
 import { AgentsPanel } from "./components/AgentsPanel";
+import { Toaster } from "./lib/toast";
 
 const MemoPlanCard = memo(PlanCard);
 const MemoApprovalInbox = memo(ApprovalInbox);
+
+type CenterTab = "chat" | "agents" | "discover" | "ideas" | "deepideas" | "library";
+
+/** Workspace tabs — add an entry here to extend the center column. */
+const TABS: { id: CenterTab; label: string }[] = [
+  { id: "chat", label: "Fox Chat" },
+  { id: "agents", label: "🤖 Agents" },
+  { id: "discover", label: "Discover" },
+  { id: "ideas", label: "💡 IDEAgent" },
+  { id: "deepideas", label: "🕸 Deep Ideation" },
+  { id: "library", label: "Library" },
+];
+
+const TAB_COMPONENTS: Record<CenterTab, () => JSX.Element> = {
+  chat: ChatPanel,
+  agents: AgentsPanel,
+  discover: DiscoverPanel,
+  ideas: IdeasPanel,
+  deepideas: DeepIdeasPanel,
+  library: LibraryPanel,
+};
 
 function GlobalProgress() {
   const { snap } = usePulse();
@@ -67,8 +89,20 @@ export default function App() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showKG, setShowKG] = useState(false);
-  const [centerTab, setCenterTab] = useState<"chat" | "discover" | "ideas" | "deepideas" | "library" | "agents">("chat");
+  const [centerTab, setCenterTab] = useState<CenterTab>("chat");
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    (localStorage.getItem("fox-theme") as "light" | null) === "light" ? "light" : "dark",
+  );
   const plansRef = useRef<Map<string, Plan>>(new Map());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("fox-theme", theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
 
   const layout = useLayout();
 
@@ -187,13 +221,20 @@ export default function App() {
           </h1>
           <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
           {state && <StatusBar state={state} />}
-          <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph">
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            title="Switch color theme"
+          >
+            {theme === "dark" ? "☀ light" : "☾ dark"}
+          </button>
+          <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph" aria-label="Open knowledge graph">
             ⬡ Knowledge Graph
           </button>
         </header>
         <GlobalProgress />
         {error && (
-          <div className="banner error">
+          <div className="banner error" role="alert">
             <span>{error}</span>
             <button className="ghost" onClick={() => setError(null)} title="Dismiss">✕</button>
           </div>
@@ -235,13 +276,19 @@ export default function App() {
           {/* ── workspace ── */}
           <section className="col col-chat" style={{ width: `${ly.centerPct}%` }}>
             <div className="col-head">
-              <div className="center-tabs">
-                <button className={centerTab === "chat" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("chat")}>Fox Chat</button>
-                <button className={centerTab === "agents" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("agents")}>🤖 Agents</button>
-                <button className={centerTab === "discover" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("discover")}>Discover</button>
-                <button className={centerTab === "ideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("ideas")}>💡 IDEAgent</button>
-                <button className={centerTab === "deepideas" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("deepideas")}>🕸 Deep Ideation</button>
-                <button className={centerTab === "library" ? "tabbtn active" : "tabbtn"} onClick={() => setCenterTab("library")}>Library</button>
+              <div className="center-tabs" role="tablist" aria-label="Workspace sections">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    role="tab"
+                    aria-selected={centerTab === t.id}
+                    tabIndex={centerTab === t.id ? 0 : -1}
+                    className={centerTab === t.id ? "tabbtn active" : "tabbtn"}
+                    onClick={() => setCenterTab(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
               {(ly.collapsedLeft || ly.collapsedRight) && (
                 <button className="col-collapse" onClick={ly.collapsedLeft ? toggleLeft : toggleRight} title="Expand side panel">
@@ -250,12 +297,10 @@ export default function App() {
               )}
             </div>
             <div className="col-body">
-              {centerTab === "chat" && <ChatPanel />}
-              {centerTab === "agents" && <AgentsPanel />}
-              {centerTab === "discover" && <DiscoverPanel />}
-              {centerTab === "ideas" && <IdeasPanel />}
-              {centerTab === "deepideas" && <DeepIdeasPanel />}
-              {centerTab === "library" && <LibraryPanel />}
+              {(() => {
+                const Panel = TAB_COMPONENTS[centerTab];
+                return <Panel />;
+              })()}
             </div>
           </section>
 
@@ -293,6 +338,7 @@ export default function App() {
         </footer>
         {showKG && <KnowledgeGraph onClose={() => setShowKG(false)} />}
         <JobsBar />
+        <Toaster />
       </div>
     </PulseProvider>
   );

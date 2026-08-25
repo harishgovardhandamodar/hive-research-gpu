@@ -58,7 +58,12 @@ export function GoalComposer({
             </option>
           ))}
         </select>
-        <button onClick={() => void submit()} disabled={busy} className={busy ? "btn-busy" : ""}>
+        <button
+          onClick={() => void submit()}
+          disabled={busy || goal.trim().length < 3}
+          title={goal.trim().length < 3 ? "describe the goal (at least 3 characters)" : undefined}
+          className={busy ? "btn-busy" : ""}
+        >
           {busy ? (
             <>
               <span className="spinner" aria-hidden /> planning…
@@ -68,7 +73,7 @@ export function GoalComposer({
           )}
         </button>
       </div>
-      <p className="hint">{MODE_HELP[mode]}</p>
+      <p className="hint">{goal.trim().length > 0 && goal.trim().length < 3 ? "keep typing — goals need at least 3 characters" : MODE_HELP[mode]}</p>
     </div>
   );
 }

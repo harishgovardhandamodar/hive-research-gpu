@@ -16,7 +16,11 @@ def _key(arxiv_id: str, authors: str, year: str) -> str:
         first = _clean(authors).split(",")[0].split("and")[0].strip().split()
         if first:
             first_surname = first[-1].lower()
-    return f"{first_surname}{year}{arxiv_id.split('v')[0].replace('.', '')}"
+    # bibtex keys should stay alphanumeric; "n.d." years and unicode names
+    # would otherwise leak dots/spaces into the key
+    year_part = re.sub(r"[^a-zA-Z0-9]", "", year) or "nd"
+    ident = re.sub(r"[^a-zA-Z0-9]", "", arxiv_id.split("v")[0])
+    return f"{first_surname}{year_part}{ident}"
 
 
 def bibtex(arxiv_id: str, title: str, authors: str, published: str) -> str:

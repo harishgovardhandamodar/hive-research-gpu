@@ -876,12 +876,22 @@ async def refresh_agents_from_fork() -> dict[str, Any]:
 
     Source: https://github.com/harishgovardhandamodar/ai-agent-papers
     """
-    from .agents_fork import FORK_URL, fetch_and_cache
+    from .agents_fork import FORK_URL, fetch_and_cache, load_cached
 
     try:
         result = await fetch_and_cache(state.settings.data_dir, url=FORK_URL)
     except Exception as exc:
-        raise HTTPException(500, f"fork fetch failed: {exc}") from exc
+        # offline / fork unreachable: keep serving the last cached catalog
+        cached = load_cached(state.settings.data_dir)
+        if not cached:
+            raise HTTPException(502, f"fork fetch failed and no cache exists: {exc}") from exc
+        return {
+            "fetched_at": 0,
+            "count": len(cached),
+            "agents": cached,
+            "source": "cache",
+            "warning": f"fetch failed, serving cached agents: {str(exc)[:200]}",
+        }
     return {
         "source": result["source"],
         "count": result["count"],
@@ -989,6 +999,7 @@ async def status_bar() -> dict[str, Any]:
         approvals_pending=len(state.approvals.pending()),
         suggestions_open=len(state.suggestions.open()),
         fox_step_episodes=state.episodes.recent(kind="step", limit=300),
+        ingest_failures=state.ingest_failures.count(),
     )
     snapshot["episodes"] = state.episodes.stats()["count"]
     snapshot["last_scan"] = state.proactive.last_cycle.get("at")

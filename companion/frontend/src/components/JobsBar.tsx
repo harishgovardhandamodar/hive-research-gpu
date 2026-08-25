@@ -23,6 +23,11 @@ export function JobsBar() {
         <span className="jb-item" title="open proactive suggestions">
           ◆ {snap.suggestions_open} suggestions
         </span>
+        {snap.ingest_failures > 0 && (
+          <a href="#discover" className="jb-item jb-warn" title="failed ingestions — see Discover to rerun">
+            ✖ {snap.ingest_failures} failed
+          </a>
+        )}
       </div>
       <div className="jb-group jb-center">
         {hasPlans ? (

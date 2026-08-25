@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import type { IngestFailure } from "../types";
-
-interface PoolPaper {
-  arxiv_id: string;
-  title: string;
-  authors: string;
-  published: string;
-  abstract: string;
-  topics: string[];
-  imported: boolean;
-}
+import type { IngestFailure, PoolPaper } from "../types";
+import { usePolling } from "../hooks/usePolling";
+import { toast } from "../lib/toast";
 
 export function DiscoverPanel() {
   const [topics, setTopics] = useState<string[]>([]);
@@ -36,22 +28,20 @@ export function DiscoverPanel() {
     }
   }, []);
 
+  usePolling(refresh, 30000);
+
+  // pool papers flip to "in library" as import plans finish — refresh on ws activity
   useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 30000);
-    // pool papers flip to "in library" as import plans finish — refresh on ws activity
     const onChange = () => setTimeout(refresh, 400);
     window.addEventListener("plans-changed", onChange);
-    return () => {
-      clearInterval(t);
-      window.removeEventListener("plans-changed", onChange);
-    };
+    return () => window.removeEventListener("plans-changed", onChange);
   }, [refresh]);
 
   const doImport = async (arxivId: string) => {
     setImporting(arxivId);
     try {
       await api.importPoolPaper(arxivId, "tiered");
+      toast(`queued import of ${arxivId} — approve it in the inbox`);
       await refresh();
     } finally {
       setImporting(null);
@@ -62,6 +52,7 @@ export function DiscoverPanel() {
     setImporting(ids.join(","));
     try {
       await api.retryIngest(ids, "tiered");
+      toast(`queued rerun of ${ids.length} paper${ids.length > 1 ? "s" : ""}`);
       await refresh();
     } finally {
       setImporting(null);
