@@ -351,6 +351,18 @@ class IdeagentEngine:
             )
             content = await llm.chat(system=_JUDGE_SYSTEM, user=judge_user, json_mode=True, num_predict=300)
             data = _parse_json(content)
+            # self-consistency fallback: all-default scores mean the judge's
+            # output was unusable — take one more vote before settling
+            if not data or all(abs(_clamp(data, k) - 5.0) < 0.01 for k in ("novelty", "feasibility", "impact")):
+                retry = await llm.chat(
+                    system=_JUDGE_SYSTEM,
+                    user=judge_user + "\nScore decisively — do NOT default to 5. Use the full 0-10 range.",
+                    json_mode=True,
+                    num_predict=300,
+                )
+                data2 = _parse_json(retry)
+                if data2 and not all(abs(_clamp(data2, k) - 5.0) < 0.01 for k in ("novelty", "feasibility", "impact")):
+                    data = data2
             gen_scores.update({k: data.get(k, v) for k, v in gen_scores.items() if k in data or k == "verdict"})
         except Exception:
             pass  # generator's implicit mid scores stand

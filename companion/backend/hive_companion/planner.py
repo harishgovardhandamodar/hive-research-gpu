@@ -38,6 +38,7 @@ class Plan:
     steps: list[Step]
     planner: str = "heuristic"
     status: str = "ready"  # ready|running|done|failed|cancelled
+    created_by_agent: str = ""  # agent profile that shaped this plan
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -108,9 +109,58 @@ class Planner:
         if dropped:
             logger.info("dropped invalid steps: %s", dropped)
         plan = Plan(id=plan_id, goal_id="", goal=goal_text, steps=steps, planner=used)
+
+        # Tree-of-Thought lite: sample alternative drafts and keep the
+        # highest critic score instead of committing to the first attempt.
+        if used == "llm":
+            best_score, alternatives = None, []
+            for _ in range(self.BEST_OF_N - 1):
+                try:
+                    alt_raw = await self._plan_with_llm(goal_text, memory_context)
+                    alt, _d = _validate_steps(alt_raw, self.registry)
+                    if alt:
+                        alternatives.append(alt)
+                except Exception:
+                    continue
+            for alt in alternatives:
+                score = await self._score_plan(goal_text, alt)
+                if best_score is None or score > best_score[0]:
+                    best_score = (score, alt)
+            if best_score and alternatives:
+                current = await self._score_plan(goal_text, plan.steps)
+                if best_score[0] > current + 0.5:
+                    plan.steps = [
+                        Step(index=n, tool=s.tool, args=s.args, rationale=s.rationale)
+                        for n, s in enumerate(best_score[1])
+                    ]
+                    plan.planner = "llm-tot"
+                    logger.info("best-of-N: switched to higher-scored draft (%.1f > %.1f)", best_score[0], current)
+
         if used == "llm":
             await self._critique(plan)
         return plan
+
+    BEST_OF_N = 2  # total drafts considered (original + N-1 alternatives)
+
+    async def _score_plan(self, goal_text: str, steps: list) -> float:
+        """Critic score 0-10 for a candidate plan (0 when scoring unavailable)."""
+        if self.llm is None or not steps:
+            return 0.0
+        try:
+            listing = "\n".join(f"{i}: {s.tool} {json.dumps(s.args)[:80]}" for i, s in enumerate(steps))
+            content = await self.llm.chat(
+                system=(
+                    "Rate this research-agent plan for the given goal from 0 (useless) "
+                    'to 10 (excellent). Respond exactly as {"score": <number>}.'
+                ),
+                user=f"Goal: {goal_text}\nPlan:\n{listing}",
+                json_mode=True,
+                num_predict=40,
+            )
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            return float(json.loads(match.group(0)).get("score", 0)) if match else 0.0
+        except Exception:
+            return 0.0
 
     async def _critique(self, plan: Plan) -> None:
         """LLM-as-critic pre-flight: drop redundant/off-goal steps before execution.

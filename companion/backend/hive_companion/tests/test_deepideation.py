@@ -84,16 +84,23 @@ class TestDeepRun(unittest.TestCase):
             '{"dir":"continuous auditing"}',                        # forward
             json.dumps({"title": "Draft Idea", "summary": "s",
                         "mechanism": "audit trails", "builds_on": ["c1", "c2"]}),
+            "strongest objection: evaluation plan is thin",
             json.dumps({"critique": "too close to prior work",
                         "revised_title": "Revised Idea",
                         "revised_summary": "sharper s"}),
+            json.dumps({"critique": "round2: tighten threat model",
+                        "revised_title": "Revised Idea",
+                        "revised_summary": "even sharper s"}),
             json.dumps({"novelty": 8, "feasibility": 6, "impact": 7, "verdict": "solid"}),
             # second pair (c3 bridge)
             '{"principle":"delegation bounds"}',
             '{"dir":"policy learning"}',
             json.dumps({"title": "Second Idea", "summary": "s2", "mechanism": "m2"}),
+            "strongest objection: novelty marginal",
             json.dumps({"critique": "ok", "revised_title": "Second Idea",
                         "revised_summary": "s2"}),
+            json.dumps({"critique": "round2 ok", "revised_title": "Second Idea",
+                        "revised_summary": "s2 refined"}),
             json.dumps({"novelty": 5, "feasibility": 7, "impact": 6}),
         ]
         llm = ScriptedLLM(script)

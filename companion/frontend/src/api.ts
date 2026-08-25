@@ -15,6 +15,7 @@ import type {
   Schedule,
    CompareEdge,
    IngestFailure,
+   PlanTemplate,
  } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit & { quiet?: boolean }): Promise<T> {
@@ -129,6 +130,14 @@ export const api = {
       body: JSON.stringify({ message, mode, conversation_id: conversationId ?? undefined }),
     }),
   runProactive: () => req<{ created: Suggestion[] }>("/api/proactive/run", { method: "POST", body: "{}" }),
+  planTemplates: () => req<PlanTemplate[]>("/api/plans/templates"),
+  runPlanTemplate: (id: string, mode = "tiered") =>
+    req<Plan>(`/api/plans/templates/${id}/run`, {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
+  deletePlanTemplate: (id: string) =>
+    req<{ deleted: string }>(`/api/plans/templates/${id}`, { method: "DELETE" }),
 };
 
 export function connectWs(onEvent: (event: MessageEvent) => void): WebSocket {

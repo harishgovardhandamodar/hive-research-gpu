@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AutonomyMode } from "../types";
 import { AutonomySelect } from "./ui";
+import { api } from "../api";
+import { toast } from "../lib/toast";
+import type { PlanTemplate } from "../types";
 
 const MODE_HELP: Record<AutonomyMode, string> = {
   approve: "Every mutating step waits for your approval.",
@@ -18,6 +21,14 @@ export function GoalComposer({
   const [goal, setGoal] = useState("");
   const [mode, setMode] = useState<AutonomyMode>("tiered");
   const [busy, setBusy] = useState(false);
+  const [templates, setTemplates] = useState<PlanTemplate[]>([]);
+
+  useEffect(() => {
+    api
+      .planTemplates()
+      .then(setTemplates)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const onPrefill = (e: Event) => {
@@ -41,6 +52,30 @@ export function GoalComposer({
 
   return (
     <div className="composer">
+      {templates.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            const tpl = templates.find((t) => t.id === e.target.value);
+            if (tpl) {
+              setGoal(tpl.goal);
+              toast(`template loaded: ${tpl.goal.slice(0, 40)} (${tpl.uses} uses)`);
+            }
+            e.target.value = "";
+          }}
+          aria-label="load a saved workflow template"
+          title="re-run a saved successful workflow"
+        >
+          <option value="" disabled>
+            ▸ saved workflows ({templates.length})
+          </option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.goal.slice(0, 46)} · ×{t.uses}
+            </option>
+          ))}
+        </select>
+      )}
       <textarea
         value={goal}
         placeholder="What should the companion do? e.g. 'survey recent work on graph neural networks' or 'improve notes I rated poorly'"

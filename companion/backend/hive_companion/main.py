@@ -35,6 +35,7 @@ from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
 from .policy import ReinforcementPolicy
+from .plan_templates import TemplateStore
 from .proactive import ProactiveEngine, SuggestionStore
 from .settings import load_settings
 from .timeline import build_timeline
@@ -89,6 +90,7 @@ class CompanionApp:
             on_iteration=lambda run: self._persist_deep_runs(),
         )
         self.agents = AgentSelectionStore(self.settings.data_dir / "agent_selection.json")
+        self.templates = TemplateStore(self.settings.data_dir)
         self.schedules = ScheduleStore(self.settings.data_dir)
         self.scheduler = GoalScheduler(
             self.schedules,
@@ -220,6 +222,11 @@ class CompanionApp:
         goal_id = goal_episode["id"]
         if plan is None:
             memory_context = self.episodes.context_for_prompt(goal_text)
+            # experience replay: surface the closest past workflow as a seed
+            similar = self.episodes.retrieve(goal_text, limit=3, kinds=["observation"])
+            replay = [e["summary"] for e in similar if "finished: status=done" in e.get("summary", "")]
+            if replay:
+                memory_context += "\nSimilar past workflow that succeeded:\n" + replay[0][:200]
             # agent-profile conditioning: enabled research agents bias the planner
             try:
                 selected_ids = self.agents.get()
@@ -235,6 +242,14 @@ class CompanionApp:
                 logger.debug("agent-profile context unavailable", exc_info=True)
             plan = await self.planner.build(goal_text, memory_context=memory_context)
             plan.goal_id = goal_id
+            try:
+                selected_ids = self.agents.get()
+                if selected_ids:
+                    profile = next((a for a in catalog_dicts() if a["id"] == selected_ids[0]), None)
+                    if profile:
+                        plan.created_by_agent = str(profile.get("name", ""))[:60]
+            except Exception:
+                pass
             if success_criteria:
                 setattr(plan, "verdict_criteria", success_criteria)
         self.plans[plan.id] = plan
@@ -252,6 +267,17 @@ class CompanionApp:
                         if not event.get("ok") and self.llm is not None:
                             asyncio.create_task(self._reflect_on_failure(plan, event))
                 self._persist_plan_final(plan)
+                if plan.status == "done" and plan.planner in ("llm", "llm-tot"):
+                    try:
+                        agent = getattr(plan, "created_by_agent", "") or (self.agents.get() or [""])[0]
+                        self.templates.save(
+                            plan.goal,
+                            [{"tool": st.tool, "args": st.args} for st in plan.steps],
+                            plan.planner,
+                            agent,
+                        )
+                    except Exception:
+                        logger.debug("template save failed", exc_info=True)
             except Exception:
                 logger.exception("plan %s crashed", plan.id)
 
@@ -414,6 +440,45 @@ async def get_tools() -> list[dict[str, Any]]:
 async def create_goal(req: GoalRequest) -> dict[str, Any]:
     plan = await state.launch_plan(req.goal.strip(), req.mode, success_criteria=req.success_criteria.strip())
     return plan.to_dict()
+
+
+class TemplateRunRequest(BaseModel):
+    mode: str = "tiered"
+
+
+@app.get("/api/plans/templates")
+async def list_templates() -> list[dict[str, Any]]:
+    return state.templates.items()
+
+
+@app.post("/api/plans/templates/{template_id}/run")
+async def run_template(template_id: str, req: TemplateRunRequest) -> dict[str, Any]:
+    """Case-based reasoning: re-run a saved successful workflow."""
+    tpl = state.templates.get(template_id)
+    if not tpl:
+        raise HTTPException(404, "template not found")
+    from .planner import Step
+
+    plan = Plan(
+        id=uuid.uuid4().hex[:12],
+        goal_id="",
+        goal=tpl["goal"],
+        steps=[
+            Step(index=n, tool=st["tool"], args=st.get("args", {}), rationale=f"from template {tpl['id']}")
+            for n, st in enumerate(tpl["steps"])
+        ],
+        planner="template",
+    )
+    launched = await state.launch_plan(tpl["goal"], req.mode, plan=plan)
+    state.templates.save(tpl["goal"], tpl["steps"], tpl["planner"], tpl.get("agent", ""))
+    return launched.to_dict()
+
+
+@app.delete("/api/plans/templates/{template_id}")
+async def delete_template(template_id: str) -> dict[str, Any]:
+    if not state.templates.delete(template_id):
+        raise HTTPException(404, "template not found")
+    return {"deleted": template_id}
 
 
 @app.get("/api/plans")

@@ -156,6 +156,15 @@ export interface PoolPaper {
   imported: boolean;
 }
 
+export interface PlanTemplate {
+  id: string;
+  goal: string;
+  steps: { tool: string; args: Record<string, unknown> }[];
+  planner: string;
+  agent?: string;
+  uses: number;
+}
+
 export interface IngestFailure {
   arxiv_id: string;
   title?: string;

@@ -254,7 +254,18 @@ class PlanExecutor:
 
             gated: list[tuple[Step, Any]] = []
             for step in batch:
-                decision = gate(self._modes.get(plan.id, mode), self.registry.is_mutating(step.tool))
+                mutates = self.registry.is_mutating(step.tool)
+                decision = gate(self._modes.get(plan.id, mode), mutates)
+                if decision == "wait_approval" and mode is not AutonomyMode.APPROVE and self.policy.trust(step.tool):
+                    # earned autonomy: long success history on this exact tool
+                    # buys it a pass under tiered mode (never under approve)
+                    self.episodes.append(
+                        "step",
+                        f"{step.tool} auto-approved — earned autonomy (trusted tool history)",
+                        session_id=session_id, goal_id=goal_id, plan_id=plan.id,
+                        tool=step.tool, status="auto",
+                    )
+                    decision = "run"
                 if decision == "wait_approval":
                     gated.append((step, None))
                 else:

@@ -337,6 +337,22 @@ class DeepIdeationEngine:
             "revisions": 0,
         }
 
+        # multi-agent debate: an adversary makes the strongest case against
+        # the draft before refinement — the critic then must answer it
+        try:
+            objection = await llm.chat(
+                system=(
+                    "You are a skeptical reviewer. In at most 3 sentences, deliver the "
+                    "single strongest technical objection to this research idea "
+                    "(feasibility, novelty, or evaluation). No pleasantries."
+                ),
+                user=f"{idea['title']}\n{idea['summary']}",
+                num_predict=160,
+            )
+            idea["adversarial_objection"] = objection.strip()[:300]
+        except Exception:
+            objection = ""
+
         # recursive refinement: novelty check against the library, then revise
         for round_no in range(1, run.depth + 1):
             hits: list[str] = []
@@ -351,6 +367,7 @@ class DeepIdeationEngine:
             critique_user = (
                 f"Idea draft: {idea['title']}\n{idea['summary']}\n"
                 + (f"Similar existing work in the library:\n" + "\n".join(f"- {h}" for h in hits) + "\n" if hits else "No close matches surfaced from the library.\n")
+                + (f"A reviewer's strongest objection you MUST address:\n{objection}\n" if objection else "")
                 + f"This is refinement round {round_no} of {run.depth}. Strengthen the weakest novelty claim."
             )
             try:
