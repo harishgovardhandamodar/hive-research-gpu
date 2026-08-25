@@ -17,7 +17,7 @@ import type {
    IngestFailure,
  } from "./types";
 
-export async function req<T>(path: string, init?: RequestInit): Promise<T> {
+export async function req<T>(path: string, init?: RequestInit & { quiet?: boolean }): Promise<T> {
   const resp = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...init,
@@ -25,8 +25,10 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (!resp.ok) {
     const body = await resp.text();
     const message = `${resp.status}: ${body.slice(0, 200)}`;
-    // surface failures globally — panels may swallow them locally
-    window.dispatchEvent(new CustomEvent("api-error", { detail: { path, message } }));
+    // surface failures globally unless the caller opts out (best-effort calls)
+    if (!init?.quiet) {
+      window.dispatchEvent(new CustomEvent("api-error", { detail: { path, message } }));
+    }
     throw new Error(message);
   }
   return resp.json() as Promise<T>;

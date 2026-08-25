@@ -14,9 +14,37 @@ interface SimNode {
   vy: number;
 }
 
-const PAPER_COLOR = "#6db3f2";
-const CONCEPT_COLOR = "#f0b429";
-const EDGE_COLOR = "rgba(139,150,168,0.25)";
+const PAPER_COLOR = "#60a5fa";
+const CONCEPT_COLOR = "#c084fc";
+
+// Same relation semantics as the hive research app's knowledge graph
+// (dashboard.html): each edge type gets its own color / width / dash.
+type RelStyle = { color: string; width: number; dash: number[] | null };
+const REL_COLORS: Record<string, RelStyle> = {
+  cites: { color: "#34d399", width: 1.8, dash: null },
+  extends: { color: "#c084fc", width: 1.6, dash: null },
+  improves: { color: "#22d3ee", width: 1.6, dash: null },
+  uses: { color: "#60a5fa", width: 1.3, dash: null },
+  introduces: { color: "#fbbf24", width: 1.4, dash: null },
+  proposes: { color: "#fbbf24", width: 1.2, dash: null },
+  compares: { color: "#f472b6", width: 1.1, dash: [3, 3] },
+  contrasts: { color: "#f87171", width: 1.2, dash: [3, 3] },
+  references: { color: "#64748b", width: 1, dash: [2, 3] },
+  nests: { color: "#a78bfa", width: 1.1, dash: null },
+  related_to: { color: "#334155", width: 0.9, dash: [2, 4] },
+};
+
+function relStyle(relation: string | undefined): RelStyle {
+  return REL_COLORS[relation ?? ""] ?? REL_COLORS.related_to;
+}
+
+/** On the light theme the navy default disappears — brighten it. */
+function themeEdgeColor(style: RelStyle): RelStyle {
+  if (document.documentElement.dataset.theme === "light" && style === REL_COLORS.related_to) {
+    return { ...style, color: "#94a3b8" };
+  }
+  return style;
+}
 
 function simulate(nodes: SimNode[], links: { source: string; target: string }[], width: number, height: number) {
   const index = new Map(nodes.map((n) => [n.id, n]));
@@ -86,9 +114,21 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [hover, setHover] = useState<SimNode | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverRef = useRef<SimNode | null>(null);
+  const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const simRef = useRef<SimNode[]>([]);
   const linkRef = useRef<{ source: string; target: string; relation: string }[]>([]);
+
+  // modal hygiene: Escape closes, search field gets focus on open
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    searchRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const loadFull = useCallback(async () => {
     try {
@@ -105,8 +145,8 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   }, [loadFull]);
 
   useEffect(() => {
-    if (!data || !canvasRef.current) return;
-    const canvas = canvasRef.current;
+    if (!data || !canvasRef) return;
+    const canvas = canvasRef;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     canvas.width = width * devicePixelRatio;
@@ -135,17 +175,22 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
       const pos = new Map(nodes.map((n) => [n.id, n]));
-      ctx.lineWidth = 0.6;
-      ctx.strokeStyle = EDGE_COLOR;
+      const h = hoverRef.current;
       for (const l of data.links) {
         const a = pos.get(l.source);
         const b = pos.get(l.target);
         if (!a || !b) continue;
+        const style = themeEdgeColor(relStyle(l.relation));
+        const touched = h && (l.source === h.id || l.target === h.id);
+        ctx.strokeStyle = touched ? "#f0b429" : style.color;
+        ctx.lineWidth = style.width * (touched ? 1.6 : 1);
+        ctx.setLineDash(style.dash ?? []);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
+      ctx.setLineDash([]);
       for (const n of nodes) {
         const isPaper = n.type === "paper";
         ctx.beginPath();
@@ -175,6 +220,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
           best = n;
         }
       }
+      hoverRef.current = best;
       setHover(best);
     };
     canvas.addEventListener("mousemove", onMove);
@@ -241,7 +287,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
           )}
         </div>
         <div className="kg-canvas-wrap">
-          <canvas ref={canvasRef} className="kg-canvas" />
+          <canvas ref={setCanvasRef} className="kg-canvas" />
           {hover && (
             <div className="kg-tooltip">
               <strong>{hover.label}</strong>
@@ -252,8 +298,10 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
           )}
           <div className="kg-legend">
             <span><i style={{ background: PAPER_COLOR }} /> papers</span>
-            <span><i style={{ background: CONCEPT_COLOR }} /> concepts / keywords</span>
-            <span>edges: related_to · cites · extends</span>
+            <span><i style={{ background: CONCEPT_COLOR }} /> concepts</span>
+            <span><i style={{ background: REL_COLORS.cites.color }} /> cites</span>
+            <span><i style={{ background: REL_COLORS.extends.color }} /> extends</span>
+            <span><i style={{ background: REL_COLORS.related_to.color }} /> related</span>
           </div>
         </div>
       </div>

@@ -219,18 +219,20 @@ export default function App() {
               <span className="brand-sub">for hive research</span>
             </span>
           </h1>
-          <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
           {state && <StatusBar state={state} />}
-          <button
-            className="theme-toggle"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            title="Switch color theme"
-          >
-            {theme === "dark" ? "☀ light" : "☾ dark"}
-          </button>
-          <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph" aria-label="Open knowledge graph">
-            ⬡ Knowledge Graph
-          </button>
+          <p className="tagline">agentic research workflow — episodic memory · proactive suggestions · reinforcement learning</p>
+          <div className="header-actions">
+            <button className="kg-open" onClick={() => setShowKG(true)} title="Explore the knowledge graph" aria-label="Open knowledge graph">
+              ⬡ Knowledge Graph
+            </button>
+            <button
+              className="theme-toggle"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              title="Switch color theme"
+            >
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
+          </div>
         </header>
         <GlobalProgress />
         {error && (

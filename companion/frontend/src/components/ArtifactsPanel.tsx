@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "../api";
 import type { ArtifactGroup } from "../types";
+import { usePolling } from "../hooks/usePolling";
+import { EmptyState } from "./ui";
 import { ArtifactViewer, useArtifactOpener } from "./Explorer";
 
 type SortKey = "recent" | "name";
@@ -19,11 +21,7 @@ export function ArtifactsPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 15000);
-    return () => clearInterval(t);
-  }, [refresh]);
+  usePolling(refresh, 15000);
 
   return (
     <div className="panel">
@@ -68,9 +66,7 @@ export function ArtifactsPanel() {
         ),
       )}
       {groups.every((g) => g.total === 0) && (
-        <p className="empty">
-          No artifacts yet. Approved surveys and digests land here as files in your vault.
-        </p>
+        <EmptyState hint="No artifacts yet. Approved surveys and digests land here as files in your vault." />
       )}
       <ArtifactViewer loaded={loaded} busy={busy} onClose={() => setLoaded(null)} />
     </div>

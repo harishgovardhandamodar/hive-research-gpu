@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { usePolling } from "../hooks/usePolling";
+import { ArgsView } from "./ui";
 import type { Approval } from "../types";
 
 export function ApprovalInbox({ onChanged }: { onChanged: () => void }) {
@@ -13,19 +15,15 @@ export function ApprovalInbox({ onChanged }: { onChanged: () => void }) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 4000);
-    return () => clearInterval(t);
-  }, [refresh]);
+  usePolling(refresh, 4000);
 
+  // instant refresh when a step pauses for approval (App dispatches this on
+  // every plan event — the old "ws-event" listener here never fired because
+  // nothing published that event)
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.type === "awaiting_approval") refresh();
-    };
-    window.addEventListener("ws-event", handler);
-    return () => window.removeEventListener("ws-event", handler);
+    const handler = () => setTimeout(refresh, 300);
+    window.addEventListener("plans-changed", handler);
+    return () => window.removeEventListener("plans-changed", handler);
   }, [refresh]);
 
   const decide = async (id: string, approved: boolean) => {
@@ -45,7 +43,7 @@ export function ApprovalInbox({ onChanged }: { onChanged: () => void }) {
         <div key={a.id} className="approval-card">
           <code>{a.tool}</code>
           {a.rationale && <p>{a.rationale}</p>}
-          <pre className="args">{JSON.stringify(a.args)}</pre>
+          <ArgsView args={a.args} />
           <div className="composer-row">
             <button className="ok" onClick={() => void decide(a.id, true)}>
               approve

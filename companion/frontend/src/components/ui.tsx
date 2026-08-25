@@ -55,3 +55,19 @@ export function Pill({ kind, title, children }: { kind?: string; title?: string;
     </span>
   );
 }
+
+/** Tool arguments as readable key/value chips instead of a raw JSON dump. */
+export function ArgsView({ args }: { args: Record<string, unknown> }) {
+  const entries = Object.entries(args);
+  if (entries.length === 0) return null;
+  return (
+    <span className="args-chips">
+      {entries.map(([k, v]) => (
+        <code key={k} className="arg-chip" title={`${k}: ${String(v)}`}>
+          {k}={String(v).slice(0, 40)}
+          {String(v).length > 40 ? "…" : ""}
+        </code>
+      ))}
+    </span>
+  );
+}

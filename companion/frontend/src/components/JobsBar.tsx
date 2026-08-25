@@ -1,10 +1,9 @@
 import { usePulse } from "../hooks/usePulse";
+import { timeAgo } from "../lib/time";
 
 export function JobsBar() {
   const { snap } = usePulse();
-  const scanAgo = snap.last_scan
-    ? Math.max(1, Math.round((Date.now() - new Date(snap.last_scan).getTime()) / 60000))
-    : null;
+  const scanAgo = timeAgo(snap.last_scan);
 
   const hasPlans = snap.plan_progress.length > 0;
 
@@ -63,7 +62,7 @@ export function JobsBar() {
       <div className="jb-group">
         <span className="stat" title="episodic memory records">{snap.episodes} episodes</span>
         <span className="stat" title="last proactive signal scan">
-          scanned {scanAgo !== null ? `${scanAgo}m ago` : "—"}
+          scanned {scanAgo}
         </span>
       </div>
     </footer>

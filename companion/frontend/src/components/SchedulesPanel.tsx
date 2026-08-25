@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "../api";
+import { usePolling } from "../hooks/usePolling";
+import { toast } from "../lib/toast";
 import type { Schedule } from "../types";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -19,14 +21,21 @@ export function SchedulesPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  usePolling(refresh, 60000);
 
   const add = async () => {
     if (goal.trim().length < 5) return;
     await api.addSchedule(goal.trim(), mode, cadence, weekday);
     setGoal("");
+    toast("schedule created");
+    await refresh();
+  };
+
+  const remove = async (id: string) => {
+    // destructive + irreversible: ask before cutting
+    if (!window.confirm("Delete this schedule?")) return;
+    await api.deleteSchedule(id);
+    toast("schedule deleted", "info");
     await refresh();
   };
 
@@ -74,7 +83,7 @@ export function SchedulesPanel() {
               <button className="ghost" onClick={() => void api.toggleSchedule(s.id).then(refresh)}>
                 {s.enabled ? "pause" : "resume"}
               </button>
-              <button className="bad ghost" onClick={() => void api.deleteSchedule(s.id).then(refresh)}>×</button>
+              <button className="bad ghost" onClick={() => void remove(s.id)} aria-label={`delete schedule ${s.goal.slice(0, 30)}`}>×</button>
             </div>
           </li>
         ))}

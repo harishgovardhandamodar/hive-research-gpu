@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, req } from "../api";
+import { marked } from "marked";
+import { toast } from "../lib/toast";
 import type { ChatMessage } from "../types";
+
+marked.setOptions({ breaks: true, gfm: true });
 
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
 const CHAT_STORAGE_KEY = "fox-chat-v1";
@@ -35,8 +39,9 @@ export function ChatPanel() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // hive may expose different fox modes; fall back to the known list
-    req<{ modes?: unknown[] }>("/api/fox/modes")
+    // hive may expose different fox modes; fall back to the known list.
+    // quiet: older hive builds 404 here — not worth the global error banner.
+    req<{ modes?: unknown[] }>("/api/fox/modes", { quiet: true })
       .then((d) => {
         const list = (d.modes ?? [])
           .map((m) => (typeof m === "string" ? m : typeof m === "object" && m !== null && "name" in m ? String((m as { name: unknown }).name) : ""))
@@ -128,7 +133,11 @@ export function ChatPanel() {
           <div key={i} className={`msg msg-${m.role}`}>
             {m.role === "assistant" && <img src="/fox-avatar.webp" alt="" className="msg-fox" width={18} height={18} onError={(e) => ((e.currentTarget.style.display = "none"))} />}
             <div className="msg-body">
-              <p className="msg-text">{m.text}</p>
+              {m.role === "assistant" ? (
+                <div className="msg-text msg-md" dangerouslySetInnerHTML={{ __html: marked.parse(m.text) as string }} />
+              ) : (
+                <p className="msg-text">{m.text}</p>
+              )}
               {m.memoryRecalled && m.memoryRecalled.length > 0 && (
                 <details className="memory">
                   <summary>recalled {m.memoryRecalled.length} episodes</summary>
@@ -169,6 +178,17 @@ export function ChatPanel() {
             }
           }}
         />
+        <button
+          className="ghost"
+          title="clear conversation"
+          onClick={() => {
+            setMessages([]);
+            setConversationId(null);
+            toast("conversation cleared", "info");
+          }}
+        >
+          ⌫ clear
+        </button>
         <button onClick={() => void send()} disabled={busy}>
           send
         </button>

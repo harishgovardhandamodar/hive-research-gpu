@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { AutonomyMode, Plan, Step } from "../types";
+import { ArgsView } from "./ui";
 
 const STATE_ICON: Record<Step["state"], string> = {
   pending: "·",
@@ -38,7 +39,19 @@ export function PlanCard({ plan, onModeSwitch }: { plan: Plan; onModeSwitch: () 
           <div className="plan-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>
       )}
-      <div className="plan-head" onClick={() => setOpen(!open)}>
+      <div
+        className="plan-head"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
+      >
         <span className={`chev ${open ? "up" : ""}`}>›</span>
         <span className="plan-goal">{plan.goal}</span>
         <span className="pill">{plan.planner}</span>
@@ -60,9 +73,7 @@ export function PlanCard({ plan, onModeSwitch }: { plan: Plan; onModeSwitch: () 
                 <div>
                   <code>{s.tool}</code>
                   {s.rationale && <p>{s.rationale}</p>}
-                  {Object.keys(s.args).length > 0 && (
-                    <pre className="args">{JSON.stringify(s.args)}</pre>
-                  )}
+                  <ArgsView args={s.args} />
                 </div>
               </li>
             ))}
