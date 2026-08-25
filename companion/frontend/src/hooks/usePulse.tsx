@@ -10,6 +10,7 @@ export interface PulseSnapshot {
   hive_jobs: { label: string; status: string }[];
   episodes: number;
   last_scan: string | null;
+  plan_progress: { id: string; goal: string; status: string; total: number; done: number; progress: number; current_tool: string; current_state: string }[];
 }
 
 const EMPTY: PulseSnapshot = {
@@ -21,6 +22,7 @@ const EMPTY: PulseSnapshot = {
   hive_jobs: [],
   episodes: 0,
   last_scan: null,
+  plan_progress: [],
 };
 
 interface PulseCtx {
@@ -42,7 +44,8 @@ export function PulseProvider({ children }: { children: React.ReactNode }) {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      setSnap(await req<PulseSnapshot>("/api/statusbar"));
+      const data = await req<PulseSnapshot & { plan_progress?: PulseSnapshot["plan_progress"] }>("/api/statusbar");
+      setSnap({ ...EMPTY, ...data, plan_progress: data.plan_progress ?? [] });
     } catch {
       /* keep last known */
     } finally {

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { api, connectWs } from "./api";
 import type { AppState, AutonomyMode, Plan } from "./types";
-import { PulseProvider } from "./hooks/usePulse";
+import { PulseProvider, usePulse } from "./hooks/usePulse";
 import { useLayout } from "./hooks/useLayout";
 import { StatusBar } from "./components/StatusBar";
 import { GoalComposer } from "./components/GoalComposer";
@@ -23,6 +23,18 @@ import { AgentsPanel } from "./components/AgentsPanel";
 
 const MemoPlanCard = memo(PlanCard);
 const MemoApprovalInbox = memo(ApprovalInbox);
+
+function GlobalProgress() {
+  const { snap } = usePulse();
+  if (snap.plan_progress.length === 0) return null;
+  const avg = snap.plan_progress.reduce((a, p) => a + p.progress, 0) / snap.plan_progress.length;
+  const pct = Math.round(avg * 100);
+  return (
+    <div className="global-progress" aria-label={`${snap.plan_progress.length} agentic tasks running, ${pct}% avg`}>
+      <div className="global-progress-fill" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
 
 function Gutter({
   id,
@@ -166,6 +178,7 @@ export default function App() {
             ⬡ Knowledge Graph
           </button>
         </header>
+        <GlobalProgress />
         {error && <div className="banner error">{error}</div>}
         <main className="columns" ref={containerRef}>
           {/* ── left rail (collapsed) ── */}

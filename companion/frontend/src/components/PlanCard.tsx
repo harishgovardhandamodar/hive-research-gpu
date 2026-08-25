@@ -26,21 +26,37 @@ export function PlanCard({ plan, onModeSwitch }: { plan: Plan; onModeSwitch: () 
   };
 
   const statusClass = ["failed", "done", "running"].includes(plan.status) ? `plan-${plan.status}` : "";
+  const total = plan.steps.length;
+  const done = plan.steps.filter((s) => ["done", "failed", "skipped"].includes(s.state)).length;
+  const runningIdx = plan.steps.findIndex((s) => s.state === "running" || s.state === "awaiting_approval");
+  const progress = total ? done / total : 0;
 
   return (
     <div className={`plan-card ${statusClass}`}>
+      {total > 0 && (
+        <div className="plan-progress" title={`${done}/${total} steps`}>
+          <div className="plan-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+      )}
       <div className="plan-head" onClick={() => setOpen(!open)}>
         <span className={`chev ${open ? "up" : ""}`}>›</span>
         <span className="plan-goal">{plan.goal}</span>
         <span className="pill">{plan.planner}</span>
-        <span className="pill">{plan.status}</span>
+        <span className={`pill pill-status status-${plan.status}`}>{plan.status}</span>
+        {plan.status === "running" && runningIdx >= 0 && (
+          <span className="pill pill-running" title={`step ${runningIdx + 1}/${total}: ${plan.steps[runningIdx].tool}`}>
+            <span className="spinner spinner-sm" aria-hidden /> {plan.steps[runningIdx].tool}
+          </span>
+        )}
       </div>
       {open && (
         <>
           <ol className="steps">
             {plan.steps.map((s) => (
               <li key={s.index} className={`step step-${s.state}`}>
-                <span className="step-icon">{STATE_ICON[s.state]}</span>
+                <span className="step-icon">
+                  {s.state === "running" ? <span className="spinner spinner-sm" aria-hidden /> : STATE_ICON[s.state]}
+                </span>
                 <div>
                   <code>{s.tool}</code>
                   {s.rationale && <p>{s.rationale}</p>}

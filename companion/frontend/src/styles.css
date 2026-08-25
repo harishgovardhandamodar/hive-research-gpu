@@ -444,3 +444,27 @@ button.ghost { background: transparent; }
 .agent-toggle input:checked + .toggle-track { background: rgba(240,180,41,.25); border-color: var(--accent); }
 .agent-toggle input:checked + .toggle-track::after { transform: translateX(16px); background: var(--accent); }
 .agent-sync-row { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+
+/* ── progress & spinners ── */
+.spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle; }
+.spinner-sm { width: 11px; height: 11px; border-width: 1.8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-busy { display: inline-flex; align-items: center; gap: 6px; }
+
+.plan-card { position: relative; overflow: hidden; }
+.plan-progress { height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin: -2px 0 8px; }
+.plan-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--ok)); border-radius: 2px; transition: width .4s ease; }
+.pill-status { text-transform: capitalize; }
+.status-running { color: var(--accent); border-color: var(--accent); }
+.status-done { color: var(--ok); border-color: var(--ok); }
+.status-failed { color: var(--bad); border-color: var(--bad); }
+.pill-running { display: inline-flex; align-items: center; gap: 4px; border-color: var(--accent); color: var(--accent); }
+
+.global-progress { height: 3px; background: transparent; }
+.global-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #f59e0b, var(--ok)); transition: width .5s ease; }
+
+.jb-plan { display: inline-flex; align-items: center; gap: 6px; max-width: 300px; }
+.jb-plan-goal { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.jb-progress { width: 60px; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.jb-progress-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease; }
+.jb-plan-meta { font-size: 10px; color: var(--dim); white-space: nowrap; }

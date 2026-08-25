@@ -44,6 +44,8 @@ export function GoalComposer({
         value={goal}
         placeholder="What should the companion do? e.g. 'survey recent work on graph neural networks' or 'improve notes I rated poorly'"
         onChange={(e) => setGoal(e.target.value)}
+        disabled={busy}
+        aria-busy={busy}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
         }}
@@ -56,8 +58,14 @@ export function GoalComposer({
             </option>
           ))}
         </select>
-        <button onClick={() => void submit()} disabled={busy}>
-          {busy ? "planning…" : "set goal"}
+        <button onClick={() => void submit()} disabled={busy} className={busy ? "btn-busy" : ""}>
+          {busy ? (
+            <>
+              <span className="spinner" aria-hidden /> planning…
+            </>
+          ) : (
+            "set goal"
+          )}
         </button>
       </div>
       <p className="hint">{MODE_HELP[mode]}</p>

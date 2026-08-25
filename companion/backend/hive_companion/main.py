@@ -887,9 +887,26 @@ async def similarity_route(body: dict[str, Any]) -> Any:
 @app.get("/api/statusbar")
 async def status_bar() -> dict[str, Any]:
     plans_by_status: dict[str, int] = {}
+    plan_progress: list[dict[str, Any]] = []
     for plan in state.plans.values():
         if plan.status in ("running", "ready"):
             plans_by_status["running"] = plans_by_status.get("running", 0) + 1
+            total = len(plan.steps)
+            done = sum(1 for s in plan.steps if s.state in ("done", "failed", "skipped"))
+            cur = next((s for s in plan.steps if s.state in ("running", "awaiting_approval")), None)
+            progress = (done / total) if total else 0
+            plan_progress.append(
+                {
+                    "id": plan.id,
+                    "goal": plan.goal[:80],
+                    "status": plan.status,
+                    "total": total,
+                    "done": done,
+                    "progress": round(progress, 3),
+                    "current_tool": cur.tool if cur else (plan.steps[done].tool if done < total else ""),
+                    "current_state": cur.state if cur else "pending",
+                }
+            )
     snapshot = await collect_statusbar(
         state.client,
         plans_by_status,
@@ -899,6 +916,7 @@ async def status_bar() -> dict[str, Any]:
     )
     snapshot["episodes"] = state.episodes.stats()["count"]
     snapshot["last_scan"] = state.proactive.last_cycle.get("at")
+    snapshot["plan_progress"] = plan_progress
     return snapshot
 
 
