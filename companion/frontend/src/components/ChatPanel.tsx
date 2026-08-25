@@ -60,7 +60,10 @@ export function ChatPanel() {
   return (
     <div className="chat">
       <div className="chat-head">
-        <h2>Fox Chat</h2>
+        <h2>
+          <img src="/fox-avatar.webp" alt="" className="chat-fox-icon" width={22} height={22} onError={(e) => ((e.currentTarget.style.display = "none"))} />
+          Fox Chat
+        </h2>
         <select value={mode} onChange={(e) => setMode(e.target.value)} title="Fox reasoning mode">
           {FOX_MODES.map((m) => (
             <option key={m} value={m}>
@@ -71,33 +74,39 @@ export function ChatPanel() {
       </div>
       <div className="chat-log">
         {messages.length === 0 && (
-          <p className="empty">Ask anything about your library. Answers are grounded in your notes and knowledge graph; every exchange becomes an episode the companion can recall.</p>
+          <div className="chat-empty">
+            <img src="/fox-avatar.webp" alt="Fox" className="chat-empty-fox" width={72} height={72} onError={(e) => ((e.currentTarget.style.display = "none"))} />
+            <p className="empty">Ask anything about your library. Answers are grounded in your notes and knowledge graph; every exchange becomes an episode the companion can recall.</p>
+          </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            <p className="msg-text">{m.text}</p>
-            {m.memoryRecalled && m.memoryRecalled.length > 0 && (
-              <details className="memory">
-                <summary>recalled {m.memoryRecalled.length} episodes</summary>
-                <ul>
-                  {m.memoryRecalled.map((e, j) => (
-                    <li key={j}>
-                      [{e.kind}] {e.summary}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {m.sources && m.sources.length > 0 && (
-              <details className="sources">
-                <summary>{m.sources.length} sources</summary>
-                <ul>
-                  {m.sources.map((s, j) => (
-                    <li key={j}>{s.title || s.paper_id}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            {m.role === "assistant" && <img src="/fox-avatar.webp" alt="" className="msg-fox" width={18} height={18} onError={(e) => ((e.currentTarget.style.display = "none"))} />}
+            <div className="msg-body">
+              <p className="msg-text">{m.text}</p>
+              {m.memoryRecalled && m.memoryRecalled.length > 0 && (
+                <details className="memory">
+                  <summary>recalled {m.memoryRecalled.length} episodes</summary>
+                  <ul>
+                    {m.memoryRecalled.map((e, j) => (
+                      <li key={j}>
+                        [{e.kind}] {e.summary}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {m.sources && m.sources.length > 0 && (
+                <details className="sources">
+                  <summary>{m.sources.length} sources</summary>
+                  <ul>
+                    {m.sources.map((s, j) => (
+                      <li key={j}>{s.title || s.paper_id}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
           </div>
         ))}
         {busy && <p className="typing">the fox is thinking…</p>}
