@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AutonomyMode } from "../types";
 
 const MODE_HELP: Record<AutonomyMode, string> = {
@@ -17,6 +17,15 @@ export function GoalComposer({
   const [goal, setGoal] = useState("");
   const [mode, setMode] = useState<AutonomyMode>("tiered");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (text) setGoal(text);
+    };
+    window.addEventListener("fox-prefill", onPrefill);
+    return () => window.removeEventListener("fox-prefill", onPrefill);
+  }, []);
 
   const submit = async () => {
     if (goal.trim().length < 3 || busy) return;

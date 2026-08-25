@@ -18,6 +18,7 @@ interface Agent {
   autonomy: string;
   tags: string[];
   enabled: boolean;
+  from_fork?: boolean;
 }
 
 const CATEGORY_ORDER = ["ideation", "experimentation", "writing"] as const;
@@ -38,16 +39,31 @@ export function AgentsPanel() {
   const [category, setCategory] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [forkExtra, setForkExtra] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await req<{ agents: Agent[]; selected_ids: string[]; categories: Record<string, string> }>("/api/agents");
+      const data = await req<{ agents: Agent[]; selected_ids: string[]; categories: Record<string, string>; fork_extra?: number }>("/api/agents");
       setAgents(data.agents);
       setSelected(data.selected_ids);
+      setForkExtra(data.fork_extra ?? 0);
     } catch {
       /* ignore */
     }
   }, []);
+
+  const syncFromFork = async () => {
+    setSyncing(true);
+    try {
+      await req<{ count: number }>("/api/agents/refresh", { method: "POST", body: "{}" });
+      await load();
+    } catch {
+      /* ignore */
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -113,12 +129,19 @@ export function AgentsPanel() {
           </span>
         </h2>
         <p className="hint">
-          Pick the agents that fit your workflow. Based on{" "}
-          <a href="https://github.com/masamasa59/ai-agent-papers/blob/main/applications/domain/ai-scientist.md" target="_blank" rel="noreferrer">
-            AI Scientist survey (masamasa59)
+          Pick the agents that fit your workflow. Curated from your fork{" "}
+          <a href="https://github.com/harishgovardhandamodar/ai-agent-papers/blob/main/applications/domain/ai-scientist.md" target="_blank" rel="noreferrer">
+            harishgovardhandamodar/ai-agent-papers
           </a>{" "}
-          — curated into 3 tracks. The planner prioritizes your active agents&apos; toolchains.
+          (upstream: masamasa59) — 3 tracks. The planner prioritizes your active agents&apos; toolchains.
+          {forkExtra > 0 && <span> · <em>{forkExtra} extra from fork</em></span>}
         </p>
+        <div className="agent-sync-row">
+          <button className="ghost" onClick={() => void syncFromFork()} disabled={syncing} title="Fetch your fork's ai-scientist.md and sync — any edit to your fork auto-reflects here">
+            {syncing ? "syncing…" : "↻ Sync from fork"}
+          </button>
+          <span className="hint">or run <code>python companion/scripts/sync_agents_from_fork.py</code></span>
+        </div>
       </div>
 
       <div className="agent-toolbar">
@@ -165,6 +188,7 @@ export function AgentsPanel() {
                 {a.autonomy}
               </span>
               {a.implemented && <span className="pill kind">implemented</span>}
+              {a.from_fork && <span className="pill" style={{ borderColor: "#b08bd4", color: "#b08bd4" }}>from fork</span>}
               <a className="agent-paper" href={a.paper_url} target="_blank" rel="noreferrer" title={a.paper_title}>
                 {a.arxiv_id ? `arXiv:${a.arxiv_id}` : "paper"} ↗
               </a>

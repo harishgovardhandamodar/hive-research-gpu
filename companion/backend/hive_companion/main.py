@@ -711,14 +711,59 @@ async def run_due_schedules() -> dict[str, Any]:
 
 
 @app.get("/api/agents")
-async def list_agents() -> dict[str, Any]:
+async def list_agents(include_fork: bool = True) -> dict[str, Any]:
     selected = set(state.agents.get())
     items = []
     for d in catalog_dicts():
         row = dict(d)
         row["enabled"] = row["id"] in selected
+        row["from_fork"] = False
         items.append(row)
-    return {"categories": CATEGORY_LABEL, "agents": items, "selected_ids": sorted(selected)}
+    fork_extra: list[dict[str, Any]] = []
+    if include_fork:
+        try:
+            from .agents_fork import load_cached as _load_fork
+
+            cached = _load_fork(state.settings.data_dir)
+            # map curated ids for dedup (arxiv id is canonical)
+            curated_arxiv = {str(a.arxiv_id) for a in __import__("hive_companion.agents_catalog", fromlist=["CATALOG"]).CATALOG if a.arxiv_id}
+            curated_ids = set(CATALOG_BY_ID)
+            for f in cached:
+                fid = str(f.get("id", ""))
+                arxiv = f.get("arxiv_id")
+                if fid in curated_ids or (arxiv and str(arxiv) in curated_arxiv):
+                    continue
+                # synthesize a full agent card from fork entry
+                cat = f.get("category", "ideation")
+                row = {
+                    "id": fid,
+                    "name": f.get("name", fid)[:40],
+                    "category": cat,
+                    "tagline": f.get("tagline", f.get("paper_title", ""))[:120],
+                    "description": f.get("paper_title", ""),
+                    "paper_title": f.get("paper_title", ""),
+                    "paper_url": f.get("paper_url", ""),
+                    "arxiv_id": arxiv,
+                    "capabilities": [],
+                    "workflow": ["read paper", "apply workflow"],
+                    "icon": f.get("icon", "🤖"),
+                    "color": f.get("color", "#8b96a8"),
+                    "implemented": False,
+                    "autonomy": "tiered",
+                    "tags": ["from-fork"],
+                    "enabled": fid in selected,
+                    "from_fork": True,
+                }
+                fork_extra.append(row)
+        except Exception:
+            pass
+    items.extend(fork_extra)
+    return {
+        "categories": CATEGORY_LABEL,
+        "agents": items,
+        "selected_ids": sorted(selected),
+        "fork_extra": len(fork_extra),
+    }
 
 
 @app.get("/api/agents/selection")
@@ -732,9 +777,53 @@ class AgentSelectionIn(BaseModel):
 
 @app.post("/api/agents/selection")
 async def set_agent_selection(body: AgentSelectionIn) -> dict[str, Any]:
-    valid = [str(x) for x in body.selected_ids if str(x) in CATALOG_BY_ID]
+    # allow both curated and fork ids — validate against union
+    allowed: set[str] = set(CATALOG_BY_ID)
+    try:
+        from .agents_fork import load_cached as _load_fork
+
+        for f in _load_fork(state.settings.data_dir):
+            fid = str(f.get("id", ""))
+            if fid:
+                allowed.add(fid)
+    except Exception:
+        pass
+    valid = [str(x) for x in body.selected_ids if str(x) in allowed]
+    # if fork cache empty and user tries to set fork ids, keep them anyway (relax)
+    if not valid and body.selected_ids:
+        # fallback: allow any non-empty slug (lets new fork agents be selected before cache loads)
+        valid = [str(x).strip() for x in body.selected_ids if str(x).strip()]
+        valid = valid[:20]
     saved = state.agents.set(valid)
     return {"selected_ids": saved}
+
+
+@app.post("/api/agents/refresh")
+async def refresh_agents_from_fork() -> dict[str, Any]:
+    """Fetch your fork's ai-scientist.md, parse, cache, and return summary.
+
+    Source: https://github.com/harishgovardhandamodar/ai-agent-papers
+    """
+    from .agents_fork import FORK_URL, fetch_and_cache
+
+    try:
+        result = await fetch_and_cache(state.settings.data_dir, url=FORK_URL)
+    except Exception as exc:
+        raise HTTPException(500, f"fork fetch failed: {exc}") from exc
+    return {
+        "source": result["source"],
+        "count": result["count"],
+        "fetched_at": result["fetched_at"],
+        "cache_path": result["cache_path"],
+    }
+
+
+@app.get("/api/agents/fork")
+async def get_fork_agents() -> dict[str, Any]:
+    from .agents_fork import FORK_URL, load_cached
+
+    agents = load_cached(state.settings.data_dir)
+    return {"source": FORK_URL, "count": len(agents), "agents": agents}
 
 
 @app.get("/api/weekdays")

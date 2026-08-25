@@ -346,6 +346,20 @@ class AgentSelectionStore:
         self._lock = threading.Lock()
         self._selected: set[str] | None = None
 
+    def _allowed_ids(self) -> set[str]:
+        allowed = set(CATALOG_BY_ID)
+        try:
+            from .agents_fork import load_cached
+
+            # data_dir is parent of agent_selection.json
+            for f in load_cached(self.path.parent):
+                fid = str(f.get("id", "")).strip()
+                if fid:
+                    allowed.add(fid)
+        except Exception:
+            pass
+        return allowed
+
     def _load(self) -> set[str]:
         if self._selected is not None:
             return self._selected
@@ -356,7 +370,8 @@ class AgentSelectionStore:
                 try:
                     raw = json.loads(self.path.read_text())
                     ids = raw.get("selected_ids") or raw.get("selected") or []
-                    valid = {str(x) for x in ids if str(x) in CATALOG_BY_ID}
+                    allowed = self._allowed_ids()
+                    valid = {str(x).strip() for x in ids if str(x).strip() in allowed}
                     self._selected = valid if valid else set(DEFAULT_SELECTION)
                 except Exception:
                     self._selected = set(DEFAULT_SELECTION)
@@ -368,7 +383,8 @@ class AgentSelectionStore:
         return sorted(self._load())
 
     def set(self, ids: list[str]) -> list[str]:
-        valid = sorted({str(x) for x in ids if str(x) in CATALOG_BY_ID})
+        allowed = self._allowed_ids()
+        valid = sorted({str(x).strip() for x in ids if str(x).strip() in allowed})
         # keep at least one so planner always has context
         if not valid:
             valid = sorted(set(DEFAULT_SELECTION))
