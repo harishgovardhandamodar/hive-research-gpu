@@ -869,6 +869,20 @@ npm --prefix companion/frontend run build</pre>
 </body></html>"""
 
 
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402 (top-level import ok)
+
+
+class _NoCacheAssets(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        resp = await call_next(request)
+        if request.url.path.startswith("/assets/"):
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+            resp.headers["Pragma"] = "no-cache"
+        return resp
+
+
+app.add_middleware(_NoCacheAssets)
+
 app.mount(
     "/assets",
     StaticFiles(directory=_dist_dir / "assets", check_dir=False),

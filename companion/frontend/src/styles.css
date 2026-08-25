@@ -79,7 +79,7 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 .layout-footer:hover { opacity: 1; }
 
 /* perf: skip rendering far-off cards */
-.plan-card, .pool-card, .idea-group, .episode, .approval-card, .suggestion-card {
+.pool-card, .idea-group, .approval-card, .suggestion-card {
   content-visibility: auto;
   contain-intrinsic-size: auto 90px;
 }
@@ -192,7 +192,7 @@ button.ghost { background: transparent; }
 .tl-failed .tl-dot::before { color: var(--bad); }
 .tl-running .tl-dot::before { color: var(--accent); }
 .rail { list-style: none; margin: 0; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
-.node { position: relative; font-size: 11px; padding-left: 14px; }
+.node { position: relative; font-size: 11px; padding-left: 14px; display: flex; align-items: baseline; gap: 6px; }
 .node::before { content: ""; position: absolute; left: -16.5px; top: 7px; width: 20px; height: 1px; background: var(--border); }
 .node-icon { position: absolute; left: -5.5px; top: 1px; width: 11px; text-align: center; font-size: 9px; color: var(--dim); }
 .node-done .node-icon { color: var(--ok); }
@@ -205,7 +205,8 @@ button.ghost { background: transparent; }
 .st-failed { color: var(--bad); }
 .st-skipped { color: var(--warn); }
 .node code { color: var(--text); }
-.node-text { margin: 1px 0 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.node-text { margin: 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.node div { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
 .unfiled { font-size: 11px; color: var(--dim); margin-top: 4px; }
 .unfiled ul { margin: 6px 0 0; padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }
 

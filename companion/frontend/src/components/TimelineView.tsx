@@ -92,9 +92,9 @@ export function TimelineView() {
                     <span className="node-ts">{s.ts.slice(11, 19)}</span>
                     <code>{s.tool}</code>
                     <span className={`node-state st-${s.status}`}>{s.status}</span>
-                    <p className="node-text" title={s.summary}>
+                    <span className="node-text" title={s.summary}>
                       {s.summary}
-                    </p>
+                    </span>
                   </div>
                 </li>
               ))}
