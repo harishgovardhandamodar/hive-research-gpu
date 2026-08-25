@@ -169,7 +169,7 @@ export default function App() {
         <main className="columns" ref={containerRef}>
           {/* ── left rail (collapsed) ── */}
           {ly.collapsedLeft && (
-            <button className="rail rail-left" onClick={toggleLeft} title="Show goals panel">
+            <button className="collapsed-rail rail-left" onClick={toggleLeft} title="Show goals panel">
               ⫿ Goals
             </button>
           )}
@@ -229,7 +229,7 @@ export default function App() {
 
           {/* ── right rail (collapsed) ── */}
           {ly.collapsedRight && (
-            <button className="rail rail-right" onClick={toggleRight} title="Show insights panel">
+            <button className="collapsed-rail rail-right" onClick={toggleRight} title="Show insights panel">
               Insights ⫸
             </button>
           )}
