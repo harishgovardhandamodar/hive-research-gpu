@@ -139,6 +139,8 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_debug_graph()
         elif path == "/api/graph":
             _json_response(self, self.org.graph_data())
+        elif path == "/api/graph/snapshots":
+            _json_response(self, {"snapshots": self.org.list_graph_snapshots()})
         elif path == "/api/graph/clusters":
             try:
                 threshold = float(params.get("threshold", 0.35))
@@ -606,6 +608,38 @@ info.textContent += ' | OK';
         elif path == "/api/graph/detail":
             result = self.org.detail_graph()
             _json_response(self, result)
+        elif path == "/api/graph/save":
+            name = (data.get("name") or data.get("path") or params.get("name") or params.get("path") or "").strip()
+            if not name:
+                _json_response(self, {"error": "missing snapshot name (field 'name')"}, 400)
+                return
+            try:
+                result = self.org.save_graph_snapshot(name)
+            except ValueError as exc:
+                _json_response(self, {"error": str(exc)}, 400)
+                return
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
+                return
+            _json_response(self, {"status": "ok", **result})
+        elif path == "/api/graph/load":
+            name = (data.get("name") or data.get("path") or params.get("name") or params.get("path") or "").strip()
+            if not name:
+                _json_response(self, {"error": "missing snapshot name (field 'name')"}, 400)
+                return
+            merge = bool(data.get("merge") or params.get("merge") == "1")
+            try:
+                result = self.org.load_graph_snapshot(name, merge=merge)
+            except ValueError as exc:
+                _json_response(self, {"error": str(exc)}, 400)
+                return
+            except FileNotFoundError as exc:
+                _json_response(self, {"error": str(exc)}, 404)
+                return
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
+                return
+            _json_response(self, {"status": "ok", **result})
         elif path == "/api/definitions":
             result = self.org.generate_definitions()
             _json_response(self, result)

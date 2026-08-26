@@ -9,6 +9,15 @@ marked.setOptions({ breaks: true, gfm: true });
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
 const CHAT_STORAGE_KEY = "fox-chat-v1";
 
+const FOX_SAMPLES: { label: string; prompt: string; mode?: string }[] = [
+  { label: "Summarize my library", prompt: "Summarize the key trends across my ingested papers", mode: "rag" },
+  { label: "What’s new?", prompt: "What’s new this week? Give me a digest of recent papers", mode: "rag" },
+  { label: "Compare papers", prompt: "Compare the two most recent papers on federated learning", mode: "deep-thinking" },
+  { label: "Deep research", prompt: "What are the open problems in vision-language models?", mode: "deep-research" },
+  { label: "Survey", prompt: "Survey recent work on AI agents and LLM adoption in enterprises", mode: "deep-research" },
+  { label: "Explain GNNs", prompt: "Explain graph neural networks like I’m 5", mode: "fast" },
+];
+
 interface PersistedChat {
   messages: ChatMessage[];
   conversationId: string | null;
@@ -127,6 +136,31 @@ export function ChatPanel() {
           <div className="chat-empty">
             <img src="/fox-avatar.webp" alt="Fox" className="chat-empty-fox" width={72} height={72} onError={(e) => ((e.currentTarget.style.display = "none"))} />
             <p className="empty">Ask anything about your library. Answers are grounded in your notes and knowledge graph; every exchange becomes an episode the companion can recall.</p>
+            <div className="sample-commands" aria-label="sample prompts">
+              <span className="artifact-label" style={{ display: "block", marginTop: 10, marginBottom: 6 }}>
+                Try a sample:
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                {FOX_SAMPLES.map((s) => (
+                  <button
+                    key={s.label}
+                    className="chip"
+                    title={`${s.mode ? `mode: ${s.mode} — ` : ""}${s.prompt}`}
+                    onClick={() => {
+                      setInput(s.prompt);
+                      if (s.mode && FOX_MODES.includes(s.mode)) setMode(s.mode);
+                      // focus the textarea next tick
+                      setTimeout(() => {
+                        const ta = document.querySelector<HTMLTextAreaElement>(".chat-input textarea");
+                        ta?.focus();
+                      }, 0);
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         {messages.map((m, i) => (

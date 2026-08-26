@@ -60,7 +60,13 @@ export const api = {
     req<Suggestion>(`/api/suggestions/${id}/reject`, { method: "POST", body: "{}" }),
   episodes: (query = "", limit = 60) =>
     req<{ items: Episode[] }>(`/api/episodes?query=${encodeURIComponent(query)}&limit=${limit}`),
+  episodesByGoal: (goalId: string, limit = 200) =>
+    req<{ items: Episode[]; goal_id: string }>(`/api/episodes?goal_id=${encodeURIComponent(goalId)}&limit=${limit}`),
   timeline: () => req<TimelineResponse>("/api/timeline?limit=40"),
+  timelineThread: (goalId: string) =>
+    req<{ goal_id: string; thread: TimelineResponse["threads"][number] | null; episodes: Episode[]; total: number }>(
+      `/api/timeline/${encodeURIComponent(goalId)}`,
+    ),
   artifacts: () => req<{ groups: ArtifactGroup[] }>("/api/artifacts"),
   explorer: () => req<ArtifactNode>("/api/explorer"),
   kg: () => req<KGData>("/api/kg"),

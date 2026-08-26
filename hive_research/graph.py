@@ -192,6 +192,101 @@ class KnowledgeGraph:
         ]
         return data
 
+    # -- Snapshots for Fox companion save/load -------------------------------
+
+    def _snapshots_dir(self) -> Path:
+        d = self.graph_dir / "snapshots"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _sanitize_snapshot_name(self, name: str) -> str:
+        import re as _re
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("snapshot name required")
+        # allow letters, numbers, _, -, .
+        if not _re.fullmatch(r"[A-Za-z0-9._-]{1,64}", name):
+            raise ValueError("snapshot name must be 1-64 chars of [A-Za-z0-9._-]")
+        return name
+
+    def save_snapshot(self, name: str) -> dict[str, Any]:
+        safe = self._sanitize_snapshot_name(name)
+        dest = self._snapshots_dir() / f"{safe}.json"
+        with self._lock:
+            tmp = dest.with_suffix(".json.tmp")
+            self._hive.to_json_file(str(tmp))
+            os.replace(tmp, dest)
+        return {"path": str(dest), "name": safe, "nodes": len(self._hive.nodes), "edges": len(self._hive.edges)}
+
+    def load_snapshot(self, name: str, merge: bool = False) -> dict[str, Any]:
+        safe = self._sanitize_snapshot_name(name)
+        src = self._snapshots_dir() / f"{safe}.json"
+        if not src.exists():
+            # also try graph_dir/{name}.json for backwards compat
+            alt = self.graph_dir / f"{safe}.json"
+            if alt.exists():
+                src = alt
+            else:
+                raise FileNotFoundError(f"snapshot not found: {safe}")
+        loaded = HiveGraph.from_json_file(str(src))
+        with self._lock:
+            if merge:
+                existing_ids = {n.id for n in self._hive.nodes}
+                added_nodes = 0
+                for n in loaded.nodes:
+                    if n.id not in existing_ids:
+                        self._hive.nodes.append(n)
+                        added_nodes += 1
+                existing_edges = {(e.source, e.target, e.relation) for e in self._hive.edges}
+                added_edges = 0
+                for e in loaded.edges:
+                    if (e.source, e.target, e.relation) not in existing_edges:
+                        self._hive.edges.append(e)
+                        added_edges += 1
+                self.save()
+                return {
+                    "path": str(src),
+                    "name": safe,
+                    "merged": True,
+                    "added_nodes": added_nodes,
+                    "added_edges": added_edges,
+                    "total_nodes": len(self._hive.nodes),
+                    "total_edges": len(self._hive.edges),
+                }
+            else:
+                self._hive = loaded
+                self.graph_id = loaded.id or self.graph_id
+                self.save()
+                return {
+                    "path": str(src),
+                    "name": safe,
+                    "merged": False,
+                    "nodes": len(self._hive.nodes),
+                    "edges": len(self._hive.edges),
+                }
+
+    def list_snapshots(self) -> list[dict[str, Any]]:
+        d = self._snapshots_dir()
+        out: list[dict[str, Any]] = []
+        for p in sorted(d.glob("*.json")):
+            try:
+                st = p.stat()
+                out.append({"name": p.stem, "path": str(p), "size": st.st_size, "mtime": int(st.st_mtime)})
+            except OSError:
+                continue
+        # also surface legacy graph_dir/*.json snapshots (excluding main)
+        for p in sorted(self.graph_dir.glob("*.json")):
+            if p.stem in ("main",):
+                continue
+            if p.parent == d:
+                continue
+            try:
+                st = p.stat()
+                out.append({"name": p.stem, "path": str(p), "size": st.st_size, "mtime": int(st.st_mtime), "legacy": True})
+            except OSError:
+                continue
+        return out
+
     def detail_graph(self, llm: Any) -> int:
         node_map = {n.id: n.label for n in self._hive.nodes}
         batch: list[dict[str, str]] = []

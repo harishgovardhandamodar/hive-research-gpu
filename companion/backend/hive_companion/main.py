@@ -59,8 +59,8 @@ class CompanionApp:
         self.suggestions = SuggestionStore(self.settings.data_dir)
         self.ingest_failures = IngestFailureStore(self.settings.data_dir)
         self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
-        self.registry = ToolRegistry(self.client, failures=self.ingest_failures, episodes=self.episodes, llm=self.llm)
         self.kg = KGCache(self.client)
+        self.registry = ToolRegistry(self.client, failures=self.ingest_failures, episodes=self.episodes, llm=self.llm, kg=self.kg)
         ideation_url = self.settings.ideation_base_url or self.settings.llm_base_url
         self.ideagent = IdeagentEngine(
             llm_fast=ChatClient(ideation_url, self.settings.llm_fast_model),
@@ -281,6 +281,9 @@ class CompanionApp:
             except Exception:
                 logger.exception("plan %s crashed", plan.id)
 
+        asyncio.create_task(pump())
+        return plan
+
     async def _reflect_on_failure(self, plan: Plan, event: dict[str, Any]) -> None:
         idx = event.get("step_index")
         step = plan.steps[idx] if isinstance(idx, int) and 0 <= idx < len(plan.steps) else None
@@ -312,9 +315,6 @@ class CompanionApp:
             status="reflected",
         )
         self.bus.publish("reflection", {"plan_id": plan.id, "arxiv_hint": "", "reflection": reflection})
-
-        asyncio.create_task(pump())
-        return plan
 
     def _record_ingest_outcome(self, plan: Plan, event: dict[str, Any]) -> None:
         """Keep the ingestion failure ledger in sync with add_paper steps."""
@@ -571,7 +571,16 @@ async def accept_suggestion(suggestion_id: str, req: SuggestionDecisionRequest) 
 
 
 @app.get("/api/episodes")
-async def list_episodes(query: str = "", limit: int = 50, kind: str = "") -> dict[str, Any]:
+async def list_episodes(query: str = "", limit: int = 50, kind: str = "", goal_id: str = "") -> dict[str, Any]:
+    if goal_id:
+        items = state.episodes.recent(limit=min(limit, 500), kind=kind or None, goal_id=goal_id)
+        # include the goal episode itself even if it has different id shape
+        if kind in ("", "goal"):
+            goal_ep = next((e for e in state.episodes.recent(limit=500, kind="goal") if e.get("id") == goal_id or e.get("goal_id") == goal_id), None)
+            if goal_ep and goal_ep not in items:
+                items = [goal_ep] + items
+        items = sorted(items, key=lambda e: e.get("ts", ""))
+        return {"items": items, "goal_id": goal_id}
     if query:
         items = state.episodes.retrieve(query, limit=min(limit, 100))
     else:
@@ -587,6 +596,20 @@ async def episode_stats() -> dict[str, Any]:
 @app.get("/api/timeline")
 async def agent_timeline(limit: int = 40) -> dict[str, Any]:
     return build_timeline(state.episodes, limit=min(limit, 100))
+
+
+@app.get("/api/timeline/{goal_id}")
+async def timeline_thread(goal_id: str) -> dict[str, Any]:
+    episodes = state.episodes.recent(limit=500, goal_id=goal_id)
+    # ensure goal episode itself is included
+    goal_ep = next((e for e in state.episodes.recent(limit=500, kind="goal") if e.get("id") == goal_id or e.get("goal_id") == goal_id), None)
+    if goal_ep and all(e.get("id") != goal_ep.get("id") for e in episodes):
+        episodes = [goal_ep] + episodes
+    episodes = sorted(episodes, key=lambda e: e.get("ts", ""))
+    # also include timeline summary for this thread if available
+    full = build_timeline(state.episodes, limit=100)
+    thread = next((t for t in full["threads"] if t["goal_id"] == goal_id), None)
+    return {"goal_id": goal_id, "thread": thread, "episodes": episodes, "total": len(episodes)}
 
 
 @app.get("/api/artifacts")
@@ -632,6 +655,43 @@ async def kg_search(q: str = "") -> dict[str, Any]:
         raise HTTPException(400, "query too short")
     try:
         return await state.kg.search(q)
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+
+
+class KGSaveRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+
+
+class KGLoadRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    merge: bool = False
+
+
+@app.get("/api/kg/snapshots")
+async def kg_snapshots() -> dict[str, Any]:
+    try:
+        return await state.client.graph_snapshots()
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+
+
+@app.post("/api/kg/save")
+async def kg_save(req: KGSaveRequest) -> dict[str, Any]:
+    try:
+        result = await state.client.graph_save(req.name.strip())
+        state.kg.invalidate()
+        return result
+    except HiveApiError as exc:
+        raise _hive_error(exc) from exc
+
+
+@app.post("/api/kg/load")
+async def kg_load(req: KGLoadRequest) -> dict[str, Any]:
+    try:
+        result = await state.client.graph_load(req.name.strip(), merge=req.merge)
+        state.kg.invalidate()
+        return result
     except HiveApiError as exc:
         raise _hive_error(exc) from exc
 

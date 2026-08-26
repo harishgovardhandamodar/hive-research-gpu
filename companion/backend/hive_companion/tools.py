@@ -38,11 +38,13 @@ class ToolRegistry:
         failures: IngestFailureStore | None = None,
         episodes: Any = None,
         llm: Any = None,
+        kg: Any = None,
     ) -> None:
         self.client = client
         self.failures = failures
         self.episodes = episodes
         self.llm = llm
+        self.kg = kg
         self._tools: dict[str, Tool] = {}
         self._register_all()
 
@@ -101,6 +103,38 @@ class ToolRegistry:
         async def _similarity(paper_ids: str) -> Any:
             ids = [x.strip() for x in paper_ids.split(",") if x.strip()]
             return await client.similarity(ids)
+
+        @self._register(
+            "graph.save",
+            "Save CURRENT graph to a new snapshot file. Example: save as 'before_experiment' before major changes. Creates a file you can later load.",
+            args={"name": "snapshot name to create, e.g. before_experiment (alphanumeric _.- allowed, 1-64 chars)"},
+        )
+        async def _graph_save(name: str) -> Any:
+            result = await client.graph_save(name)
+            return result
+
+        @self._register(
+            "graph.load",
+            "Restore a PREVIOUSLY SAVED snapshot, REPLACING current graph. First call graph.list_snapshots to see available names. Example: load 'before_experiment'. Add merge=true to merge instead of replace.",
+            mutates=True,
+            args={"name": "existing snapshot name to restore"},
+        )
+        async def _graph_load(name: str, merge: str = "") -> Any:
+            do_merge = str(merge).lower() in ("1", "true", "yes") if isinstance(merge, str) else bool(merge)
+            result = await client.graph_load(name, merge=do_merge)
+            if self.kg is not None:
+                try:
+                    self.kg.invalidate()
+                except Exception:
+                    pass
+            return result
+
+        @self._register(
+            "graph.list_snapshots",
+            "List ALL saved graph snapshots. No arguments. Returns array of {name, path, size, mtime}. Call this before graph.load to discover names.",
+        )
+        async def _graph_snapshots() -> Any:
+            return await client.graph_snapshots()
 
         @self._register("pool.papers", "Papers observed in the watch pool, not yet imported.")
         async def _pool_papers() -> Any:

@@ -140,6 +140,18 @@ class Organizer:
     def graph_data(self) -> dict[str, Any]:
         return self.kg.to_node_link()
 
+    def save_graph_snapshot(self, name: str) -> dict[str, Any]:
+        return self.kg.save_snapshot(name)
+
+    def load_graph_snapshot(self, name: str, merge: bool = False) -> dict[str, Any]:
+        result = self.kg.load_snapshot(name, merge=merge)
+        # keep RAG in sync when graph is replaced — simplest is to leave RAG as-is
+        # (nodes may have been added/removed, but embeddings stay valid)
+        return result
+
+    def list_graph_snapshots(self) -> list[dict[str, Any]]:
+        return self.kg.list_snapshots()
+
     def detail_graph(self) -> dict[str, Any]:
         count = self.kg.detail_graph(self.llm)
         return {"detailed": count, "graph": self.kg.to_node_link()}

@@ -4,6 +4,15 @@ import { EmptyState } from "./ui";
 import type { CompareEdge, LibraryHit } from "../types";
 import { useArtifactOpener, ArtifactViewer } from "./Explorer";
 
+const LIBRARY_SAMPLES = [
+  "transformer attention",
+  "federated learning",
+  "AI alignment",
+  "graph neural network",
+  "vision language model",
+  "LLM safety",
+];
+
 export function LibraryPanel() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<LibraryHit[] | null>(null);
@@ -82,6 +91,36 @@ export function LibraryPanel() {
           {hits.length} matches · click one with notes to open them
         </p>
       )}
+      <div className="sample-commands" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0 10px" }} aria-label="sample searches">
+        <span className="artifact-label" style={{ alignSelf: "center", marginRight: 4 }}>
+          Try:
+        </span>
+        {LIBRARY_SAMPLES.map((s) => (
+          <button
+            key={s}
+            className="chip"
+            title={`search "${s}"`}
+            onClick={() => {
+              setQuery(s);
+              // trigger search with the sample term directly
+              setBusy(true);
+              api
+                .librarySearch(s)
+                .then((data) => {
+                  setHits(data.items);
+                  setLoadError(null);
+                })
+                .catch((e) => {
+                  setHits([]);
+                  setLoadError(e instanceof Error ? e.message : "library search failed");
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
       <ul className="pool-list">
         {hits === null && (
           <EmptyState as="li" hint="Search across ingested papers. Results link straight to their vault notes." />

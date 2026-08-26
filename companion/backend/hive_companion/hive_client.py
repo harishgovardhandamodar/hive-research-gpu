@@ -102,6 +102,15 @@ class HiveClient:
     async def graph(self) -> dict[str, Any]:
         return await self.get("/api/graph")
 
+    async def graph_snapshots(self) -> dict[str, Any]:
+        return await self.get("/api/graph/snapshots")
+
+    async def graph_save(self, name: str) -> dict[str, Any]:
+        return await self.post("/api/graph/save", {"name": name})
+
+    async def graph_load(self, name: str, merge: bool = False) -> dict[str, Any]:
+        return await self.post("/api/graph/load", {"name": name, "merge": merge})
+
     async def similarity(self, paper_ids: list[str], algorithm: str = "combined") -> Any:
         return await self.post("/api/similarity", {"paper_ids": paper_ids, "algorithm": algorithm})
 
