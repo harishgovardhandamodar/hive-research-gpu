@@ -32,7 +32,9 @@ from .deepideation import ConceptNetwork, DeepIdeationEngine, DeepRun
 from .ideagent import IdeagentEngine, IdeaRun, persist_runs
 from .awesome_scientist import fetch_and_cache as awesome_fetch_and_cache
 from .awesome_scientist import load_cached as awesome_load_cached
+from .backup import BackupLoop
 from .backup import BackupLoop, create_snapshot, list_snapshots
+from .tldr import make_tldr
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
 from .planner import Plan, Planner, Step
@@ -488,6 +490,28 @@ async def delete_template(template_id: str) -> dict[str, Any]:
 
 # -- Awesome-AI-Scientist excerpts & agents ------------------------------------
 
+class TldrRequest(BaseModel):
+    text: str = Field(default="", max_length=8000)
+    path: str = ""
+    focus: str = ""
+
+
+@app.post("/api/tldr")
+async def tldr_endpoint(req: TldrRequest) -> dict[str, Any]:
+    """One-sentence TLDR (Cachola et al. 2020) of raw text or a vault note."""
+    text = req.text
+    if not text and req.path:
+        try:
+            file = await state.client.read_file(req.path)
+            text = str(file.get("content", ""))[:4000]
+        except HiveApiError as exc:
+            raise _hive_error(exc) from exc
+    if not text.strip():
+        raise HTTPException(400, "nothing to summarize")
+    tldr = await make_tldr(state.llm, text[:4000], focus=req.focus[:120])
+    return {"tldr": tldr}
+
+
 @app.get("/api/scientist")
 async def scientist_excerpts() -> dict[str, Any]:
     cached = awesome_load_cached(state.settings.data_dir)
@@ -496,6 +520,19 @@ async def scientist_excerpts() -> dict[str, Any]:
             cached = await awesome_fetch_and_cache(state.settings.data_dir)
         except Exception as exc:
             raise HTTPException(502, f"Awesome-AI-Scientist sync failed and no cache exists: {str(exc)[:200]}")
+    # corpus coverage: which excerpt arxiv ids are not in the library yet
+    try:
+        library = {str(p.get("arxiv_id", p.get("id", ""))).split("v")[0] for p in await state.client.papers()}
+        with_arxiv = [e for e in cached.get("excerpts", []) if e.get("arxiv_id")]
+        remaining_ids: list[str] = []
+        for e in with_arxiv:
+            if e["arxiv_id"].split("v")[0] not in library and e["arxiv_id"] not in remaining_ids:
+                remaining_ids.append(e["arxiv_id"])
+        cached["total_with_arxiv"] = len(with_arxiv)
+        cached["remaining"] = len(remaining_ids)
+        cached["remaining_ids"] = remaining_ids
+    except HiveApiError:
+        pass  # hive down — serve the cache without coverage numbers
     return cached
 
 
@@ -530,6 +567,37 @@ async def scientist_import(req: ScientistImportRequest) -> dict[str, Any]:
     )
     launched = await state.launch_plan(plan.goal, req.mode, plan=plan)
     return launched.to_dict()
+
+
+class ScientistIngestAllRequest(BaseModel):
+    mode: str = "auto"
+
+
+@app.post("/api/scientist/ingest-all")
+async def scientist_ingest_all(req: ScientistIngestAllRequest) -> dict[str, Any]:
+    """Bulk-ingest every Awesome-AI-Scientist excerpt missing from the library.
+
+    One governed plan, one mutating step (library.import_many) so the whole
+    corpus needs a single approval; per-paper outcomes land in jobs + failures.
+    """
+    payload = await scientist_excerpts()
+    remaining = list(payload.get("remaining_ids") or [])
+    if not remaining:
+        return {"queued": False, "message": "all excerpts already ingested", "remaining": 0}
+    from .planner import Step
+
+    plan = Plan(
+        id=uuid.uuid4().hex[:12],
+        goal_id="",
+        goal=f"ingest {len(remaining)} Awesome-AI-Scientist papers into the knowledge graph",
+        steps=[
+            Step(index=0, tool="library.import_many", args={"arxiv_ids": ",".join(remaining)}, rationale="AI-Scientist corpus bulk import"),
+            Step(index=1, tool="rag.rebuild", args={}, rationale="refresh vector index over the new corpus"),
+        ],
+        planner="scientist",
+    )
+    launched = await state.launch_plan(plan.goal, req.mode, plan=plan)
+    return {"queued": True, "remaining": len(remaining), "plan": launched.to_dict()}
 
 
 @app.get("/api/plans")

@@ -259,4 +259,14 @@ export interface ScientistPayload {
   sections?: string[];
   source?: string;
   warning?: string;
+  total_with_arxiv?: number;
+  remaining?: number;
+  remaining_ids?: string[];
+}
+
+export interface ScientistCorpus {
+  /** base arxiv id -> excerpt metadata for KG node tagging */
+  byId: Record<string, ScientistExcerpt & { url?: string }>;
+  totalWithArxiv: number;
+  remaining: number;
 }

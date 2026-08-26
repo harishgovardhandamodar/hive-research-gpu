@@ -276,3 +276,11 @@ button.ghost { background: transparent; }
   color: var(--accent); font-size: 9.5px; text-transform: uppercase;
   letter-spacing: .6px; margin-right: 6px;
 }
+
+/* TLDR summary card (timeline overlay, per Cachola et al. 2020) */
+.tl-tldr {
+  margin: 8px 14px 0; padding: 8px 12px;
+  border: 1px solid var(--accent); border-left-width: 3px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: 12.5px; line-height: 1.5;
+}

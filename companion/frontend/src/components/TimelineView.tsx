@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { EmptyState } from "./ui";
 import type { TimelineEvent, TimelineResponse, TimelineThread } from "../types";
@@ -190,6 +190,8 @@ function buildChronology(thread: TimelineThread): ChronoEntry[] {
 }
 
 export function TimelineDetailOverlay({ thread, onClose }: { thread: TimelineThread; onClose: () => void }) {
+  const [tldr, setTldr] = useState<string | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -197,6 +199,26 @@ export function TimelineDetailOverlay({ thread, onClose }: { thread: TimelineThr
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // TLDR mode (Cachola et al. 2020): one controlled sentence for the whole run
+  const chronoRef = useRef<ChronoEntry[]>([]);
+  chronoRef.current = buildChronology(thread);
+  useEffect(() => {
+    let alive = true;
+    const transcript = chronoRef.current
+      .map((e) => e.headline)
+      .join(" \u00b7 ")
+      .slice(0, 2500);
+    api
+      .postTldr({ text: transcript, focus: `workflow run: ${thread.goal}` })
+      .then((r) => {
+        if (alive) setTldr(r.tldr);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [thread.goal_id]);
 
   const chrono = buildChronology(thread);
 
@@ -215,6 +237,11 @@ export function TimelineDetailOverlay({ thread, onClose }: { thread: TimelineThr
           </h2>
           <button onClick={onClose}>close</button>
         </div>
+        {tldr && (
+          <div className="tl-tldr" title="TLDR summary (Cachola et al. 2020)">
+            <span className="pill kind">TLDR</span> {tldr}
+          </div>
+        )}
         <div className="tl-detail-body">
           {chrono.map((e, i) => (
             <details key={`${e.ts}-${i}`} className="tl-ev" open={i === chrono.length - 1}>

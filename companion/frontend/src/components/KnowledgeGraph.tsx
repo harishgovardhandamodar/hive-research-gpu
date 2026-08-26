@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { KGData } from "../types";
+import type { KGData, ScientistCorpus } from "../types";
 
 interface SimNode {
   id: string;
@@ -26,6 +26,7 @@ interface Tip {
 const PAPER_COLOR = "#60a5fa";
 const CONCEPT_COLOR = "#c084fc";
 const LINEAGE_COLOR = "#2dd4bf";
+const SCIENTIST_COLOR = "#fb923c"; // Awesome-AI-Scientist corpus nodes
 const LABEL_COLOR = "#94a3b8";
 const LINEAGE_RELS = new Set(["cites", "extends", "improves", "proposes"]);
 const PAPER_SIZE = 14;
@@ -174,6 +175,9 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   const [tip, setTip] = useState<Tip | null>(null);
 
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+  const scientistRef = useRef<ScientistCorpus | null>(null);
+  const tldrCacheRef = useRef<Map<string, string>>(new Map());
+  const [, forceTick] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const simNodesRef = useRef<SimNode[]>([]);
@@ -237,6 +241,21 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     loadFull();
   }, [loadFull]);
+
+  // AI-Scientist corpus tagging: base arxiv id -> excerpt metadata
+  useEffect(() => {
+    api
+      .scientistExcerpts()
+      .then((payload) => {
+        const byId: ScientistCorpus["byId"] = {};
+        for (const e of payload.excerpts ?? []) {
+          if (e.arxiv_id) byId[e.arxiv_id.split("v")[0]] = { ...e };
+        }
+        const corpus = { byId, totalWithArxiv: payload.total_with_arxiv ?? 0, remaining: payload.remaining ?? 0 };
+        scientistRef.current = corpus;
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!data || !canvasEl) return;
@@ -389,8 +408,13 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
       // nodes: rounded squares for papers (teal when cited), circles for concepts
       for (const n of nodes) {
         const cited = citedIds.has(n.id);
-        const fill =
-          n.type === "paper" ? (cited ? LINEAGE_COLOR : PAPER_COLOR) : CONCEPT_COLOR;
+        const sciEntry =
+          n.type === "paper" ? scientistRef.current?.byId[n.id.split("v")[0]] : undefined;
+        const fill = sciEntry
+          ? SCIENTIST_COLOR
+          : n.type === "paper"
+            ? (cited ? LINEAGE_COLOR : PAPER_COLOR)
+            : CONCEPT_COLOR;
         const dimmed = h && n.id !== h.id && !data.links.some(
           (l) => (l.source === h!.id && l.target === n.id) || (l.target === h!.id && l.source === n.id),
         );
@@ -643,6 +667,39 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
               <strong>{tip.d.label}</strong>
               <span className="pill kind">{tip.d.type}</span>
               {tip.d.seed && <span className="pill">match</span>}
+              {(() => {
+                const sci = scientistRef.current?.byId[tip.d.id.split("v")[0]];
+                if (!sci) return null;
+                const tldrKey = `sci-${tip.d.id}`;
+                if (!tldrCacheRef.current.has(tldrKey)) {
+                  tldrCacheRef.current.set(tldrKey, "…");
+                  api
+                    .postTldr({ text: `${sci.title}. ${sci.section}`, focus: sci.title })
+                    .then((r) => {
+                      tldrCacheRef.current.set(tldrKey, r.tldr);
+                      forceTick((n) => n + 1);
+                    })
+                    .catch(() => tldrCacheRef.current.delete(tldrKey));
+                }
+                return (
+                  <>
+                    <span className="pill" style={{ borderColor: SCIENTIST_COLOR, color: SCIENTIST_COLOR }}>AI-Scientist</span>
+                    <p style={{ margin: "4px 0 0", fontSize: 11 }}>
+                      TLDR: {tldrCacheRef.current.get(tldrKey)}
+                    </p>
+                    {sci.section && (
+                      <p style={{ margin: "4px 0 0", fontSize: 11 }}>
+                        {sci.section}
+                        {sci.year ? ` · ${sci.year}.${sci.month}` : ""}
+                      </p>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                      {sci.url && <a href={sci.url} target="_blank" rel="noreferrer">paper ↗</a>}
+                      {sci.review_url && <a href={sci.review_url} target="_blank" rel="noreferrer">review ↗</a>}
+                    </div>
+                  </>
+                );
+              })()}
               {tip.d.definition && <p>{tip.d.definition}</p>}
               {tip.relations.length > 0 && (
                 <ul className="kg-tip-rels">
@@ -661,6 +718,7 @@ export function KnowledgeGraph({ onClose }: { onClose: () => void }) {
             <span><i style={{ background: PAPER_COLOR }} /> papers</span>
             <span><i style={{ background: CONCEPT_COLOR }} /> concepts</span>
             <span><i style={{ background: LINEAGE_COLOR }} /> cited</span>
+            <span><i style={{ background: SCIENTIST_COLOR }} /> AI-Scientist</span>
             <span><i style={{ background: REL_COLORS.cites.color }} /> cites</span>
             <span><i style={{ background: REL_COLORS.extends.color }} /> extends</span>
             <span><i style={{ background: REL_COLORS.related_to.color }} /> related</span>

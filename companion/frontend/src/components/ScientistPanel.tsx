@@ -1,43 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "../api";
 import { usePolling } from "../hooks/usePolling";
-import { EmptyState } from "./ui";
 import { toast } from "../lib/toast";
-
-interface ScientistExcerpt {
-  title: string;
-  url: string;
-  arxiv_id: string;
-  year: string;
-  month: string;
-  section: string;
-  review_url: string;
-  reviewed: boolean;
-}
-
-interface AgentTool {
-  name: string;
-  description: string;
-  url: string;
-  kind: string;
-}
-
-interface ScientistPayload {
-  excerpts?: ScientistExcerpt[];
-  agents?: AgentTool[];
-  sections?: string[];
-  source?: string;
-  warning?: string;
-}
+import { EmptyState } from "./ui";
+import type { ScientistAgentTool, ScientistPayload } from "../types";
 
 export function ScientistPanel() {
   const [payload, setPayload] = useState<ScientistPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [section, setSection] = useState("all");
-  const [view, setView] = useState<"excerpts" | "agents">("excerpts");
   const [syncing, setSyncing] = useState(false);
-  const [importing, setImporting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -54,131 +26,90 @@ export function ScientistPanel() {
     setSyncing(true);
     try {
       setPayload(await api.scientistRefresh());
+      toast("fork synced");
     } finally {
       setSyncing(false);
     }
   };
 
-  const importPaper = async (arxivId: string) => {
-    setImporting(arxivId);
+  const scientistIngestAll = async () => {
+    const remaining = payload?.remaining ?? 0;
+    if (remaining === 0) return;
+    if (
+      !window.confirm(
+        `Ingest ${remaining} AI-Scientist papers into the knowledge graph? Each runs the full analysis pipeline — this will take a while.`,
+      )
+    )
+      return;
     try {
-      await api.scientistImport(arxivId, "tiered");
-      toast(`queued import of ${arxivId} — approve in the inbox`);
-    } finally {
-      setImporting(null);
+      const res = await api.scientistIngestAll("auto");
+      if (res.queued) toast(`queued bulk ingestion of ${res.remaining} papers — approve once in the inbox`);
+      else toast(res.message ?? "nothing to ingest", "info");
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "bulk ingest failed", "error");
     }
   };
+
+  const agents: ScientistAgentTool[] = [...(payload?.agents ?? [])].filter((a) =>
+    query.trim() === "" ? true : `${a.name} ${a.description}`.toLowerCase().includes(query.trim().toLowerCase()),
+  );
 
   return (
     <div className="discover">
       <div className="composer-row" style={{ marginTop: 0 }}>
         <button onClick={() => void sync()} disabled={syncing} className={syncing ? "btn-busy" : ""}>
-          {syncing ? (<><span className="spinner" aria-hidden /> syncing…</>) : "⟳ sync fork"}
+          {syncing ? (
+            <>
+              <span className="spinner" aria-hidden /> syncing…
+            </>
+          ) : (
+            "⟳ sync fork"
+          )}
         </button>
         <input
           className="search"
           style={{ flex: 1 }}
-          placeholder="filter excerpts & agents…"
+          placeholder="filter agents & tools…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="filter AI-scientist content"
+          aria-label="filter AI-scientist agents"
         />
-        <select value={view} onChange={(e) => setView(e.target.value as "excerpts" | "agents")} aria-label="content view">
-          <option value="excerpts">excerpts</option>
-          <option value="agents">agents & tools</option>
-        </select>
-        {view === "excerpts" && (
-          <select value={section} onChange={(e) => setSection(e.target.value)} aria-label="section filter">
-            <option value="all">all sections</option>
-            {(payload?.sections ?? []).map((sec) => (
-              <option key={sec} value={sec}>{sec}</option>
-            ))}
-          </select>
-        )}
+        <button
+          onClick={() => void scientistIngestAll()}
+          disabled={(payload?.remaining ?? 0) === 0}
+          title={
+            payload?.remaining
+              ? `ingest ${payload.remaining} excerpts into the knowledge graph (tagged orange nodes)`
+              : "all excerpts already ingested"
+          }
+        >
+          ⬇ ingest all ({payload?.remaining ?? "…"})
+        </button>
       </div>
       {error && (
         <div className="banner error" role="alert">
           <span>{error}</span>
-          <button className="ghost" onClick={() => void load()}>retry</button>
+          <button className="ghost" onClick={() => void load()}>
+            retry
+          </button>
         </div>
       )}
-      {payload?.warning && <p className="hint" style={{ color: "var(--warn)" }}>{payload.warning}</p>}
+      {payload?.warning && (
+        <p className="hint" style={{ color: "var(--warn)" }}>
+          {payload.warning}
+        </p>
+      )}
+      {payload && (
+        <p className="hint">
+          corpus: {payload.total_with_arxiv ?? 0} papers tracked · {payload.remaining ?? 0} pending · ingested nodes appear{" "}
+          <span style={{ color: "#fb923c" }}>orange</span> in the knowledge graph, with their excerpt on hover
+        </p>
+      )}
 
-      {view === "excerpts" && <ExcerptList payload={payload} query={query} section={section} importing={importing} onImport={(id) => void importPaper(id)} />}
-      {view === "agents" && <AgentList payload={payload} query={query} />}
-    </div>
-  );
-}
+      {!payload && !error && <EmptyState skeleton />}
+      {payload && agents.length === 0 && <EmptyState hint="No agent/tool projects match your filter." />}
 
-function ExcerptList({
-  payload,
-  query,
-  section,
-  importing,
-  onImport,
-}: {
-  payload: ScientistPayload | null;
-  query: string;
-  section: string;
-  importing: string | null;
-  onImport: (arxivId: string) => void;
-}) {
-  const excerpts = useMemo(() => {
-    let list = payload?.excerpts ?? [];
-    if (section !== "all") list = list.filter((e) => e.section === section);
-    const q = query.trim().toLowerCase();
-    if (q) list = list.filter((e) => `${e.title} ${e.section}`.toLowerCase().includes(q));
-    return list;
-  }, [payload, query, section]);
-
-  usePolling(() => undefined, 60_000); // keep hook parity; data loads via load()
-
-  if (!payload) return <EmptyState skeleton />;
-  if (excerpts.length === 0) return <EmptyState hint="No excerpts match. Sync the fork or relax the filter." />;
-
-  return (
-    <>
-      <p className="hint">{excerpts.length} curated excerpts · source: Awesome-AI-Scientist</p>
-      <ul className="pool-list">
-        {excerpts.map((e, i) => (
-          <li key={`${e.arxiv_id}-${i}`} className="pool-card">
-            <div className="pool-head">
-              <strong>{e.title}</strong>
-              {e.year && <span className="pill kind">{e.year}.{e.month}</span>}
-            </div>
-            <p className="pool-meta">{e.section}</p>
-            <div className="composer-row">
-              {e.url && <a className="ghost" href={e.url} target="_blank" rel="noreferrer">paper ↗</a>}
-              {e.review_url && <a className="ghost" href={e.review_url} target="_blank" rel="noreferrer">review ↗</a>}
-              {e.review_url?.includes("ai-researcher.net") && <span className="pill kind">AI review</span>}
-              {!e.reviewed && !e.review_url && <span className="stat">no review</span>}
-              {e.arxiv_id && (
-                <button disabled={importing === e.arxiv_id} onClick={() => onImport(e.arxiv_id)}>
-                  {importing === e.arxiv_id ? "queueing…" : "ingest"}
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
-function AgentList({ payload, query }: { payload: ScientistPayload | null; query: string }) {
-  const agents = useMemo(() => {
-    let list = payload?.agents ?? [];
-    const q = query.trim().toLowerCase();
-    if (q) list = list.filter((a) => `${a.name} ${a.description}`.toLowerCase().includes(q));
-    return list;
-  }, [payload, query]);
-
-  if (!payload) return <EmptyState skeleton />;
-  if (agents.length === 0) return <EmptyState hint="No agent/tool projects match." />;
-
-  return (
-    <>
-      <p className="hint">{agents.length} research-automation projects from the featured list</p>
       <ul className="pool-list">
         {agents.map((a, i) => (
           <li key={`${a.name}-${i}`} className={`pool-card ${a.kind === "platform" ? "platform" : ""}`}>
@@ -189,12 +120,14 @@ function AgentList({ payload, query }: { payload: ScientistPayload | null; query
             <p className="pool-meta">{a.description}</p>
             {a.url && (
               <div className="composer-row">
-                <a className="ghost" href={a.url} target="_blank" rel="noreferrer">open ↗</a>
+                <a className="ghost" href={a.url} target="_blank" rel="noreferrer">
+                  open ↗
+                </a>
               </div>
             )}
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }

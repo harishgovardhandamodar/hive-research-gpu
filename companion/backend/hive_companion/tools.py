@@ -120,6 +120,39 @@ class ToolRegistry:
             return await client.add_paper(arxiv_id)
 
         @self._register(
+            "library.import_many",
+            "Bulk-ingest a list of arxiv ids sequentially, tracking per-paper outcomes.",
+            mutates=True,
+            args={"arxiv_ids": "comma-separated arxiv ids"},
+        )
+        async def _import_many(arxiv_ids: str) -> Any:
+            ids = [x.strip() for x in arxiv_ids.split(",") if x.strip()]
+            added, failed = [], []
+            for n, aid in enumerate(ids):
+                try:
+                    res = await client.add_paper(aid)
+                except HiveApiError as exc:
+                    res = {"status": "error", "error": str(exc)}
+                ok = isinstance(res, dict) and res.get("status") == "added"
+                if ok:
+                    added.append(aid)
+                else:
+                    failed.append({"id": aid, "error": str((res or {}).get("error", ""))[:160]})
+                if self.failures is not None:
+                    if ok:
+                        self.failures.record_success(aid)
+                    else:
+                        self.failures.record_failure(aid, error=str((res or {}).get("error", ""))[:300])
+                _ = n
+            return {
+                "requested": len(ids),
+                "added": len(added),
+                "failed": len(failed),
+                "added_ids": added,
+                "failures": failed,
+            }
+
+        @self._register(
             "library.retry_failed",
             "Re-ingest papers whose previous ingestion failed, one by one.",
             mutates=True,
@@ -251,6 +284,20 @@ class ToolRegistry:
                     self.episodes.append("insight", text.strip()[:400])
                     made += 1
             return {"consolidated": made, "reviewed_episodes": len(recent)}
+
+        @self._register(
+            "summarize.tldr",
+            "One-sentence TLDR of a vault note (Cachola et al. 2020 extreme summarization style).",
+            args={"path": "vault-relative note path"},
+        )
+        async def _tldr(path: str) -> Any:
+            from .tldr import make_tldr
+
+            file = await client.read_file(path)
+            content = str(file.get("content", ""))
+            title = path.rsplit("/", 1)[-1].replace("_", " ").rsplit(".", 1)[0]
+            tldr = await make_tldr(self.llm, content[:4000], focus=title)
+            return {"path": path, "tldr": tldr}
 
         @self._register(
             "verify.attribution",

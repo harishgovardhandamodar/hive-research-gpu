@@ -134,6 +134,13 @@ export const api = {
   planTemplates: () => req<PlanTemplate[]>("/api/plans/templates"),
   scientistExcerpts: () => req<ScientistPayload>("/api/scientist", { quiet: true }),
   scientistRefresh: () => req<Record<string, unknown>>("/api/scientist/refresh", { method: "POST", body: "{}" }),
+  scientistIngestAll: (mode = "auto") =>
+    req<{ queued: boolean; remaining?: number; message?: string }>("/api/scientist/ingest-all", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
+  postTldr: (body: { text?: string; path?: string; focus?: string }) =>
+    req<{ tldr: string }>("/api/tldr", { method: "POST", body: JSON.stringify(body), quiet: true }),
   scientistImport: (arxivId: string, mode = "tiered") =>
     req<Plan>("/api/scientist/import", {
       method: "POST",
