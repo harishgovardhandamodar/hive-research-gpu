@@ -58,6 +58,8 @@ def build_timeline(store: EpisodeStore, limit: int = 40) -> dict[str, Any]:
                     "tool": ctx.get("tool", "?"),
                     "status": ctx.get("status", "done"),
                     "summary": ep["summary"],
+                    # full error text / tool result for the detail overlay
+                    "detail": str(ctx.get("result") or ctx.get("error") or "")[:600],
                 }
             )
         elif kind == "feedback":

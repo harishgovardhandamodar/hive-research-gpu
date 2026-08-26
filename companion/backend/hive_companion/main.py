@@ -30,6 +30,8 @@ from .jobsbar import collect as collect_statusbar
 from .kg import KGCache, extract_arxiv_ids
 from .deepideation import ConceptNetwork, DeepIdeationEngine, DeepRun
 from .ideagent import IdeagentEngine, IdeaRun, persist_runs
+from .awesome_scientist import fetch_and_cache as awesome_fetch_and_cache
+from .awesome_scientist import load_cached as awesome_load_cached
 from .backup import BackupLoop, create_snapshot, list_snapshots
 from .cite import bibtex
 from .schedules import GoalScheduler, ScheduleStore, WEEKDAYS
@@ -281,6 +283,9 @@ class CompanionApp:
             except Exception:
                 logger.exception("plan %s crashed", plan.id)
 
+        asyncio.create_task(pump())
+        return plan
+
     async def _reflect_on_failure(self, plan: Plan, event: dict[str, Any]) -> None:
         idx = event.get("step_index")
         step = plan.steps[idx] if isinstance(idx, int) and 0 <= idx < len(plan.steps) else None
@@ -479,6 +484,52 @@ async def delete_template(template_id: str) -> dict[str, Any]:
     if not state.templates.delete(template_id):
         raise HTTPException(404, "template not found")
     return {"deleted": template_id}
+
+
+# -- Awesome-AI-Scientist excerpts & agents ------------------------------------
+
+@app.get("/api/scientist")
+async def scientist_excerpts() -> dict[str, Any]:
+    cached = awesome_load_cached(state.settings.data_dir)
+    if not cached.get("excerpts"):
+        try:
+            cached = await awesome_fetch_and_cache(state.settings.data_dir)
+        except Exception as exc:
+            raise HTTPException(502, f"Awesome-AI-Scientist sync failed and no cache exists: {str(exc)[:200]}")
+    return cached
+
+
+@app.post("/api/scientist/refresh")
+async def scientist_refresh() -> dict[str, Any]:
+    try:
+        result = await awesome_fetch_and_cache(state.settings.data_dir)
+    except Exception as exc:
+        cached = awesome_load_cached(state.settings.data_dir)
+        if not cached.get("excerpts"):
+            raise HTTPException(502, f"sync failed, no cache: {str(exc)[:200]}")
+        return {**cached, "warning": f"fetch failed, serving cache: {str(exc)[:200]}"}
+    return result
+
+
+class ScientistImportRequest(BaseModel):
+    arxiv_id: str = Field(min_length=5, max_length=32)
+    mode: str = "tiered"
+
+
+@app.post("/api/scientist/import")
+async def scientist_import(req: ScientistImportRequest) -> dict[str, Any]:
+    """Ingest an excerpt's arxiv paper through the governed plan pipeline."""
+    from .planner import Step
+
+    plan = Plan(
+        id=uuid.uuid4().hex[:12],
+        goal_id="",
+        goal=f"import AI-Scientist excerpt {req.arxiv_id}",
+        steps=[Step(index=0, tool="library.add_paper", args={"arxiv_id": req.arxiv_id}, rationale="selected from Awesome-AI-Scientist")],
+        planner="scientist",
+    )
+    launched = await state.launch_plan(plan.goal, req.mode, plan=plan)
+    return launched.to_dict()
 
 
 @app.get("/api/plans")

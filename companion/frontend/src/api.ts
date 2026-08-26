@@ -16,6 +16,7 @@ import type {
    CompareEdge,
    IngestFailure,
    PlanTemplate,
+   ScientistPayload,
  } from "./types";
 
 export async function req<T>(path: string, init?: RequestInit & { quiet?: boolean }): Promise<T> {
@@ -131,6 +132,13 @@ export const api = {
     }),
   runProactive: () => req<{ created: Suggestion[] }>("/api/proactive/run", { method: "POST", body: "{}" }),
   planTemplates: () => req<PlanTemplate[]>("/api/plans/templates"),
+  scientistExcerpts: () => req<ScientistPayload>("/api/scientist", { quiet: true }),
+  scientistRefresh: () => req<Record<string, unknown>>("/api/scientist/refresh", { method: "POST", body: "{}" }),
+  scientistImport: (arxivId: string, mode = "tiered") =>
+    req<Plan>("/api/scientist/import", {
+      method: "POST",
+      body: JSON.stringify({ arxiv_id: arxivId, mode }),
+    }),
   runPlanTemplate: (id: string, mode = "tiered") =>
     req<Plan>(`/api/plans/templates/${id}/run`, {
       method: "POST",

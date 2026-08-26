@@ -9,6 +9,15 @@ marked.setOptions({ breaks: true, gfm: true });
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
 const CHAT_STORAGE_KEY = "fox-chat-v1";
 
+/** Sample commands — click to load (and switch mode when suggested). */
+const SAMPLE_COMMANDS: { text: string; mode?: string }[] = [
+  { text: "What changed across my vault this week?" },
+  { text: "Summarize the state of AI agent security research", mode: "thinking" },
+  { text: "Which of my papers discuss prompt injection?", mode: "rag" },
+  { text: "Give me a daily digest of new pool papers", mode: "fast" },
+  { text: "Deep research: privacy risks when enterprises consume third-party AI agents", mode: "deep-research" },
+];
+
 interface PersistedChat {
   messages: ChatMessage[];
   conversationId: string | null;
@@ -127,6 +136,23 @@ export function ChatPanel() {
           <div className="chat-empty">
             <img src="/fox-avatar.webp" alt="Fox" className="chat-empty-fox" width={72} height={72} onError={(e) => ((e.currentTarget.style.display = "none"))} />
             <p className="empty">Ask anything about your library. Answers are grounded in your notes and knowledge graph; every exchange becomes an episode the companion can recall.</p>
+            <div className="suggest-row" role="list" aria-label="sample commands">
+              {SAMPLE_COMMANDS.map((c) => (
+                <button
+                  key={c.text}
+                  role="listitem"
+                  className="chip suggest-chip"
+                  title={c.mode ? `runs in ${c.mode} mode` : undefined}
+                  onClick={() => {
+                    setInput(c.text);
+                    if (c.mode) setMode(c.mode);
+                  }}
+                >
+                  {c.mode && <span className="suggest-mode">{c.mode}</span>}
+                  {c.text}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (

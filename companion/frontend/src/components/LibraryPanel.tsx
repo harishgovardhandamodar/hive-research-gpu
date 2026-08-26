@@ -4,6 +4,15 @@ import { EmptyState } from "./ui";
 import type { CompareEdge, LibraryHit } from "../types";
 import { useArtifactOpener, ArtifactViewer } from "./Explorer";
 
+/** One-click sample searches for the library. */
+const LIBRARY_SUGGESTIONS = [
+  "agent security",
+  "LLM safety",
+  "federated learning privacy",
+  "knowledge graph embedding",
+  "prompt injection",
+];
+
 export function LibraryPanel() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<LibraryHit[] | null>(null);
@@ -42,11 +51,12 @@ export function LibraryPanel() {
     }
   };
 
-  const runSearch = useCallback(async () => {
-    if (query.trim().length < 2) return;
+  const runSearch = useCallback(async (override?: string) => {
+    const q = (override ?? query).trim();
+    if (q.length < 2) return;
     setBusy(true);
     try {
-      const data = await api.librarySearch(query.trim());
+      const data = await api.librarySearch(q);
       setHits(data.items);
       setLoadError(null);
     } catch (e) {
@@ -81,6 +91,23 @@ export function LibraryPanel() {
         <p className="hint">
           {hits.length} matches · click one with notes to open them
         </p>
+      )}
+      {!hits && (
+        <div className="suggest-row" role="list" aria-label="suggested searches">
+          {LIBRARY_SUGGESTIONS.map((q) => (
+            <button
+              key={q}
+              role="listitem"
+              className="chip suggest-chip"
+              onClick={() => {
+                setQuery(q);
+                void runSearch(q);
+              }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
       )}
       <ul className="pool-list">
         {hits === null && (

@@ -37,10 +37,10 @@ export function useLivePlans() {
         return;
       }
       const plan = plansRef.current.get(planId);
-      if (!plan && event.type !== "plan_started") return;
-      if (event.type === "plan_started") {
+      if (!plan || event.type === "plan_started") {
+        // unknown or brand-new plan: pull authoritative state from the server
         void refreshPlans();
-        return;
+        if (event.type === "plan_started") return;
       }
       if (!plan) return;
       // let live panels (Discover etc.) react to plan activity without polling
@@ -67,8 +67,20 @@ export function useLivePlans() {
       };
     };
     open();
+
+    // reconciliation: WS frames are best-effort (backgrounded tabs, dropped
+    // sockets), so poll periodically and on refocus to settle card states
+    void refreshPlans();
+    const t = setInterval(() => void refreshPlans(), 10000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshPlans();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       clearTimeout(retry);
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
       ws?.close();
     };
   }, [applyEvent]);

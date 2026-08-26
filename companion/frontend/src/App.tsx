@@ -21,17 +21,19 @@ import { SchedulesPanel } from "./components/SchedulesPanel";
 import { IdeasPanel } from "./components/IdeasPanel";
 import { DeepIdeasPanel } from "./components/DeepIdeasPanel";
 import { AgentsPanel } from "./components/AgentsPanel";
+import { ScientistPanel } from "./components/ScientistPanel";
 import { Toaster } from "./lib/toast";
 
 const MemoPlanCard = memo(PlanCard);
 const MemoApprovalInbox = memo(ApprovalInbox);
 
-type CenterTab = "chat" | "agents" | "discover" | "ideas" | "deepideas" | "library";
+type CenterTab = "chat" | "agents" | "scientist" | "discover" | "ideas" | "deepideas" | "library";
 
 /** Workspace tabs — add an entry here to extend the center column. */
 const TABS: { id: CenterTab; label: string }[] = [
   { id: "chat", label: "Fox Chat" },
   { id: "agents", label: "🤖 Agents" },
+  { id: "scientist", label: "🧪 AI Scientist" },
   { id: "discover", label: "Discover" },
   { id: "ideas", label: "💡 IDEAgent" },
   { id: "deepideas", label: "🕸 Deep Ideation" },
@@ -41,6 +43,7 @@ const TABS: { id: CenterTab; label: string }[] = [
 const TAB_COMPONENTS: Record<CenterTab, () => JSX.Element> = {
   chat: ChatPanel,
   agents: AgentsPanel,
+  scientist: ScientistPanel,
   discover: DiscoverPanel,
   ideas: IdeasPanel,
   deepideas: DeepIdeasPanel,

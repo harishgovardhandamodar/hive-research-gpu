@@ -81,6 +81,13 @@ export interface TimelineStep {
   tool: string;
   status: string;
   summary: string;
+  detail?: string;
+}
+
+export interface TimelineEvent {
+  ts: string;
+  kind: string;
+  summary: string;
 }
 
 export interface TimelineThread {
@@ -95,6 +102,7 @@ export interface TimelineThread {
   steps_skipped: number;
   steps: TimelineStep[];
   decisions: { ts: string; summary: string }[];
+  events: TimelineEvent[];
 }
 
 export interface TimelineResponse {
@@ -225,4 +233,30 @@ export interface IdeaRunState {
     builds_on?: string[];
     cell: string;
   }[];
+}
+
+export interface ScientistExcerpt {
+  title: string;
+  url: string;
+  arxiv_id: string;
+  year: string;
+  month: string;
+  section: string;
+  review_url: string;
+  reviewed: boolean;
+}
+
+export interface ScientistAgentTool {
+  name: string;
+  description: string;
+  url: string;
+  kind: string;
+}
+
+export interface ScientistPayload {
+  excerpts?: ScientistExcerpt[];
+  agents?: ScientistAgentTool[];
+  sections?: string[];
+  source?: string;
+  warning?: string;
 }
