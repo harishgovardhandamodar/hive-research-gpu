@@ -205,6 +205,28 @@ class TestHTTPServer(unittest.TestCase):
             else:
                 os.environ["COMPANION_URL"] = old
 
+    # -- knowledge-mapper link ---------------------------------------------------
+
+    def test_mapper_redirects_to_gui(self) -> None:
+        status, headers, body = self._request_no_redirect("/mapper")
+        self.assertEqual(status, 302)
+        self.assertEqual(headers["location"], "http://127.0.0.1:8209/")
+        data = json.loads(body)
+        self.assertEqual(data["redirect"], "http://127.0.0.1:8209/")
+
+    def test_mapper_url_env_override(self) -> None:
+        old = os.environ.get("MAPPER_URL")
+        os.environ["MAPPER_URL"] = "http://example.com:8204/"
+        try:
+            status, headers, _ = self._request_no_redirect("/mapper")
+            self.assertEqual(status, 302)
+            self.assertEqual(headers["location"], "http://example.com:8204/")
+        finally:
+            if old is None:
+                del os.environ["MAPPER_URL"]
+            else:
+                os.environ["MAPPER_URL"] = old
+
     def test_parallel_requests_do_not_serialize_each_other(self) -> None:
         """With ThreadingHTTPServer, a slow handler must not block others."""
         import time

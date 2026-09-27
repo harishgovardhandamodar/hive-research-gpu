@@ -13,6 +13,8 @@
 - [Similarity](similarity.md)
 - [GPU Management](gpu.md)
 - [Docker Deployment](docker.md)
+- [Fox Companion](companion.md)
+- [Knowledge Mapper addon](knowledge-mapper.md)
 - [Development](development.md)
   - [Benchmarking](benchmarking.md)
 - [API Reference](api.md)

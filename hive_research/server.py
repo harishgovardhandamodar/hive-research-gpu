@@ -135,6 +135,8 @@ class RouteHandler(BaseHTTPRequestHandler):
             self._serve_landscape()
         elif path == "/companion":
             self._serve_companion_redirect()
+        elif path == "/mapper":
+            self._serve_mapper_redirect()
         elif path == "/debug/graph":
             self._serve_debug_graph()
         elif path == "/api/graph":
@@ -734,6 +736,26 @@ info.textContent += ' | OK';
 
     def _serve_companion_redirect(self) -> None:
         target = self._companion_url()
+        body = json.dumps({"redirect": target}).encode()
+        self.send_response(302)
+        self.send_header("Location", target)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _mapper_url(self) -> str:
+        """Knowledge-mapper GUI location: explicit env override, else same host on :8209."""
+        configured = os.environ.get("MAPPER_URL", "").strip()
+        if configured:
+            return configured
+        host = (self.headers.get("Host") or "127.0.0.1:7777").rsplit(":", 1)[0]
+        if host.startswith("[") and not host.endswith("]"):
+            host += "]"
+        return f"http://{host}:8209/"
+
+    def _serve_mapper_redirect(self) -> None:
+        target = self._mapper_url()
         body = json.dumps({"redirect": target}).encode()
         self.send_response(302)
         self.send_header("Location", target)

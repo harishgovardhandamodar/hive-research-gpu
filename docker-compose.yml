@@ -47,6 +47,53 @@ services:
       - OLLAMA_IDEATION_URL=http://localhost:11434
     restart: unless-stopped
 
+  # Agentic Knowledge Mapper — sibling addon (../agentic-knowledge-mapper).
+  # Requires that checkout next to this repo. Standalone investigation app:
+  # plan→search→analyze→map loop, explainer, AI-security reports, audit ledger.
+  # Bridge-mode on purpose: the standalone sibling stack already owns :8204,
+  # so this copy serves on :8209. LLM traffic exits via host.docker.internal.
+  knowledge-mapper:
+    build:
+      context: ../agentic-knowledge-mapper
+    ports:
+      - "8209:8204"
+    volumes:
+      - akm_data:/app/data
+    environment:
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host.docker.internal:8210/v1}
+      - LLM_FALLBACK_URL=${LLM_FALLBACK_URL:-http://host.docker.internal:11434/v1}
+      - LLM_MODEL=${LLM_MODEL:-qwen3.8:27b}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-qwen3.8:27b}
+      - LLM_TIMEOUT_S=${LLM_TIMEOUT_S:-180}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -s -o /dev/null http://localhost:8204/api/health | grep -q 200 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # 3rd tab of the mapper UI ("AI Standards & Regulations"): static build of
+  # the vendored dashboard (../agentic-knowledge-mapper/standards-dashboard).
+  # On :5174 (bridge) because the standalone sibling stack already owns :5173.
+  # Note: the mapper GUI hardcodes its iframe to <host>:5173, so the Standards
+  # tab shows the standalone dashboard; this copy is for direct access.
+  mapper-standards:
+    build:
+      context: ../agentic-knowledge-mapper/standards-dashboard
+    ports:
+      - "5174:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   hive_data:
   companion_data:
+  akm_data:

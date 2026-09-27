@@ -75,6 +75,16 @@ services:
       start_period: 40s
 ```
 
+## Addons (same compose file)
+
+```bash
+docker compose up -d --build knowledge-mapper mapper-standards
+```
+
+- `knowledge-mapper` — sibling Agentic Knowledge Mapper (`../agentic-knowledge-mapper`), GUI on `:8209` (side-by-side; standalone keeps `:8204`). See [knowledge-mapper.md](knowledge-mapper.md).
+- `mapper-standards` — its vendored AI Standards dashboard on `:5174` (standalone keeps `:5173`).
+- `companion` — Fox Companion agentic GUI on `:8001`. See [companion.md](companion.md).
+
 ## Dockerfile Structure
 
 1. Base: `nvidia/cuda:12.4.1-runtime-ubuntu22.04`

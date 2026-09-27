@@ -189,6 +189,37 @@ python -m uvicorn hive_companion.main:app --port 8001 --app-dir companion/backen
 - **Episodic memory browser** — searchable record of every action taken
 - See [docs/companion.md](docs/companion.md) for architecture and configuration.
 
+### Agentic Knowledge Mapper — Investigation Addon (sibling app)
+
+A second addon at `http://localhost:8209` from the sibling checkout at
+`../agentic-knowledge-mapper`: define an **investigation** (keywords +
+free-text brief) and agents plan searches, analyze candidates, and map them
+into a per-investigation **knowledge graph**. Includes a grounded
+**explainer** (evidence drawers, self-critique, quizzes, drift watch), an **AI
+Security agent** (scored reports with Markdown/PDF export), and a
+**hash-chained audit ledger** with re-derivable proofs. All LLM reasoning goes
+through the local gateway (`:8210/v1`, Ollama) — no external API keys.
+Runs side-by-side with the sibling's standalone stack (`:8204`/`:5173`),
+which keeps its ports; this copy uses `:8209`/`:5174` with its own `akm_data`
+volume.
+
+```bash
+# requires the sibling checkout next to this repo
+# macOS / Apple Silicon: export the MLX build first (Linux default is qwen3.8:27b)
+[ "$(uname -s)" = "Darwin" ] && export LLM_MODEL=qwen3.8:27b-mlx LLM_FALLBACK_MODEL=qwen3.8:27b-mlx
+docker compose up -d --build knowledge-mapper mapper-standards
+# GUI at http://localhost:8209 — API health at /api/health
+# Standards dashboard (direct) at http://localhost:5174
+# (the GUI's Standards tab iframe still resolves to <host>:5173, i.e. the standalone stack)
+```
+
+- **Knowledge graph** per investigation (vis-network, type colors, relevance sizing, relation edges)
+- **Review queue** (pending/accepted/rejected) feeding the graph
+- **Audit ledger** timeline, session spines, proof verification, self-verifying exports
+- Shares the hive stack's LLM gateway: `LLM_BASE_URL` (container default `http://host.docker.internal:8210/v1`), fallback `LLM_FALLBACK_URL` (`http://host.docker.internal:11434/v1`), `LLM_MODEL` / `LLM_FALLBACK_MODEL` (Linux default `qwen3.8:27b`, macOS/Apple Silicon `qwen3.8:27b-mlx`)
+- Data persists in the `akm_data` volume (`/app/data` → `akm.db`)
+- See [docs/knowledge-mapper.md](docs/knowledge-mapper.md) and the upstream repo docs (`../agentic-knowledge-mapper/docs/`).
+
 ## Architecture
 
 ```
