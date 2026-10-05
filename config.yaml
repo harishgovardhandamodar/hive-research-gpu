@@ -9,8 +9,11 @@ arxiv:
   max_results: 10
 
 ollama:
-  base_url: http://localhost:11434
-  model: qwen3.6:latest
+  # fox-services gateway on axiom-1 (2x RTX 5080 peer, over Tailscale).
+  # Speaks the Ollama native API, so this is a drop-in for a bare Ollama URL.
+  # Every env var below overrides these; compose sets them explicitly.
+  base_url: http://axiom-1.tailb61a66.ts.net:8210
+  model: qwen3.8:27b
   fast_model: llama3.2:3b
   embed_model: nomic-embed-text
   max_tokens: 16384
@@ -65,3 +68,20 @@ feedback:
 workflow:
   digest_hours: 24
   domain_presets: []        # e.g. [agents, multiagent, swarms, alignment, llm-security]
+
+# Hash-chained audit ledger. The swarm records every role, model call and claim
+# here; the dashboard's Audit panel and the /api/ledger + /api/swarm routes read
+# it back. Ledgering degrades the audit, never the ingest, if it is unavailable.
+ledger:
+  enabled: true
+  db_path: ""               # default: <root>/ledger.sqlite3, beside the data it describes
+
+# Multi-agent extraction swarm. This is the only ingest path; the single-prompt
+# extractor is a recorded fallback (run.degraded) for when the swarm cannot finish.
+swarm:
+  budget_llm_calls: 12      # per-paper inference ceiling
+  budget_minutes: 30
+  min_grounded_ratio: 0.5   # warning floor, not a gate: the check is a substring match
+  allowed_sources: []       # empty = no source allow-list expressed
+  fallback_enabled: true    # a partial note beats no note; the fallback is recorded
+

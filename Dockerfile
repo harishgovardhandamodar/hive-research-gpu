@@ -21,6 +21,11 @@ COPY hive-datatype/__init__.py /app/hive_datatype/__init__.py
 COPY pyproject.toml /app/pyproject.toml
 COPY hive_research/ /app/hive_research/
 COPY config.yaml /app/config.yaml
+# The About tab renders these; without them the docs viewer reports
+# "no docs directory" rather than failing.
+COPY docs/ /app/docs/
+COPY README.md /app/README.md
+COPY AGENTS.md /app/AGENTS.md
 
 RUN /venv/bin/pip install --no-cache-dir /app/
 

@@ -247,6 +247,84 @@ class TestHTTPServer(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertLess(elapsed, 0.9, "request blocked behind slow handler")
 
+    # -- audit ledger + swarm views ---------------------------------------------
+
+    def _seed_ledger(self):
+        from hive_research import ledger as lg
+        from hive_research.ledger_models import init_store, reset_store
+
+        reset_store()
+        store = init_store(Path(self.tmp) / "data" / "ledger.sqlite3")
+        self.addCleanup(reset_store)
+        lg.append("run-1", "run.start", "orchestrator", store=store)
+        for role in ("source-collector", "tag-classifier"):
+            spawn = lg.append("run-1", "swarm.spawn", "orchestrator",
+                              data={"role": role, "phase": "spawn"}, store=store)
+            lg.append("run-1", "swarm.complete", role,
+                      data={"role": role, "phase": "complete",
+                            "parent_event": spawn}, store=store)
+        lg.append("run-1", "run.end", "orchestrator", store=store)
+        return store
+
+    def test_ledger_lists_runs(self) -> None:
+        self._seed_ledger()
+        status, body = self.request("/api/ledger/runs")
+        self.assertEqual(status, 200)
+        runs = json.loads(body)["runs"]
+        self.assertIn("run-1", [r["id"] for r in runs])
+
+    def test_ledger_exports_and_verifies_a_run(self) -> None:
+        self._seed_ledger()
+        status, body = self.request("/api/ledger/run-1")
+        self.assertEqual(status, 200)
+        bundle = json.loads(body)
+        self.assertTrue(bundle["verification"]["ok"])
+        self.assertEqual(bundle["run"]["id"], "run-1")
+
+        status, body = self.request("/api/ledger/run-1/verify")
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+
+    def test_ledger_integrity_and_swarm_views(self) -> None:
+        self._seed_ledger()
+        status, body = self.request("/api/ledger/run-1/integrity")
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["chain_ok"])
+
+        status, body = self.request("/api/swarm/topology?run_id=run-1")
+        self.assertEqual(status, 200)
+        self.assertIn("source-collector", json.loads(body)["complete"])
+
+        status, body = self.request("/api/swarm/health?run_id=run-1")
+        self.assertEqual(status, 200)
+        self.assertIsInstance(json.loads(body)["roles"], list)
+
+        status, body = self.request("/api/swarm/monitor")
+        self.assertEqual(status, 200)
+        self.assertIn("runs", json.loads(body))
+
+    def test_unknown_run_is_404(self) -> None:
+        self._seed_ledger()
+        status, _ = self.request("/api/ledger/does-not-exist")
+        self.assertEqual(status, 404)
+
+    # -- documentation viewer ----------------------------------------------------
+
+    def test_docs_index_and_document(self) -> None:
+        status, body = self.request("/api/docs")
+        self.assertEqual(status, 200)
+        docs = json.loads(body)["docs"]
+        self.assertTrue(any(d["id"] == "architecture" for d in docs))
+
+        status, body = self.request("/api/docs/architecture")
+        self.assertEqual(status, 200)
+        self.assertIn("Audit Ledger and Agent Swarm", json.loads(body)["markdown"])
+
+    def test_docs_unknown_and_traversal_are_404(self) -> None:
+        for bad in ("no-such-doc", "../config", "..%2fconfig.yaml"):
+            status, _ = self.request(f"/api/docs/{bad}")
+            self.assertEqual(status, 404, bad)
+
 
 if __name__ == "__main__":
     unittest.main()

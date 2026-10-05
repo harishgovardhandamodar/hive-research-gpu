@@ -58,9 +58,12 @@ class CompanionApp:
         self.registry = ToolRegistry(self.client)
         self.kg = KGCache(self.client)
         ideation_url = self.settings.ideation_base_url or self.settings.llm_base_url
+        _ideation_hdrs = {"service_name": self.settings.service_name,
+                         "requestor": "subagent",
+                         "timeout": self.settings.llm_timeout_s}
         self.ideagent = IdeagentEngine(
-            llm_fast=ChatClient(ideation_url, self.settings.llm_fast_model),
-            llm_main=ChatClient(ideation_url, self.settings.llm_model),
+            llm_fast=ChatClient(ideation_url, self.settings.llm_fast_model, **_ideation_hdrs),
+            llm_main=ChatClient(ideation_url, self.settings.llm_model, **_ideation_hdrs),
             kg=self.kg,
             bus=self.bus,
             on_complete=lambda run: persist_runs(self.settings.data_dir, self.ideagent.history),
@@ -71,8 +74,8 @@ class CompanionApp:
         self.deep_network = ConceptNetwork(self.kg)
         ideation_url2 = self.settings.ideation_base_url or self.settings.llm_base_url
         self.deep_llms = [
-            ChatClient(ideation_url2, self.settings.llm_fast_model),
-            ChatClient(ideation_url2, self.settings.llm_model),
+            ChatClient(ideation_url2, self.settings.llm_fast_model, **_ideation_hdrs),
+            ChatClient(ideation_url2, self.settings.llm_model, **_ideation_hdrs),
         ]
         self._ideagent_llms.extend(x for x in self.deep_llms if x is not None)
         self.deepideation = DeepIdeationEngine(
@@ -91,7 +94,10 @@ class CompanionApp:
             self.schedules,
             launcher=lambda goal, mode: state.launch_plan(goal, mode),
         )
-        self.llm: ChatClient | None = ChatClient(self.settings.llm_base_url, self.settings.llm_fast_model)
+        self.llm: ChatClient | None = ChatClient(
+            self.settings.llm_base_url, self.settings.llm_fast_model,
+            service_name=self.settings.service_name, requestor="user",
+            timeout=self.settings.llm_timeout_s)
         self.planner = Planner(self.registry, self.llm, self.policy)
         self.executor = PlanExecutor(
             self.registry,

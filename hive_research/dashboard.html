@@ -303,6 +303,11 @@ select{cursor:pointer}
 .markdown-body table{border-collapse:collapse;font-size:12px;margin:8px 0;border-radius:8px;overflow:hidden}
 .markdown-body th,.markdown-body td{padding:6px 10px;border:1px solid var(--border);text-align:left}
 .markdown-body th{background:var(--surface2);color:var(--text2);font-size:11px}
+/* Mermaid diagrams in rendered Markdown */
+.mermaid-diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 8px;margin:10px 0;overflow-x:auto;text-align:center;transition:border-color .2s}
+.mermaid-diagram:hover{border-color:var(--text3)}
+.mermaid-diagram pre.mermaid{margin:0;background:transparent;border:0;text-align:center;font-size:12px;color:var(--text2);white-space:pre}
+.mermaid-diagram svg{max-width:100%;height:auto}
 
 /* ── Browse Paper List ── */
 .browse-paper{padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:all .15s;position:relative}
@@ -528,6 +533,9 @@ select{cursor:pointer}
   <div class="nav-item" data-panel="fox" onclick="switchPanel('fox')" aria-label="Fox — Research Companion">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5l4.6 3.9h6.8L20 3.5V12c0 4.6-3.4 8-8 9.5C7.4 20 4 16.6 4 12z"/><circle cx="9.2" cy="12" r="0.5" fill="currentColor" stroke="none"/><circle cx="14.8" cy="12" r="0.5" fill="currentColor" stroke="none"/><path d="M12 15.2l-1.1-1.3h2.2z" fill="currentColor" stroke="none"/></svg>
     <span class="tip">Fox — Research Companion</span></div>
+  <div class="nav-item" data-panel="audit" onclick="switchPanel('audit')" aria-label="Audit ledger">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.4-2.9 8.2-7 9.5C7.9 19.2 5 15.4 5 11V6z"/><path d="M9 12l2 2 4-4"/></svg>
+    <span class="tip">Audit ledger</span></div>
   <div class="nav-item" onclick="window.open('/landscape','_blank')" style="cursor:pointer" aria-label="Landscape">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="3.8" ry="8.5"/><path d="M3.8 9.2h16.4M3.8 14.8h16.4"/></svg>
     <span class="tip">Landscape</span></div>
@@ -764,18 +772,41 @@ select{cursor:pointer}
 </div>
 
 <!-- ── About Panel ── -->
+<!-- ── Audit Panel ── -->
+<div class="panel" id="panel-audit">
+  <div class="panel-header"><h2>Audit Ledger <span class="badge" id="auditBadge">runs</span>
+    <button class="btn btn-sm" onclick="loadAudit()" style="margin-left:auto;font-size:10px">&#x1F504; Refresh</button>
+  </h2></div>
+  <div class="panel-body" style="padding-top:8px">
+    <div id="auditList" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="auditDetail" style="display:none;margin-top:8px"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-about">
-  <div class="panel-header"><h2>About <span class="badge">System</span></h2></div>
+  <div class="panel-header"><h2>About <span class="badge">System &amp; docs</span></h2></div>
   <div class="panel-body">
-    <div class="grid-2">
-      <div class="stat-card"><div class="num" id="aboutPapers">0</div><div class="lbl">Papers</div></div>
-      <div class="stat-card"><div class="num" id="aboutConcepts">0</div><div class="lbl">Concepts</div></div>
-      <div class="stat-card"><div class="num" id="aboutEdges">0</div><div class="lbl">Relations</div></div>
-      <div class="stat-card"><div class="num" id="aboutChunks">0</div><div class="lbl">RAG Chunks</div></div>
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;flex-shrink:0">
+      <div class="about-tab active" data-sub="system" onclick="switchAboutTab('system',this)" style="padding:6px 14px;cursor:pointer;font-size:11px;border-bottom:2px solid var(--accent);color:var(--accent);font-weight:500">About</div>
+      <div class="about-tab" data-sub="docs" onclick="switchAboutTab('docs',this)" style="padding:6px 14px;cursor:pointer;font-size:11px;color:var(--text3)">Documentation</div>
     </div>
-    <div class="card"><div class="card-header">System</div><div id="sysInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
-    <div class="card"><div class="card-header">Ollama</div><div id="ollamaInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
-    <div class="card"><div class="card-header">GPU</div><div id="gpuInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
+    <div id="aboutSection-system" class="about-section">
+      <div class="grid-2">
+        <div class="stat-card"><div class="num" id="aboutPapers">0</div><div class="lbl">Papers</div></div>
+        <div class="stat-card"><div class="num" id="aboutConcepts">0</div><div class="lbl">Concepts</div></div>
+        <div class="stat-card"><div class="num" id="aboutEdges">0</div><div class="lbl">Relations</div></div>
+        <div class="stat-card"><div class="num" id="aboutChunks">0</div><div class="lbl">RAG Chunks</div></div>
+      </div>
+      <div class="card"><div class="card-header">System</div><div id="sysInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
+      <div class="card"><div class="card-header">Ollama</div><div id="ollamaInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
+      <div class="card"><div class="card-header">GPU</div><div id="gpuInfo" style="font-size:12px;color:var(--text2);line-height:1.8"></div></div>
+    </div>
+    <div id="aboutSection-docs" class="about-section" style="display:none;flex:1;min-height:0;flex-direction:column">
+      <div style="display:flex;flex:1;min-height:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <div id="docsList" style="width:238px;min-width:238px;border-right:1px solid var(--border);overflow-y:auto;padding:6px"></div>
+        <div id="docsView" class="markdown-body" style="flex:1;min-height:0;overflow-y:auto;padding:14px 20px;font-size:12px;line-height:1.7"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -968,6 +999,17 @@ function switchImportTab(sub, el){
   if(sub==='arxiv')document.getElementById('arxivInput').focus();
 }
 
+function switchAboutTab(sub, el){
+  document.querySelectorAll('.about-tab').forEach(t=>{t.style.borderBottomColor='transparent';t.style.color='var(--text3)';t.style.fontWeight='400'});
+  document.querySelectorAll('.about-section').forEach(s=>s.style.display='none');
+  if(el){el.style.borderBottomColor='var(--accent)';el.style.color='var(--accent)';el.style.fontWeight='500'}
+  const section=document.getElementById('aboutSection-'+sub);
+  // flex (not block) for docs, so it stretches to the tab height instead of
+  // collapsing to its content.
+  if(section)section.style.display=(sub==='docs')?'flex':'block';
+  if(sub==='docs')loadDocs();
+}
+
 function switchPanel(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -978,6 +1020,7 @@ function switchPanel(name){
   if(name==='pool')loadPoolPanel();
   if(name==='import'){document.getElementById('webUrlInput').focus();loadWebList();}
   if(name==='about')loadAbout();
+  if(name==='audit')loadAudit();
   if(name==='fox'){foxDock();foxInit()}
 }
 
@@ -2103,58 +2146,176 @@ function searchPapers(){
 }
 
 function renderMarkdown(text, filePath) {
-  let html = esc(text);
-  // Protect images from later markdown processing (underscores in filenames)
-  const images = [];
+  // Block-aware renderer. The previous version replaced code fences with HTML,
+  // then ran inline/bold/italic/list/paragraph regexes over the *whole* string
+  // -- so `run_agent` in a code block became `run<em>agent</em>` and Mermaid
+  // source was corrupted before it ever reached the renderer. Code, inline code
+  // and images are now pulled out into placeholders first and restored last, so
+  // nothing downstream can touch them.
   const baseDir = (filePath || '').substring(0, (filePath || '').lastIndexOf('/') + 1);
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
-    let img;
-    if (src.startsWith('http://') || src.startsWith('https://')) {
-      img = '<img src="' + esc(src) + '" alt="' + esc(alt) + '" style="max-width:100%;cursor:zoom-in" onclick="window.open(this.src)">';
-    } else {
-      img = '<img src="/api/raw?path=' + encodeURIComponent(baseDir + src) + '" alt="' + esc(alt) + '" style="max-width:100%;cursor:zoom-in" onclick="window.open(this.src)">';
+  const store = [];
+  const keep = (h) => { store.push(h); return '\uE000' + (store.length - 1) + '\uE001'; };
+
+  const inline = (raw) => {
+    let t = esc(raw);
+    // inline code first, so ** and _ inside it stay literal
+    t = t.replace(/`([^`]+)`/g, (m, c) =>
+      keep('<code style="background:var(--surface2);padding:1px 4px;border-radius:3px;font-size:90%">' + c + '</code>'));
+    // images
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, alt, p) => {
+      const url = /^(https?:)?\/\//.test(p) ? p : ('/api/raw?path=' + encodeURIComponent(baseDir + p));
+      return keep('<img src="' + url + '" alt="' + esc(alt) + '" style="max-width:100%;border-radius:8px;margin:4px 0;cursor:zoom-in" onclick="window.open(this.src)">');
+    });
+    // links
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<a href="$2" target="_blank" style="color:var(--accent)">$1</a>');
+    // bold
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    // italic -- `_` only at word boundaries, so identifiers survive
+    t = t.replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    t = t.replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g, '$1<em>$2</em>');
+    // strikethrough
+    t = t.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+    return t;
+  };
+
+  const isBlockStart = (l) => /^\s*$/.test(l)
+    || /^\s*(`{3,}|~{3,})/.test(l)
+    || /^#{1,6}\s+/.test(l)
+    || /^\s*([-*+]|\d+\.)\s+/.test(l)
+    || /^\s*>/.test(l)
+    || /^\s*([-*_])(\s*\1){2,}\s*$/.test(l);
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*$/.test(line)) { i++; continue; }
+
+    // fenced code block
+    let fm = line.match(/^\s*(`{3,}|~{3,})\s*([\w.+#-]*)\s*$/);
+    if (fm) {
+      const marker = fm[1], lang = (fm[2] || '').toLowerCase();
+      const close = new RegExp('^\\s*' + marker[0] + '{' + marker.length + ',}\\s*$');
+      i++;
+      const buf = [];
+      while (i < lines.length && !close.test(lines[i])) { buf.push(lines[i]); i++; }
+      if (i < lines.length) i++;
+      const code = buf.join('\n');
+      if (lang === 'mermaid') {
+        out.push(keep('<div class="mermaid-diagram"><pre class="mermaid">' + esc(code) + '</pre></div>'));
+      } else {
+        out.push(keep('<pre style="margin:6px 0;background:var(--surface2);border-radius:6px;padding:10px;overflow-x:auto"><code class="lang-' + esc(lang) + '">' + esc(code) + '</code></pre>'));
+      }
+      continue;
     }
-    const idx = images.push(img) - 1;
-    return '\x00IMG' + idx + '\x00';
+
+    // heading
+    let hm = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (hm) {
+      const lvl = hm[1].length;
+      const sz = [18, 16, 14, 13, 12, 11][lvl - 1];
+      const col = lvl <= 3 ? 'var(--accent)' : (lvl === 4 ? 'var(--text)' : 'var(--text2)');
+      out.push('<h' + lvl + ' style="margin:12px 0 6px;font-size:' + sz + 'px;color:' + col + '">' + inline(hm[2]) + '</h' + lvl + '>');
+      i++; continue;
+    }
+
+    // horizontal rule
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+      out.push('<hr style="margin:10px 0;border-color:var(--border)">'); i++; continue;
+    }
+
+    // table (header row followed by a |---| separator row)
+    if (/\|/.test(line) && i + 1 < lines.length
+        && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(lines[i + 1])) {
+      const row = (r) => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      const head = row(line);
+      i += 2;
+      const body = [];
+      while (i < lines.length && /\|/.test(lines[i]) && !/^\s*$/.test(lines[i])) { body.push(row(lines[i])); i++; }
+      let h = '<table style="margin:8px 0"><thead><tr>' + head.map((c) => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>';
+      h += body.map((r) => '<tr>' + r.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('');
+      h += '</tbody></table>';
+      out.push(h); continue;
+    }
+
+    // blockquote
+    if (/^\s*>/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
+      out.push('<blockquote style="border-left:3px solid var(--accent);padding:4px 10px;margin:6px 0;color:var(--text2);background:var(--surface2);border-radius:0 4px 4px 0">' + inline(buf.join(' ')) + '</blockquote>');
+      continue;
+    }
+
+    // list
+    if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+      const ordered = /^\s*\d+\./.test(line);
+      const stop = ordered ? /^\s*\d+\.\s+/ : /^\s*[-*+]\s+/;
+      let h = ordered ? '<ol style="margin:6px 0;padding-left:22px">' : '<ul style="margin:6px 0;padding-left:22px">';
+      while (i < lines.length && stop.test(lines[i])) {
+        h += '<li style="margin:2px 0">' + inline(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '')) + '</li>';
+        i++;
+      }
+      h += ordered ? '</ol>' : '</ul>';
+      out.push(h); continue;
+    }
+
+    // paragraph
+    const para = [line]; i++;
+    while (i < lines.length && !isBlockStart(lines[i]) && !/\|/.test(lines[i])) { para.push(lines[i]); i++; }
+    out.push('<p style="margin:6px 0">' + inline(para.join(' ')) + '</p>');
+  }
+  return out.join('\n').replace(/\uE000(\d+)\uE001/g, (_, n) => store[parseInt(n)] || '');
+}
+
+// ── Mermaid (diagrams in documentation) ──
+// Mermaid measures label text in shared global state, so two run() calls in
+// flight at once measure each other's labels and the losers render cramped.
+// Every render goes through one queue so runs never interleave.
+let _mmQueue=Promise.resolve();
+function mmInit(){
+  window.mermaid.initialize({
+    startOnLoad:false, securityLevel:'strict', theme:'base',
+    themeVariables:{
+      darkMode:true, background:'transparent',
+      primaryColor:'#1e293b', primaryTextColor:'#e2e8f0', primaryBorderColor:'#334155',
+      secondaryColor:'#172033', tertiaryColor:'#0f172a',
+      lineColor:'#64748b', textColor:'#cbd5e1',
+      fontFamily:'ui-sans-serif,system-ui,sans-serif', fontSize:'13px',
+      actorBkg:'#1e293b', actorBorder:'#334155', actorTextColor:'#e2e8f0',
+      signalColor:'#94a3b8', signalTextColor:'#cbd5e1',
+      labelBoxBkgColor:'#1e293b', labelBoxBorderColor:'#334155', labelTextColor:'#e2e8f0',
+      noteBkgColor:'#172033', noteBorderColor:'#334155', noteTextColor:'#cbd5e1'
+    },
+    flowchart:{htmlLabels:true, curve:'basis'},
+    sequence:{useMaxWidth:true, mirrorActors:false}
   });
-  // code blocks
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return '<pre style="margin:4px 0;background:var(--surface2);border-radius:4px;padding:8px;overflow-x:auto"><code class="lang-' + lang + '">' + code.trim() + '</code></pre>';
-  });
-  // inline code
-  html = html.replace(/`([^`]+)`/g, '<code style="background:var(--surface2);padding:1px 4px;border-radius:3px;font-size:90%">$1</code>');
-  // bold **text** or __text__
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  // italic *text* or _text_
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-  // links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--accent)">$1</a>');
-  // Restore protected images
-  html = html.replace(/\x00IMG(\d+)\x00/g, (_, idx) => images[parseInt(idx)] || '');
-  // horizontal rules
-  html = html.replace(/^---$/gm, '<hr style="margin:8px 0;border-color:var(--border)">');
-  // blockquote
-  html = html.replace(/^&gt;\s?(.*)$/gm, '<blockquote style="border-left:3px solid var(--accent);padding:4px 8px;margin:4px 0;color:var(--text2);background:var(--surface2);border-radius:0 4px 4px 0">$1</blockquote>');
-  // headers
-  html = html.replace(/^######\s+(.*)$/gm, '<h6 style="margin:8px 0 4px;font-size:11px;color:var(--text2)">$1</h6>');
-  html = html.replace(/^#####\s+(.*)$/gm, '<h5 style="margin:8px 0 4px;font-size:12px;color:var(--text2)">$1</h5>');
-  html = html.replace(/^####\s+(.*)$/gm, '<h4 style="margin:8px 0 4px;font-size:13px;color:var(--text)">$1</h4>');
-  html = html.replace(/^###\s+(.*)$/gm, '<h3 style="margin:10px 0 4px;font-size:14px;color:var(--accent)">$1</h3>');
-  html = html.replace(/^##\s+(.*)$/gm, '<h2 style="margin:12px 0 6px;font-size:16px;color:var(--accent)">$1</h2>');
-  html = html.replace(/^#\s+(.*)$/gm, '<h1 style="margin:12px 0 6px;font-size:18px;color:var(--accent)">$1</h1>');
-  // unordered lists
-  html = html.replace(/^(\s*)[-*]\s+(.*)$/gm, '$1<li style="margin:1px 0">$2</li>');
-  html = html.replace(/(<li.*\/li>(\s*<li.*\/li>)*)/gs, '<ul style="margin:4px 0;padding-left:20px">$1</ul>');
-  // ordered lists
-  html = html.replace(/^(\s*)\d+\.\s+(.*)$/gm, '$1<li style="margin:1px 0">$2</li>');
-  html = html.replace(/(<li.*\/li>(\s*<li.*\/li>)*)/gs, '<ol style="margin:4px 0;padding-left:20px">$1</ol>');
-  // paragraphs (double newlines)
-  html = html.replace(/\n\n/g, '</p><p style="margin:6px 0">');
-  html = '<p style="margin:6px 0">' + html + '</p>';
-  html = html.replace(/<p\s+style="margin:6px\s+0">\s*<\/p>/g, '');
-  return html;
+}
+function renderMermaidBlocks(root){
+  const nodes=(root||document).querySelectorAll('pre.mermaid:not([data-mm-done])');
+  if(!nodes.length)return;
+  const run=()=>{
+    try{mmInit()}catch(e){}
+    const job=_mmQueue.then(async()=>{
+      for(const n of nodes){
+        if(n.dataset.mmDone)continue;
+        n.dataset.mmDone='1';
+        try{await window.mermaid.run({nodes:[n],suppressErrors:true})}catch(e){}
+      }
+    }).catch(()=>{});
+    _mmQueue=job.catch(()=>{});
+    return job;
+  };
+  if(window.mermaid){run();return;}
+  const existing=document.getElementById('mermaid-lib');
+  if(existing){existing.addEventListener('load',run,{once:true});return;}
+  const s=document.createElement('script');
+  s.id='mermaid-lib';
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+  s.onload=run;
+  s.onerror=()=>{/* leave the fenced source visible as a fallback */};
+  document.head.appendChild(s);
 }
 
 // ── Concept Definitions ──
@@ -2344,6 +2505,114 @@ async function loadAbout(){
       gi.innerHTML=h;
     }else{gi.innerHTML='Backend: '+g.backend}
   }catch(_){}
+  loadDocs();
+}
+
+// ── Documentation viewer ──
+let _docsLoaded=false;
+async function loadDocs(force){
+  if(_docsLoaded&&!force)return;
+  const list=el('docsList'),view=el('docsView');
+  try{
+    const data=await api('/api/docs');
+    _docsLoaded=true;
+    const docs=data.docs||[];
+    if(!docs.length){
+      list.innerHTML='';
+      view.innerHTML='<p style="color:var(--text3)">'+(data.reason||'No documentation found.')+'</p>';
+      return;
+    }
+    let last='';
+    list.innerHTML=docs.map(d=>{
+      let head='';
+      if(d.group!==last){last=d.group;head='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:8px 8px 4px">'+esc(d.group)+'</div>'}
+      const dim=d.available?'':' style="opacity:.4"';
+      return head+'<div class="doc-item" data-doc="'+esc(d.id)+'" onclick="showDoc(\''+esc(d.id)+'\')"'+dim
+        +' style="cursor:pointer;padding:5px 8px;border-radius:6px;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        +esc(d.title)+'</div>';
+    }).join('');
+    showDoc(docs[0].id);
+  }catch(e){
+    view.innerHTML='<p style="color:var(--red)">Could not load documentation.</p>';
+  }
+}
+
+async function showDoc(id){
+  document.querySelectorAll('.doc-item').forEach(n=>{
+    const on=n.getAttribute('data-doc')===id;
+    n.style.background=on?'rgba(96,165,250,.12)':'';
+    n.style.color=on?'var(--accent)':'var(--text2)';
+  });
+  const view=el('docsView');
+  view.innerHTML='<p style="color:var(--text3)">Loading…</p>';
+  try{
+    const d=await api('/api/docs/'+encodeURIComponent(id));
+    const meta=(d.lines||0)+' lines'+(d.truncated?' · truncated':'');
+    view.innerHTML='<div style="font-size:10px;color:var(--text3);margin-bottom:8px">'+esc(meta)+'</div>'
+      +renderMarkdown(d.markdown, d.file)
+      +(d.truncated?'<p style="color:var(--yellow,#fbbf24)">Document truncated in the viewer.</p>':'');
+    view.scrollTop=0;
+    renderMermaidBlocks(view);
+  }catch(e){
+    view.innerHTML='<p style="color:var(--red)">Could not load '+esc(id)+'.</p>';
+  }
+}
+
+// ── Audit ledger ──
+async function loadAudit(){
+  const list=el('auditList');list.innerHTML='<div style="color:var(--text3);font-size:12px">Loading…</div>';
+  el('auditDetail').style.display='none';
+  try{
+    const data=await api('/api/ledger/runs?limit=40');
+    const runs=data.runs||[];
+    el('auditBadge').textContent=runs.length+' runs';
+    if(!runs.length){list.innerHTML='<div style="color:var(--text3);font-size:12px">No ingest runs recorded yet.</div>';return}
+    list.innerHTML=runs.map(r=>{
+      const degraded=r.status==='degraded';
+      const color=degraded?'var(--yellow,#fbbf24)':(r.status==='open'?'var(--accent)':'var(--green,#34d399)');
+      return '<div onclick="openAuditRun(\''+esc(r.id)+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">'
+        +'<span style="width:8px;height:8px;border-radius:50%;background:'+color+'"></span>'
+        +'<span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.id)+'</span>'
+        +'<span style="font-size:10px;color:var(--text3)">'+r.events+' events</span>'
+        +'<span style="font-size:10px;color:'+color+'">'+esc(r.status||'')+'</span></div>';
+    }).join('');
+  }catch(e){list.innerHTML='<div style="color:var(--red,#f87171);font-size:12px">Ledger unavailable.</div>'}
+}
+
+async function openAuditRun(runId){
+  const d=el('auditDetail');d.style.display='block';
+  d.innerHTML='<div style="color:var(--text3);font-size:12px">Reading '+esc(runId)+'…</div>';
+  try{
+    const [bundle,integrity,topo,claims]=await Promise.all([
+      api('/api/ledger/'+encodeURIComponent(runId)),
+      api('/api/ledger/'+encodeURIComponent(runId)+'/integrity'),
+      api('/api/swarm/topology?run_id='+encodeURIComponent(runId)),
+      api('/api/ledger/'+encodeURIComponent(runId)+'/claims'),
+    ]);
+    const ok=integrity.chain_ok;
+    let h='<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+    h+='<div style="padding:8px 12px;background:var(--surface2);display:flex;gap:12px;align-items:center">'
+      +'<b style="font-size:12px">'+esc(runId)+'</b>'
+      +'<span style="font-size:11px;color:'+(ok?'var(--green,#34d399)':'var(--red,#f87171)')+'">chain '+(ok?'verified':'BROKEN')+'</span>'
+      +(integrity.degraded?'<span style="font-size:11px;color:var(--yellow,#fbbf24)">degraded</span>':'')
+      +'</div>';
+    if(integrity.blocking_alerts&&integrity.blocking_alerts.length){
+      h+='<div style="padding:8px 12px;font-size:11px;color:var(--red,#f87171)">Blocking: '+integrity.blocking_alerts.map(esc).join(', ')+'</div>';
+    }
+    h+='<div style="padding:8px 12px;font-size:11px;color:var(--text3)">'
+      +'Roles complete: '+(topo.complete||[]).map(esc).join(', ')+'</div>';
+    if(topo.failed&&topo.failed.length){
+      h+='<div style="padding:0 12px 8px;font-size:11px;color:var(--yellow,#fbbf24)">Failed: '+topo.failed.map(esc).join(', ')+'</div>';
+    }
+    const cs=claims.claims||[];
+    if(cs.length){
+      h+='<table class="sim-table"><thead><tr><th>Value</th><th>Verdict</th><th>Verifier</th></tr></thead><tbody>';
+      h+=cs.map(c=>'<tr><td>'+esc(c.text)+'</td><td>'+esc(c.verdict)+'</td><td>'+esc(c.verifier||'')+'</td></tr>').join('');
+      h+='</tbody></table>';
+    }
+    h+='</div>';
+    d.innerHTML=h;
+  }catch(e){d.innerHTML='<div style="color:var(--red,#f87171);font-size:12px">Could not read run.</div>'}
 }
 
 // ── Pool ──

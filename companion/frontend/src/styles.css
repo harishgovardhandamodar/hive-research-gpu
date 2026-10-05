@@ -265,6 +265,22 @@ button.ghost { background: transparent; }
 .md-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .md-body img { display: block; margin: 10px 0; background: #fff; padding: 6px; border-radius: 4px; }
 .md-body figcaption, .md-body em.caption { color: var(--dim); font-size: 11px; }
+/* .artifact-body keeps plain text monospaced with preserved newlines; rendered
+   markdown must not. Marked emits newlines between block elements and pre-wrap
+   would turn each into a visible blank line, and prose should not be monospace. */
+.artifact-body.md-body { white-space: normal; font-family: inherit; }
+.md-body code, .md-body pre { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; }
+
+/* chat answers are markdown; keep the bubble's pre-wrap for user text only */
+.msg-assistant { white-space: normal; }
+.msg-assistant .md-text > *:first-child { margin-top: 0; }
+.msg-assistant .md-text > *:last-child { margin-bottom: 0; }
+.msg-assistant .md-text h1 { font-size: 16px; border: none; padding: 0; margin: 12px 0 6px; }
+.msg-assistant .md-text h2 { font-size: 14px; border: none; padding: 0; margin: 10px 0 5px; }
+.msg-assistant .md-text h3 { font-size: 13px; margin: 9px 0 4px; }
+.msg-assistant .md-text p { margin: 6px 0; }
+.msg-assistant .md-text ul, .msg-assistant .md-text ol { margin: 6px 0; }
+.msg-assistant .md-text table { display: block; overflow-x: auto; }
 
 /* ── brand ── */
 .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: 0.4px; }

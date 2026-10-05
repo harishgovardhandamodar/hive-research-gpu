@@ -6,13 +6,28 @@ services:
     volumes:
       - hive_data:/app/data
     environment:
-      - OLLAMA_BASE_URL=http://localhost:8210
-      # Keep embeddings off the chat model's instance: a 27B chat model
-      # monopolizing VRAM makes embed requests stall for minutes.
-      - OLLAMA_EMBED_BASE_URL=http://localhost:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.6:latest}
+      # All inference goes through the fox-services gateway, which speaks the
+      # Ollama native API, so no client changes are needed -- but it also
+      # routes, queues and accounts for every call, which a bare Ollama does
+      # not.
+      #
+      # Default is axiom-1, the 2x RTX 5080 peer over Tailscale: the models
+      # this app wants (qwen3.8:27b, llama3.2:3b, nomic-embed-text) are
+      # resident there, and it keeps this host's own GPUs free. Override with
+      # OLLAMA_BASE_URL to use a local gateway instead.
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://axiom-1.tailb61a66.ts.net:8210}
+      # Embeddings stay on the same gateway. They used to be pinned to a bare
+      # Ollama (:11434) to dodge a large chat model hogging VRAM; the gateway
+      # solves that with per-model slots, and pinning here made every embedding
+      # invisible to its telemetry and accounting.
+      - OLLAMA_EMBED_BASE_URL=
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.8:27b}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      # Attribution: without these the gateway files this app's calls as
+      # "gateway-unknown" and cannot tell a bulk re-ingest from human queries.
+      - OLLAMA_SERVICE_NAME=hive-research-gpu
+      - OLLAMA_REQUESTOR=subagent
       # Long-form generation (surveys, deep answers) on thinking models
       # needs several minutes; 180s aborted them mid-write.
       - OLLAMA_TIMEOUT=900
@@ -42,9 +57,15 @@ services:
       # The companion drives the app through its HTTP API (single writer).
       - HIVE_API_URL=http://localhost:7777
       - HIVE_TOKEN=${HIVE_TOKEN:-}
-      - OLLAMA_BASE_URL=http://localhost:8210
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://axiom-1.tailb61a66.ts.net:8210}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-llama3.2:3b}
-      - OLLAMA_IDEATION_URL=http://localhost:11434
+      # Ideation runs on the gateway too. It was pinned to a bare Ollama
+      # (:11434) to keep generation off the chat instance, but the gateway's
+      # per-model slots already do that, and pinning made every ideation call
+      # invisible to the gateway's accounting.
+      - OLLAMA_IDEATION_URL=
+      - OLLAMA_SERVICE_NAME=hive-research-gpu-companion
+      - OLLAMA_REQUESTOR=agent
     restart: unless-stopped
 
   # Agentic Knowledge Mapper — sibling addon (../agentic-knowledge-mapper).

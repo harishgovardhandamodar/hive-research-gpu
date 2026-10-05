@@ -2,6 +2,33 @@ import { marked } from "marked";
 
 marked.setOptions({ breaks: true, gfm: true });
 
+// Marked passes raw HTML through, so anything it renders is sanitized before it
+// reaches dangerouslySetInnerHTML -- chat answers and notes both flow through
+// here, and a model that emits <script> or an onerror= attribute must not get
+// one executed in the app's origin.
+const BLOCKED_TAGS = new Set([
+  "SCRIPT", "IFRAME", "OBJECT", "EMBED", "FORM", "LINK", "STYLE", "META", "BASE",
+]);
+
+export function sanitizeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.body.querySelectorAll("*").forEach((el) => {
+    if (BLOCKED_TAGS.has(el.tagName)) {
+      el.remove();
+      return;
+    }
+    Array.from(el.attributes).forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      } else if ((name === "href" || name === "src") && /^\s*javascript:/i.test(attr.value)) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 export interface LoadedArtifact {
   path: string;
   kind: "markdown" | "image" | "raw" | "pdf";
@@ -33,11 +60,12 @@ function inlineImages(html: string, artifactPath: string): string {
   return doc.body.innerHTML;
 }
 
-function renderMarkdown(md: string): string {
+/** Markdown -> sanitized HTML. Used by the artifact viewer and the chat log. */
+export function renderMarkdown(md: string): string {
   try {
-    return marked.parse(md) as string;
+    return sanitizeHtml(marked.parse(md || "") as string);
   } catch {
-    return `<pre>${md.replace(/</g, "&lt;")}</pre>`;
+    return `<pre>${(md || "").replace(/</g, "&lt;")}</pre>`;
   }
 }
 

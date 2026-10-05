@@ -13,6 +13,7 @@ from typing import Any
 import requests
 
 from .gpu import GPUManager
+from .llm import canonical_model_name
 from .logs import get_capture
 from .organizer import Organizer
 
@@ -39,6 +40,20 @@ def _html_response(handler: BaseHTTPRequestHandler, html: str) -> None:
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.end_headers()
     handler.wfile.write(html.encode())
+
+
+def _served_by(models: list[str], wanted: str) -> bool:
+    """Whether the gateway can serve ``wanted`` from its installed models.
+
+    An untagged name means ``:latest``, and /api/tags usually lists only the
+    tagged form -- so an exact-match check reports a resident embedder as
+    missing and the panel contradicts the gateway's own loaded_models beside it.
+    Two explicitly different tags stay distinct (see canonical_model_name).
+    """
+    if not wanted:
+        return False
+    target = canonical_model_name(wanted)
+    return any(canonical_model_name(m) == target for m in models)
 
 
 class RouteHandler(BaseHTTPRequestHandler):
@@ -401,10 +416,125 @@ class RouteHandler(BaseHTTPRequestHandler):
                 job_id = path.rsplit("/", 1)[-1]
                 job = registry.get(job_id)
                 _json_response(self, job.to_dict() if job else {"error": "not found"}, 200 if job else 404)
+        elif path == "/api/docs" or path.startswith("/api/docs/"):
+            from . import info_docs
+
+            if path == "/api/docs":
+                _json_response(self, info_docs.list_docs())
+            else:
+                doc_id = path[len("/api/docs/"):].strip("/")
+                try:
+                    _json_response(self, info_docs.get_doc(doc_id))
+                except (KeyError, FileNotFoundError):
+                    _json_response(self, {"error": "not found"}, 404)
+        elif path == "/api/ledger" or path.startswith("/api/ledger/"):
+            self._handle_ledger(path, params)
+        elif path.startswith("/api/swarm"):
+            self._handle_swarm(path, params)
+        else:
+            _json_response(self, {"error": "not found"}, 404)
+
+    # -- audit ledger + swarm views ---------------------------------------
+
+    def _ledger_store(self) -> Any:
+        """The process ledger store, initialised on first use by the server.
+
+        The pipeline normally opens it; if the server is the first caller (a
+        read-only operations view on a fresh process) it opens the same path
+        from config, so both surfaces read one database.
+        """
+        from . import ledger as lg
+
+        if not self.org.config.ledger_enabled:
+            return None
+        try:
+            return lg.get_store()
+        except Exception:
+            try:
+                return lg.init_store(self.org.config.ledger_db_path)
+            except Exception:
+                return None
+
+    def _ledger_events(self, run_id: str) -> list:
+        from . import ledger as lg
+
+        if not run_id:
+            return []
+        store = self._ledger_store()
+        if store is None:
+            return []
+        try:
+            return lg.run_events(run_id, store=store)
+        except Exception:
+            return []
+
+    def _handle_ledger(self, path: str, params: dict) -> None:
+        from . import assurance_ledger as al
+        from . import ledger as lg
+
+        store = self._ledger_store()
+        if store is None:
+            _json_response(self, {"error": "ledger disabled"}, 503)
+            return
+        parts = [p for p in path.strip("/").split("/") if p]  # api, ledger, ...
+        tail = parts[2:]
+        if not tail or tail == ["runs"]:
+            _json_response(self, {"runs": lg.list_runs(
+                limit=int(params.get("limit", 50)), store=store)})
+            return
+        # tail is either [run_id, ...] or [run_id]
+        run_id = tail[0]
+        action = tail[1] if len(tail) > 1 else ""
+        if action == "":
+            export = lg.export_run(run_id, store=store)
+            ok = isinstance(export, dict) and "error" not in export
+            _json_response(self, export, 200 if ok else 404)
+        elif action == "events":
+            _json_response(self, {"run_id": run_id,
+                                  "events": lg.run_events(run_id, store=store)})
+        elif action == "claims":
+            _json_response(self, {"run_id": run_id,
+                                  "claims": lg.run_claims(run_id, store=store)})
+        elif action == "verify":
+            _json_response(self, lg.verify_chain(run_id, store=store))
+        elif action == "integrity":
+            _json_response(self, al.integrity_report(run_id, store=store))
+        else:
+            _json_response(self, {"error": "not found"}, 404)
+
+    def _handle_swarm(self, path: str, params: dict) -> None:
+        from . import assurance_ledger as al
+        from . import swarm as sw
+
+        run_id = params.get("run_id", "")
+        events = self._ledger_events(run_id) if run_id else []
+        if path == "/api/swarm/topology":
+            _json_response(self, sw.topology(events))
+        elif path == "/api/swarm/health":
+            _json_response(self, sw.health(events))
+        elif path == "/api/swarm/resume":
+            _json_response(self, sw.resume_state(events))
+        elif path == "/api/swarm/critic":
+            _json_response(self, sw.critic_review(events))
+        elif path == "/api/swarm/monitor":
+            store = self._ledger_store()
+            if store is None:
+                _json_response(self, {"error": "ledger disabled"}, 503)
+                return
+            _json_response(self, al.monitor_integrity(
+                store, limit=int(params.get("limit", 40))))
         else:
             _json_response(self, {"error": "not found"}, 404)
 
     def _handle_ollama_status(self) -> None:
+        """About-panel model + gateway state.
+
+        The gateway substitutes models, so "is my configured model available"
+        is the wrong question on its own -- what matters is what the gateway
+        can serve right now and how loaded it is. Report both: the configured
+        names stay (they are what the UI shows in the pickers) and the
+        gateway's own view is added alongside.
+        """
         base = self.org.config.ollama_base_url
         model = self.org.config.ollama_model
         fast = self.org.config.ollama_fast_model
@@ -418,15 +548,35 @@ class RouteHandler(BaseHTTPRequestHandler):
                 models = [m["name"] for m in r.json().get("models", [])]
         except Exception:
             pass
+        gateway: dict = {}
+        try:
+            gateway = self.org.llm.gateway_status()
+        except Exception:
+            gateway = {}
+        loaded = gateway.get("loaded_models") or []
         _json_response(self, {
             "connected": connected,
             "base_url": base,
             "model": model,
             "fast_model": fast,
             "embed_model": embed,
-            "model_available": model in models,
-            "fast_available": fast in models,
-            "embed_available": embed in models,
+            # Tag-insensitive: /api/tags usually lists only the tagged form
+            # ("nomic-embed-text:latest"), so an exact match reports a resident
+            # embedder as missing and the panel contradicts itself -- the
+            # gateway's own loaded_models right below shows it warm.
+            "model_available": _served_by(models, model),
+            "fast_available": _served_by(models, fast),
+            "embed_available": _served_by(models, embed),
+            "gateway": gateway,
+            # False when the gateway does not report X-Served-Model: notes then
+            # record the model we asked for, which is a request, not a fact.
+            "served_model_verifiable": bool(
+                gateway.get("served_model_verifiable", True)),
+            # Which configured models are warm right now. A substitution is
+            # cheap when the substitute is already in VRAM, and expensive
+            # when it means a cold 17GB load, so this is the number that
+            # predicts latency.
+            "loaded_models": loaded,
             "platform": platform.platform(),
             "processor": platform.processor(),
             "python": platform.python_version(),

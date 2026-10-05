@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -193,7 +194,25 @@ class Organizer:
             figures = extract_images_from_pdf(pdf_path, figures_dir)
 
             gpu_id = self.gpu_mgr.get_next_llm_gpu() if self.gpu_mgr else None
-            analysis = self.pipeline._analyze_text(text, node.label, figures=figures, model=model, gpu_id=gpu_id, hints=hints)
+            # A refresh is a re-ingest, so it runs the swarm like a first ingest
+            # does and gets its own ledger run. The run id carries the arxiv
+            # version and a timestamp so successive refreshes do not overwrite
+            # each other's history — "what did we believe about this paper, and
+            # when" is the question the ledger exists to answer.
+            run_id = f"refresh-{node.arxiv_id}-{int(time.time())}"
+            analysis, assurance = self.pipeline._analyze_via_swarm(
+                run_id=run_id,
+                paper_id=node.arxiv_id,
+                title=node.label,
+                text=text,
+                figures=figures,
+                model=model,
+                gpu_id=gpu_id,
+                hints=hints,
+            )
+            if assurance.get("degraded"):
+                logger.info("Refresh of %s ran degraded: %s", node.arxiv_id,
+                            assurance.get("degradation_reason"))
             notes = analysis.get("notes", "")
             experiment = analysis.get("experiment", {})
             results = analysis.get("results", {})

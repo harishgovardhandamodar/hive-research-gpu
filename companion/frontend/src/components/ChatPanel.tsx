@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { renderMarkdown } from "../lib/artifactView";
 import type { ChatMessage } from "../types";
 
 const FOX_MODES = ["fast", "rag", "thinking", "deep-thinking", "deep-research"];
@@ -82,8 +83,12 @@ export function ChatPanel() {
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
             {m.role === "assistant" && <img src="/fox-avatar.webp" alt="" className="msg-fox" width={18} height={18} onError={(e) => ((e.currentTarget.style.display = "none"))} />}
-            <div className="msg-body">
-              <p className="msg-text">{m.text}</p>
+            <div className={`msg-body${m.role === "assistant" ? " md-body" : ""}`}>
+              {m.role === "assistant" ? (
+                <div className="md-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
+              ) : (
+                <p className="msg-text">{m.text}</p>
+              )}
               {m.memoryRecalled && m.memoryRecalled.length > 0 && (
                 <details className="memory">
                   <summary>recalled {m.memoryRecalled.length} episodes</summary>

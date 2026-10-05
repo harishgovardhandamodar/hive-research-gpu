@@ -7,6 +7,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import agents as ag
+from . import assurance_ledger as al
+from . import ledger as lg
 from .arxiv_fetcher import PaperInfo, download_pdf, fetch_by_id
 from .config import Config
 from .gpu import GPUManager
@@ -15,6 +18,47 @@ from .llm import LLMInterface
 from .parser import extract_images_from_pdf, extract_referenced_arxiv_ids, extract_sections, extract_text
 
 logger = logging.getLogger(__name__)
+
+
+def _store_ready() -> bool:
+    """Whether the ledger already has a store bound to this process."""
+    try:
+        lg.get_store()
+        return True
+    except Exception:
+        return False
+
+
+def _min_confidence(assurance: dict[str, Any]) -> float:
+    """Lowest per-claim grounding confidence for a run, defaulting to 1.0.
+
+    This is the number written on the published note, so it is the floor, not
+    the mean: one claim the verifier could not ground should not be averaged
+    away by a dozen that were fine.
+    """
+    claims = assurance.get("claims") or []
+    if not isinstance(claims, list):
+        return 1.0
+    scores = [float(c.get("confidence", 1.0)) for c in claims
+              if isinstance(c, dict)]
+    return min(scores) if scores else 1.0
+
+
+def _record_deterministic_role(run_id: str, role: str, *,
+                               store: Any = None,
+                               detail: dict[str, Any] | None = None) -> None:
+    """Write a spawn+complete pair for a role whose work needs no model.
+
+    Their output is already on the chain as an artifact event; this is purely so
+    the absence checker can tell "the parser ran and found little" from "the
+    parser never ran", which are the same thing to a stream of artifact events.
+    """
+    spawn = al.record_swarm_event(run_id, role=role, phase="spawn",
+                                  actor="orchestrator",
+                                  intent=f"run_{role}", store=store)
+    al.record_swarm_event(run_id, role=role, phase="complete", actor=role,
+                          parent_event=spawn, completeness="complete",
+                          detail=detail or {}, store=store)
 
 
 def _sanitize_id(label: str) -> str:
@@ -76,8 +120,21 @@ class PaperPipeline:
             _prog("parse", "skipped", "pdf download disabled")
 
         text_for_analysis = pdf_text or paper.abstract
-        _prog("analyze", "running", f"LLM analysis ({model or 'default model'})")
-        analysis = self._analyze_text(text_for_analysis, paper.title, figures=figures, model=model, gpu_id=gpu_id)
+        requested_model = model or self.config.ollama_model
+        run_id = f"{paper_id}"
+        # Provenance first: the swarm issues one call per role, and the gateway
+        # may serve any of them with a different model than asked. Capture what
+        # answered so the note records the writer.
+        self.llm.last_served_model = ""
+        _prog("analyze", "running", f"swarm analysis ({requested_model})")
+        analysis, assurance = self._analyze_via_swarm(
+            run_id=run_id, paper_id=paper_id, title=paper.title,
+            text=text_for_analysis, figures=figures, model=model, gpu_id=gpu_id,
+        )
+        served_model = str(assurance.get("analyzed_by") or requested_model)
+        if served_model != requested_model:
+            _prog("analyze", "note",
+                  f"gateway served {served_model} instead of {requested_model}")
         _prog("analyze", "done")
 
         concepts = analysis.get("concepts", [])
@@ -142,6 +199,9 @@ class PaperPipeline:
                 if src and tgt:
                     self.kg.add_edge(src, tgt, rel)
         _prog("graph", "done", f"{len(concepts)} concepts, {len(relations)} relations")
+        al.record_graph_write(run_id, actor="graph-integrator", node_id=paper_id,
+                              edges=len(tags) + len(concepts) + len(relations),
+                              concepts=len(concepts), store=self._ledger())
 
         lineage_refs = []
         if pdf_text:
@@ -161,10 +221,15 @@ class PaperPipeline:
             tldr=analysis.get("tldr", ""),
             reproduction=analysis.get("reproduction", {}),
             experiment_ideas=analysis.get("experiment_ideas", []),
+            analyzed_by=served_model,
+            requested_model=requested_model,
         )
         self.kg.save()
         _prog("notes", "done", str(note_path) if note_path else "no note written")
-
+        al.record_publication(
+            run_id, note_path=str(note_path) if note_path else "",
+            analyzed_by=served_model, requested_model=requested_model,
+            confidence=_min_confidence(assurance), store=self._ledger())
         result = {
             "status": "added",
             "paper_id": paper_id,
@@ -177,11 +242,35 @@ class PaperPipeline:
             "has_results": bool(results and isinstance(results, dict) and any(v for v in results.values())),
             "figures": len(figures),
             "gpu_id": gpu_id,
+            "run_id": run_id,
+            # Surfaced on the ingest result rather than buried in the ledger:
+            # these three are what a researcher needs to decide whether to open
+            # the note at all.
+            "swarm": {
+                "degraded": bool(assurance.get("degraded")),
+                "roles_failed": assurance.get("roles_failed", []),
+                "grounded_ratio": (assurance.get("grounding") or {}).get("grounded_ratio"),
+                "policy": (assurance.get("policy") or {}).get("decision"),
+            },
         }
 
         if lineage_refs:
             result["lineage"] = lineage_refs
 
+        # Verify the chain we just wrote, while the run is still open. Closing the
+        # run without checking it would make "integrity.check missing" the normal
+        # state and hide a real break behind the same blank.
+        store = self._ledger()
+        chain = lg.verify_chain(run_id, store=store)
+        al.record_integrity_check(
+            run_id, check="chain_verify", passed=bool(chain.get("ok")),
+            detail={"events": chain.get("events"),
+                    "findings": chain.get("findings", [])}, store=store)
+        al.record_run_end(run_id, status="done" if not assurance.get("degraded")
+                          else "degraded",
+                          detail={"note_path": str(note_path) if note_path else None,
+                                  "roles_failed": assurance.get("roles_failed", [])},
+                          store=store)
         return result
 
     def process_papers_parallel(self, papers: list[PaperInfo], model: str | None = None) -> list[dict[str, Any]]:
@@ -332,7 +421,154 @@ class PaperPipeline:
             return text[:max_chars]
         return "\n\n".join(chosen)
 
-    def _analyze_text(
+    def _analyze_via_swarm(
+        self,
+        *,
+        run_id: str,
+        paper_id: str,
+        title: str,
+        text: str,
+        figures: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        gpu_id: int | None = None,
+        hints: list[str] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Run the contracted agents, and fall back to one prompt if they cannot finish.
+
+        The fallback is not a hidden compatibility shim — it is the reason a
+        researcher's ingest still produces something when the gateway is down.
+        What matters is that it is *recorded*: ``run.degraded`` goes on the chain
+        before the fallback prompt is ever sent, so a note produced this way can
+        never be mistaken for one the swarm produced. Without that record the
+        degradation is invisible, which is strictly worse than not having the
+        fallback at all.
+
+        Returns ``(analysis, assurance)``. The analysis keeps the shape the rest
+        of the pipeline expects, so graph writes, note rendering and RAG chunking
+        are unchanged.
+        """
+        store = self._ledger()
+        mandate = ag.build_mandate(paper_id, self.config)
+        graph_context = self._graph_context_for(title)
+        hints = list(hints) if hints else self._pending_hints(paper_id)
+
+        al.record_run_start(run_id, actor="orchestrator", paper_id=paper_id,
+                           mandate=mandate, store=store,
+                           detail={"source_kind": "full_text" if len(text) > 1500
+                                   else "abstract_only_declared",
+                                   "figures": len(figures or [])})
+        al.record_artifact(run_id, action="acquire", actor="source-collector",
+                           artifact_id=paper_id, title=title,
+                           source="arxiv.org", store=store)
+        al.record_artifact(run_id, action="parse", actor="document-parser",
+                           artifact_id=paper_id, title=title,
+                           detail={"chars": len(text),
+                                   "figures": len(figures or [])},
+                           store=store)
+        # The acquisition and parsing roles are deterministic, but they are still
+        # contracted roles: without their swarm lifecycle the absence checker sees
+        # two roles that never ran and flags every run. The artifact events above
+        # say what happened to the document; these say who did it and that they
+        # finished.
+        _record_deterministic_role(run_id, "source-collector", store=store,
+                                   detail={"source": "arxiv.org",
+                                           "artifact_id": paper_id})
+        _record_deterministic_role(run_id, "document-parser", store=store,
+                                   detail={"chars": len(text),
+                                           "figures": len(figures or [])})
+
+        degraded_reason = ""
+        try:
+            merged = ag.run_extraction_swarm(
+                run_id=run_id, title=title, text=self._select_analysis_context(text),
+                llm=self.llm, config=self.config, figures=figures or [],
+                graph_context=graph_context, model=model, gpu_id=gpu_id,
+                hints=hints, store=store)
+        except Exception as e:
+            logger.warning("Swarm analysis failed for %s: %s", paper_id, e)
+            degraded_reason = f"swarm raised: {e}"
+            merged = {}
+
+        assurance = dict(merged.get("assurance") or {})
+        policy = assurance.get("policy") or {}
+        # A blocked gate is a reason to fall back, not a reason to abandon: the
+        # single-prompt path ignores the gate, which is precisely why it is only
+        # reached with the failure on the record.
+        blocked = bool(policy) and not policy.get("allowed", True)
+        if degraded_reason or blocked or assurance.get("roles_failed"):
+            reason = degraded_reason or (
+                f"policy gate blocked: {', '.join(policy.get('blocked_by', []))}"
+                if blocked else
+                f"roles failed: {', '.join(assurance.get('roles_failed', []))}")
+            al.record_degraded(run_id, reason, actor="orchestrator",
+                               fallback="single-prompt extraction",
+                               store=store)
+            assurance["degraded"] = True
+            assurance["degradation_reason"] = reason
+            if self.config.swarm_fallback_enabled:
+                analysis = self._analyze_text_monolith(
+                    text, title, figures=figures or [], model=model,
+                    gpu_id=gpu_id, hints=hints)
+                if analysis:
+                    assurance["fallback"] = "single-prompt extraction"
+                    return analysis, assurance
+
+        if not merged and not degraded_reason:
+            assurance["degraded"] = True
+            assurance["degradation_reason"] = "swarm produced no analysis"
+        analysis = {k: v for k, v in merged.items() if k != "assurance"}
+        analysis.setdefault("tags", [])
+        return analysis, assurance
+
+    def _graph_context_for(self, title: str, limit: int = 12) -> str:
+        """Concepts already in the graph, for the lineage tracer to reason against.
+
+        "How does this differ from prior work" is unanswerable without knowing
+        what prior work the vault holds. Cheap to supply and the only thing that
+        makes that role more than a paraphrase of the paper's own intro.
+        """
+        try:
+            matched = self.kg.find_similar_concept(title) or []
+            names = [getattr(m, "label", "") or getattr(m, "id", "")
+                     for m in matched[:limit]]
+            return ", ".join(n for n in names if n)
+        except Exception:
+            return ""
+
+    def _pending_hints(self, paper_id: str, mode: str | None = None) -> list[str]:
+        """Unaddressed feedback from past ratings, fed to the contribution extractor.
+
+        Scoped to ingest notes only when ``mode`` is given, so low ratings on
+        unrelated surfaces (a rejected experiment, say) do not get handed to the
+        paper-extraction prompt as if they were complaints about it.
+        """
+        try:
+            from .feedback import FeedbackStore
+            return FeedbackStore(self.config).prompt_hints(mode)
+        except Exception as e:
+            logger.debug("Feedback hints unavailable for %s: %s", paper_id, e)
+            return []
+
+    def _ledger(self):
+        """The run's ledger store, or ``None`` when ledgering is unavailable.
+
+        Returning ``None`` is a supported state, not an error: every recorder
+        takes ``store=None`` and degrades to a no-op, so an unwritable ledger
+        degrades the audit rather than the ingest. A run without an audit trail
+        is worse than one with an imperfect analysis, and losing the paper
+        entirely is worse than both.
+        """
+        if not self.config.ledger_enabled:
+            return None
+        try:
+            if not _store_ready():
+                lg.init_store(self.config.ledger_db_path)
+            return lg.get_store()
+        except Exception as e:
+            logger.warning("Audit ledger unavailable: %s", e)
+            return None
+
+    def _analyze_text_monolith(
         self,
         text: str,
         title: str,
@@ -341,6 +577,13 @@ class PaperPipeline:
         gpu_id: int | None = None,
         hints: list[str] | None = None,
     ) -> dict[str, Any]:
+        """The pre-swarm single-prompt extractor, retained as the fallback path.
+
+        Kept because a degraded note beats no note, not because it is good: it
+        asks fifteen questions in one prompt, so a partial answer is
+        indistinguishable from a thin paper. Every call to it goes through
+        :meth:`_analyze_via_swarm`, which records ``run.degraded`` first.
+        """
         truncated = self._select_analysis_context(text)
 
         fast_prompt = (
@@ -366,7 +609,7 @@ class PaperPipeline:
             '  "summary": "2-3 sentence summary covering problem, approach, and key results (include numbers)",\n'
             '  "notes": "Detailed explanation of the method, architecture, experiments, and results with specific details numbers",\n'
             '  "experiments": [\n'
-            '    {\n'
+            "    {\n"
             '      "name": "Experiment name",\n'
             '      "goal": "What this tests",\n'
             '      "methodology": "Method used",\n'
@@ -376,8 +619,8 @@ class PaperPipeline:
             '      "metrics": {"metric_name": "value"},\n'
             '      "results": "Key results with numbers",\n'
             '      "findings": "Key takeaways"\n'
-            '    }\n'
-            '  ],\n'
+            "    }\n"
+            "  ],\n"
             '  "experiment": {"methodology": "...", "dataset": "...", "setup": "..."},\n'
             '  "results": {"main_findings": "...", "metrics": {"metric_name": "value"}},\n'
             '  "limitations": "Weaknesses, failure cases, assumptions that may not hold, and open questions",\n'
@@ -388,7 +631,7 @@ class PaperPipeline:
             '    "metrics": ["evaluation metrics"],\n'
             '    "compute": "hardware/training time if stated",\n'
             '    "code_url": "official code repository URL if mentioned"\n'
-            '  },\n'
+            "  },\n"
             '  "experiment_ideas": ["1-3 concrete follow-up experiment ideas building on this paper"],\n'
             '  "lineage_notes": "Prior work this builds on and how it differs",\n'
             '  "concepts": [{"name": "...", "definition": "...", "relation": "type"}],\n'
@@ -403,6 +646,25 @@ class PaperPipeline:
         analysis = self.llm.extract_structured(main_prompt, model=model, gpu_id=gpu_id)
         analysis["tags"] = tags
         return analysis
+
+    def _analyze_text(
+        self,
+        text: str,
+        title: str,
+        figures: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        gpu_id: int | None = None,
+        hints: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Single-prompt analysis. Retained for callers that want one call.
+
+        :meth:`process_paper` does not use this -- it runs the contracted agents
+        via :meth:`_analyze_via_swarm`. Kept because it is the documented fallback
+        and because dropping it would mean a degraded run has nothing to degrade
+        *to*.
+        """
+        return self._analyze_text_monolith(
+            text, title, figures=figures, model=model, gpu_id=gpu_id, hints=hints)
 
     def _embed_figures(
         self,
@@ -447,6 +709,8 @@ class PaperPipeline:
         tldr: str = "",
         reproduction: dict[str, Any] | None = None,
         experiment_ideas: list[str] | None = None,
+        analyzed_by: str = "",
+        requested_model: str = "",
     ) -> Path | None:
         vault = Path(self.config.vault_dir)
         vault.mkdir(parents=True, exist_ok=True)
@@ -469,9 +733,17 @@ class PaperPipeline:
             f"tags: [{', '.join(tags)}]",
             f"figures_count: {len(figures)}",
             f"concepts_count: {len(concepts)}",
-            "---",
-            "",
         ]
+        # Provenance. The gateway may substitute the model that did the work,
+        # so both names go in the note: analyzed_by is what actually wrote
+        # this file, requested_model is what the pipeline asked for. Without
+        # analyzed_by, a summary written by a 3B model is indistinguishable
+        # from one written by the 27B model the reader configured.
+        if analyzed_by:
+            note_lines.append(f"analyzed_by: {analyzed_by}")
+        if requested_model:
+            note_lines.append(f"requested_model: {requested_model}")
+        note_lines.extend(["---", ""])
 
         if tldr:
             note_lines.extend([f"> **TL;DR** — {tldr}", ""])

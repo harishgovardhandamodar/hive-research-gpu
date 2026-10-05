@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import unittest
+from pathlib import Path
 
-from hive_research.config import Config
+from hive_research.config import _DEFAULT_GATEWAY_URL, _DEFAULT_MODEL, Config
 from hive_research.llm import LLMInterface
 from hive_research.tests.base import TempDirTestCase, make_config
 
@@ -11,9 +12,20 @@ from hive_research.tests.base import TempDirTestCase, make_config
 class TestConfigDefaults(TempDirTestCase):
     def test_missing_file_uses_defaults(self) -> None:
         cfg = Config(self.tmp / "nope.yaml")
-        self.assertEqual(cfg.ollama_base_url, "http://localhost:11434")
+        # config.yaml is loaded by relative path, so a run from another
+        # directory lands here. It must still point at the same gateway and
+        # model the shipped config does, not at a bare local Ollama.
+        self.assertEqual(cfg.ollama_base_url, _DEFAULT_GATEWAY_URL)
+        self.assertEqual(cfg.ollama_model, _DEFAULT_MODEL)
         self.assertEqual(cfg.rag_chunk_size, 512)
         self.assertEqual(cfg.server_port, 7777)
+
+    def test_defaults_match_the_shipped_config_yaml(self) -> None:
+        """One answer to 'where does inference go', whatever the cwd."""
+        shipped = Config(Path(__file__).resolve().parents[2] / "config.yaml")
+        bare = Config(self.tmp / "nope.yaml")
+        self.assertEqual(bare.ollama_base_url, shipped.ollama_base_url)
+        self.assertEqual(bare.ollama_model, shipped.ollama_model)
 
     def test_yaml_values_loaded(self) -> None:
         cfg = make_config(self.tmp)
